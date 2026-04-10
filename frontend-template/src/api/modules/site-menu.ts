@@ -13,7 +13,11 @@ export interface SiteMenuResponseDto {
   createTime?: string
   updateBy?: string
   updateTime?: string
-  remark?: string
+  remark: string
+}
+
+export interface SiteMenuConfigResponseDto {
+  appIcon: string
 }
 
 interface ApiResponse<T> {
@@ -23,8 +27,12 @@ interface ApiResponse<T> {
   timestamp: number
 }
 
+const DEFAULT_APP_ICON = '/public/icons/tools.png'
+
 let cachedSiteMenuTree: SiteMenuResponseDto[] | null = null
 let siteMenuTreeRequest: Promise<SiteMenuResponseDto[]> | null = null
+let cachedSiteMenuConfig: SiteMenuConfigResponseDto | null = null
+let siteMenuConfigRequest: Promise<SiteMenuConfigResponseDto> | null = null
 
 async function fetchSiteMenuTree() {
   const response = await request.get<ApiResponse<SiteMenuResponseDto[]>>('/site-menu/getMenu')
@@ -37,6 +45,19 @@ async function fetchSiteMenuTree() {
   }
 
   return response.data ?? []
+}
+
+async function fetchSiteMenuConfig() {
+  const response = await request.get<ApiResponse<SiteMenuConfigResponseDto>>('/site-menu/getMenuConfig')
+
+  if (response.code !== 200) {
+    throw new RequestError(response.msg || '获取菜单配置失败，请稍后重试。', {
+      status: response.code,
+      details: response,
+    })
+  }
+
+  return response.data ?? { appIcon: DEFAULT_APP_ICON }
 }
 
 export async function getSiteMenuTree(options?: { forceRefresh?: boolean }) {
@@ -63,4 +84,30 @@ export async function getSiteMenuTree(options?: { forceRefresh?: boolean }) {
   }
 
   return siteMenuTreeRequest
+}
+
+export async function getSiteMenuConfig(options?: { forceRefresh?: boolean }) {
+  const forceRefresh = options?.forceRefresh ?? false
+
+  if (forceRefresh) {
+    cachedSiteMenuConfig = null
+    siteMenuConfigRequest = null
+  }
+
+  if (cachedSiteMenuConfig) {
+    return cachedSiteMenuConfig
+  }
+
+  if (!siteMenuConfigRequest) {
+    siteMenuConfigRequest = fetchSiteMenuConfig()
+      .then((data) => {
+        cachedSiteMenuConfig = data
+        return data
+      })
+      .finally(() => {
+        siteMenuConfigRequest = null
+      })
+  }
+
+  return siteMenuConfigRequest
 }

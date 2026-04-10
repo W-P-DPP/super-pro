@@ -118,7 +118,7 @@ export class SiteMenuRepository implements SiteMenuRepositoryPort {
       return;
     }
 
-    await repository.save(seedEntities);
+    await repository.upsert(seedEntities, ['id']);
   }
 
   private async getRepository(manager?: EntityManager): Promise<Repository<SiteMenuEntity>> {
@@ -134,12 +134,25 @@ export class SiteMenuRepository implements SiteMenuRepositoryPort {
 
   private async getAllRecords(manager?: EntityManager): Promise<SiteMenuEntity[]> {
     const repository = await this.getRepository(manager);
-    return repository.find({
-      order: {
-        sort: 'ASC',
-        id: 'ASC',
-      },
-    });
+    return repository
+      .createQueryBuilder('siteMenu')
+      .select([
+        'siteMenu.id',
+        'siteMenu.parentId',
+        'siteMenu.name',
+        'siteMenu.path',
+        'siteMenu.icon',
+        'siteMenu.isTop',
+        'siteMenu.sort',
+        'siteMenu.createBy',
+        'siteMenu.createTime',
+        'siteMenu.updateBy',
+        'siteMenu.updateTime',
+        'siteMenu.remark',
+      ])
+      .orderBy('siteMenu.sort', 'ASC')
+      .addOrderBy('siteMenu.id', 'ASC')
+      .getMany();
   }
 
   async getTree(): Promise<SiteMenuEntity[]> {

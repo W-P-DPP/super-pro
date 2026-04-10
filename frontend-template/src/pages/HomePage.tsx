@@ -31,9 +31,10 @@ import {
   toast,
 } from '@/components/ui'
 import {
+  getSiteMenuDescription,
   isExternalLink,
+  resolveSiteMenuIcon,
   searchEngines,
-  toPublicIcon,
   type ToolDirectoryContextValue,
 } from '@/data/tool-directory'
 
@@ -210,13 +211,13 @@ export function HomePage() {
                 <section
                   key={String(section.id)}
                   id={`section-${String(section.id)}`}
-                  className="scroll-mt-24 rounded-2xl border border-border/80 bg-card/95 px-4 py-4 shadow-sm md:px-5"
+                  className="scroll-mt-[var(--app-shell-section-scroll-offset)] rounded-2xl border border-border/80 bg-card/95 px-4 py-4 shadow-sm md:px-5"
                 >
                   <div className="flex items-center justify-between gap-4 border-b border-border/70 pb-3">
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-muted/50 shadow-2xs">
                         <img
-                          src={toPublicIcon(section.icon)}
+                          src={resolveSiteMenuIcon(section.icon)}
                           alt=""
                           className="size-5 object-contain opacity-90"
                         />
@@ -250,8 +251,7 @@ export function HomePage() {
                     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {items.map((item) => {
                         const itemPath = item.path.trim()
-                        const itemSummary = item.remark?.trim() || itemPath || '未配置菜单说明'
-                        const sectionIcon = toPublicIcon(section.icon)
+                        const itemSummary = getSiteMenuDescription(item.remark)
 
                         return (
                           <button
@@ -263,7 +263,7 @@ export function HomePage() {
                             <div className="flex gap-3">
                               <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-card/80">
                                 <img
-                                  src={toPublicIcon(item.icon, sectionIcon)}
+                                  src={resolveSiteMenuIcon(item.icon)}
                                   alt=""
                                   className="size-6 object-contain"
                                 />

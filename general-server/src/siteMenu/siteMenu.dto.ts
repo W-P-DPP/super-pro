@@ -27,10 +27,13 @@ export interface SiteMenuResponseDto {
   createTime?: string
   updateBy?: string
   updateTime?: string
-  remark?: string
+  remark: string
 }
 
 export type SiteMenuListDto = SiteMenuResponseDto[]
+export interface SiteMenuConfigDto {
+  appIcon: string
+}
 export type SiteMenuImportSourceDto = RawSiteMenuNodeDto[]
 
 export interface SiteMenuValidationErrorContextDto {

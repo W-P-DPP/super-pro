@@ -1,5 +1,7 @@
 import type { SiteMenuResponseDto } from '@/api/modules/site-menu'
 
+const DEFAULT_SITE_MENU_ICON = '/icons/tool.svg'
+
 export type ToolStats = {
   sectionCount: number
   itemCount: number
@@ -15,28 +17,44 @@ export type ToolDirectoryContextValue = {
   reload: () => void
 }
 
-export function toPublicIcon(icon: string | undefined, fallback = '/site-icons/tool.svg') {
-  if (!icon || icon === 'icon-path') {
-    return fallback
+export function isExternalLink(path: string) {
+  return path.startsWith('http://') || path.startsWith('https://')
+}
+
+export function resolveSiteMenuIcon(icon: string | undefined) {
+  const normalizedIcon = icon?.trim() ?? ''
+
+  if (!normalizedIcon || normalizedIcon === 'icon-path') {
+    return DEFAULT_SITE_MENU_ICON
   }
 
-  const fileName = icon.split('/').filter(Boolean).at(-1)
-  return fileName ? `/site-icons/${fileName}` : fallback
+  if (isExternalLink(normalizedIcon) || normalizedIcon.startsWith('/')) {
+    return normalizedIcon
+  }
+
+  return `/${normalizedIcon}`
 }
 
 function sortSiteMenuNodes(nodes: SiteMenuResponseDto[]) {
   return [...nodes].sort((left, right) => left.sort - right.sort || left.id - right.id)
 }
 
-export function isExternalLink(path: string) {
-  return path.startsWith('http://') || path.startsWith('https://')
+export function normalizeSiteMenuRemark(remark: string | undefined) {
+  const normalizedRemark = remark?.trim() ?? ''
+  return normalizedRemark
 }
 
 export function normalizeSiteMenuTree(nodes: SiteMenuResponseDto[]): SiteMenuResponseDto[] {
   return sortSiteMenuNodes(nodes).map((node) => ({
     ...node,
+    remark: normalizeSiteMenuRemark(node.remark),
     children: normalizeSiteMenuTree(node.children),
   }))
+}
+
+export function getSiteMenuDescription(remark: string | undefined) {
+  const normalizedRemark = normalizeSiteMenuRemark(remark)
+  return normalizedRemark || '暂无菜单说明'
 }
 
 export function buildToolStats(nodes: SiteMenuResponseDto[]): ToolStats {

@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
 
   return {
+    base:"/zwpsite",
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -15,6 +16,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      allowedHosts:["www.zwpsite.icu"],
       proxy: {
         '/api': {
           target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30010',

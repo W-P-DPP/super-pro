@@ -1,6 +1,7 @@
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
 import type {
   CreateSiteMenuRequestDto,
+  SiteMenuConfigDto,
   SiteMenuImportSourceDto,
   SiteMenuListDto,
   SiteMenuResponseDto,
@@ -16,6 +17,8 @@ import {
   siteMenuRepository,
   type SiteMenuRepositoryPort,
 } from './siteMenu.repository.ts';
+
+const SITE_MENU_APP_ICON = '/public/icons/tools.png';
 
 export class SiteMenuBusinessError extends Error {
   constructor(
@@ -247,7 +250,7 @@ function toResponseDto(entity: SiteMenuEntity): SiteMenuResponseDto {
     createTime: normalizeDateTime(entity.createTime),
     updateBy: entity.updateBy,
     updateTime: normalizeDateTime(entity.updateTime),
-    remark: entity.remark,
+    remark: entity.remark ?? '',
   };
 }
 
@@ -330,6 +333,12 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateSiteMenuRequ
 
 export class SiteMenuService {
   constructor(private readonly repository: SiteMenuRepositoryPort = siteMenuRepository) {}
+
+  async getSiteMenuConfig(): Promise<SiteMenuConfigDto> {
+    return {
+      appIcon: SITE_MENU_APP_ICON,
+    };
+  }
 
   async getSiteMenu(): Promise<SiteMenuListDto> {
     try {

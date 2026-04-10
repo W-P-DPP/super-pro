@@ -20,6 +20,19 @@ const getMenu = async (req: Request, res: Response) => {
   }
 };
 
+const getMenuConfig = async (req: Request, res: Response) => {
+  try {
+    const menuConfig = await siteMenuService.getSiteMenuConfig();
+    res.sendSuccess(menuConfig, '获取菜单配置成功');
+  } catch (error) {
+    if (error instanceof SiteMenuBusinessError) {
+      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
+    }
+
+    return res.status(HttpStatus.ERROR).sendFail('获取菜单配置失败', HttpStatus.ERROR);
+  }
+};
+
 const getMenuDetail = async (req: Request, res: Response) => {
   try {
     const menu = await siteMenuService.getSiteMenuDetail(Number(req.params.id));
@@ -96,4 +109,12 @@ const uploadMenuFile = async (req: Request, res: Response) => {
   }
 };
 
-export { createMenu, deleteMenu, getMenu, getMenuDetail, updateMenu, uploadMenuFile };
+export {
+  createMenu,
+  deleteMenu,
+  getMenu,
+  getMenuConfig,
+  getMenuDetail,
+  updateMenu,
+  uploadMenuFile,
+};

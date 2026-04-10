@@ -7,6 +7,7 @@ export interface RawSiteMenuSeedNode {
   path?: unknown
   isTop?: unknown
   icon?: unknown
+  remark?: unknown
   children?: unknown
 }
 
@@ -208,7 +209,7 @@ export function flattenSiteMenuSeedNodes(
       updateBy: 'system',
       createTime: new Date(),
       updateTime: new Date(),
-      remark: '由 siteMenu.json 初始化导入',
+      remark: typeof raw.remark === 'string' ? raw.remark.trim() : '',
       children: [],
     } satisfies SiteMenuEntity);
 

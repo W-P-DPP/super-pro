@@ -1,8 +1,12 @@
+import type {
+  SiteMenuImportSourceDto,
+  UploadedSiteMenuFileDto,
+} from '../../src/siteMenu/siteMenu.dto.ts';
 import {
   buildSiteMenuEntityTree,
   findSiteMenuNode,
   flattenSiteMenuSeedNodes,
-  type SiteMenuEntity,
+  SiteMenuEntity,
 } from '../../src/siteMenu/siteMenu.entity.ts';
 import type {
   CreateSiteMenuEntityInput,
@@ -14,14 +18,26 @@ import { SiteMenuBusinessError, SiteMenuService } from '../../src/siteMenu/siteM
 function cloneTree(nodes: SiteMenuEntity[]): SiteMenuEntity[] {
   return buildSiteMenuEntityTree(
     nodes.flatMap((node) => {
-      const current = {
-        ...node,
+      const current = Object.assign(new SiteMenuEntity(), node, {
         children: [],
-      };
+      });
 
       return [current, ...cloneTree(node.children)];
     }),
   );
+}
+
+function createUploadedFile(
+  content: string,
+  originalname = 'siteMenu.json',
+  mimetype = 'application/json',
+): UploadedSiteMenuFileDto {
+  return {
+    originalname,
+    mimetype,
+    buffer: Buffer.from(content, 'utf8'),
+    size: Buffer.byteLength(content, 'utf8'),
+  };
 }
 
 function createRepositoryMock(records: SiteMenuEntity[]): SiteMenuRepositoryPort {
@@ -34,7 +50,7 @@ function createRepositoryMock(records: SiteMenuEntity[]): SiteMenuRepositoryPort
       return findSiteMenuNode(tree, id);
     },
     async createNode(input: CreateSiteMenuEntityInput) {
-      return Object.assign(records[0] ? new (records[0].constructor as typeof SiteMenuEntity)() : {}, {
+      return Object.assign(new SiteMenuEntity(), {
         id: 99,
         parentId: input.parentId,
         name: input.name,
@@ -43,7 +59,7 @@ function createRepositoryMock(records: SiteMenuEntity[]): SiteMenuRepositoryPort
         isTop: input.parentId == null,
         sort: input.sort ?? 0,
         children: [],
-      }) as SiteMenuEntity;
+      });
     },
     async updateNode(id: number, input: UpdateSiteMenuEntityInput) {
       const current = records.find((record) => record.id === id);
@@ -51,16 +67,19 @@ function createRepositoryMock(records: SiteMenuEntity[]): SiteMenuRepositoryPort
         return null;
       }
 
-      return Object.assign({}, current, input, {
+      return Object.assign(new SiteMenuEntity(), current, input, {
         parentId: Object.prototype.hasOwnProperty.call(input, 'parentId')
           ? (input.parentId ?? null)
           : current.parentId,
         children: [],
-      }) as SiteMenuEntity;
+      });
     },
     async deleteNode(id: number) {
       const tree = cloneTree(buildSiteMenuEntityTree(records));
       return findSiteMenuNode(tree, id);
+    },
+    async importTreeFromSource(source: SiteMenuImportSourceDto) {
+      return cloneTree(buildSiteMenuEntityTree(flattenSiteMenuSeedNodes(source)));
     },
   };
 }
@@ -114,7 +133,7 @@ describe('siteMenu 实体与导入辅助', () => {
 
   it('应将数据库平铺记录组装为树结构', () => {
     const tree = buildSiteMenuEntityTree([
-      Object.assign({ children: [] }, {
+      Object.assign(new SiteMenuEntity(), {
         id: 11,
         parentId: 1,
         name: '子菜单',
@@ -123,7 +142,7 @@ describe('siteMenu 实体与导入辅助', () => {
         isTop: false,
         sort: 0,
       }),
-      Object.assign({ children: [] }, {
+      Object.assign(new SiteMenuEntity(), {
         id: 1,
         parentId: null,
         name: '根菜单',
@@ -132,7 +151,7 @@ describe('siteMenu 实体与导入辅助', () => {
         isTop: true,
         sort: 0,
       }),
-    ] as SiteMenuEntity[]);
+    ]);
 
     expect(tree).toHaveLength(1);
     expect(tree[0]).toMatchObject({
@@ -218,6 +237,85 @@ describe('SiteMenuService', () => {
           expect.objectContaining({
             id: 11,
             name: '子菜单',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('未上传文件时应返回中文错误', async () => {
+    const service = new SiteMenuService(createRepositoryMock(records));
+
+    await expect(service.importSiteMenuFile(undefined)).rejects.toMatchObject<
+      Partial<SiteMenuBusinessError>
+    >({
+      message: '请上传菜单 JSON 文件',
+    });
+  });
+
+  it('上传非法 JSON 时应返回中文错误', async () => {
+    const service = new SiteMenuService(createRepositoryMock(records));
+
+    await expect(service.importSiteMenuFile(createUploadedFile('{'))).rejects.toMatchObject<
+      Partial<SiteMenuBusinessError>
+    >({
+      message: '菜单文件不是有效的 JSON 格式',
+    });
+  });
+
+  it('上传非法节点结构时应返回中文错误', async () => {
+    const service = new SiteMenuService(createRepositoryMock(records));
+
+    await expect(
+      service.importSiteMenuFile(
+        createUploadedFile(
+          JSON.stringify([
+            {
+              id: 100,
+              path: '/broken',
+              icon: '/icons/broken.svg',
+            },
+          ]),
+        ),
+      ),
+    ).rejects.toMatchObject<Partial<SiteMenuBusinessError>>({
+      message: '菜单文件字段 name 必须是字符串',
+    });
+  });
+
+  it('上传合法菜单文件时应返回新的菜单树', async () => {
+    const service = new SiteMenuService(createRepositoryMock(records));
+
+    const imported = await service.importSiteMenuFile(
+      createUploadedFile(
+        JSON.stringify([
+          {
+            id: 100,
+            name: '导入根菜单',
+            path: '/import-root',
+            icon: '/icons/import-root.svg',
+            isTop: true,
+            children: [
+              {
+                id: 101,
+                name: '导入子菜单',
+                path: '/import-child',
+                icon: '/icons/import-child.svg',
+              },
+            ],
+          },
+        ]),
+      ),
+    );
+
+    expect(imported).toEqual([
+      expect.objectContaining({
+        id: 100,
+        name: '导入根菜单',
+        children: [
+          expect.objectContaining({
+            id: 101,
+            name: '导入子菜单',
           }),
         ],
       }),

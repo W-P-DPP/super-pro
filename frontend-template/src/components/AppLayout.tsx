@@ -17,7 +17,6 @@ import {
   AlertTitle,
   Badge,
   Button,
-  Separator,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -33,15 +32,18 @@ import {
   SidebarRail,
   SidebarTrigger,
 } from '@/components/ui'
-import { getSiteMenuTree } from '@/api/modules/site-menu'
+import { getSiteMenuConfig, getSiteMenuTree } from '@/api/modules/site-menu'
 import {
   buildToolStats,
   emptyToolStats,
   normalizeSiteMenuTree,
-  toPublicIcon,
+  resolveSiteMenuIcon,
   type ToolDirectoryContextValue,
   type ToolDirectoryLoadStatus,
 } from '@/data/tool-directory'
+
+const APP_SHELL_HEADER_CLASS =
+  'h-[var(--app-shell-header-height)] shrink-0'
 
 function scrollToSection(sectionId: string) {
   document.getElementById(`section-${sectionId}`)?.scrollIntoView({
@@ -52,6 +54,7 @@ function scrollToSection(sectionId: string) {
 
 export function AppLayout() {
   const { resolvedTheme, setTheme } = useTheme()
+  const [appIcon, setAppIcon] = useState('/public/icons/tools.png')
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
   const [directoryStatus, setDirectoryStatus] = useState<ToolDirectoryLoadStatus>('loading')
   const [directoryErrorMessage, setDirectoryErrorMessage] = useState('')
@@ -87,14 +90,20 @@ export function AppLayout() {
       setDirectoryErrorMessage('')
 
       try {
-        const menuTree = await getSiteMenuTree({
-          forceRefresh: reloadSeed > 0,
-        })
+        const [menuTree, menuConfig] = await Promise.all([
+          getSiteMenuTree({
+            forceRefresh: reloadSeed > 0,
+          }),
+          getSiteMenuConfig({
+            forceRefresh: reloadSeed > 0,
+          }),
+        ])
         if (!active) {
           return
         }
 
         const normalizedMenuTree = normalizeSiteMenuTree(menuTree)
+        setAppIcon(menuConfig.appIcon)
         setMenuTree(normalizedMenuTree)
         setToolStats(buildToolStats(normalizedMenuTree))
         setDirectoryStatus('success')
@@ -104,6 +113,7 @@ export function AppLayout() {
         }
 
         setMenuTree([])
+        setAppIcon('/public/icons/tools.png')
         setToolStats(emptyToolStats)
         setDirectoryStatus('error')
         setDirectoryErrorMessage(
@@ -134,11 +144,13 @@ export function AppLayout() {
   return (
     <SidebarProvider defaultOpen>
       <Sidebar variant="inset" collapsible="icon">
-        <SidebarHeader className="border-b border-sidebar-border/80 px-3 py-4">
-          <div className="flex items-center gap-3">
+        <SidebarHeader
+          className={`${APP_SHELL_HEADER_CLASS} justify-center border-b border-sidebar-border/80 px-3 py-0`}
+        >
+          <div className="flex w-full items-center gap-3">
             <div className="flex size-11 items-center justify-center overflow-hidden rounded-xl border border-sidebar-border/80 bg-sidebar-accent/65 shadow-sm">
               <img
-                src="/site-icons/tools.png"
+                src={resolveSiteMenuIcon(appIcon)}
                 alt="zwpsite"
                 className="size-8 object-contain"
               />
@@ -197,7 +209,7 @@ export function AppLayout() {
                         onClick={() => scrollToSection(String(section.id))}
                       >
                         <img
-                          src={toPublicIcon(section.icon)}
+                          src={resolveSiteMenuIcon(section.icon)}
                           alt=""
                           className="size-4 shrink-0 object-contain opacity-85"
                         />
@@ -229,11 +241,12 @@ export function AppLayout() {
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset className="bg-transparent">
-        <header className="sticky top-0 z-20 border-b border-border/70 bg-background/92 backdrop-blur-md">
-          <div className="flex h-[3.75rem] items-center gap-3 px-4 md:px-6">
+      <SidebarInset className="min-h-svh bg-transparent">
+        <header
+          className={`sticky top-0 z-30 ${APP_SHELL_HEADER_CLASS} border-b border-border/70 bg-background/92 backdrop-blur-md`}
+        >
+          <div className="flex h-full items-center gap-3 px-4 md:px-6">
             <SidebarTrigger />
-            <Separator orientation="vertical" className="hidden h-5 md:block" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">
                 搜索与工具导航

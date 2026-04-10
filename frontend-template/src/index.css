@@ -67,6 +67,8 @@
     0px 4px 10px 0px hsl(240 30% 25% / 0.12),
     0px 8px 10px -1px hsl(240 30% 25% / 0.12);
   --shadow-2xl: 0px 4px 10px 0px hsl(240 30% 25% / 0.3);
+  --app-shell-header-height: 3.75rem;
+  --app-shell-section-scroll-offset: calc(var(--app-shell-header-height) + 1.5rem);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 }
@@ -192,6 +194,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: var(--app-shell-section-scroll-offset);
 }
 
 body {
