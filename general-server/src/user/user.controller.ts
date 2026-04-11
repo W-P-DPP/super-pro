@@ -76,6 +76,19 @@ const deleteUser = async (req: Request, res: Response) => {
   }
 };
 
+const getLoginPublicKey = async (req: Request, res: Response) => {
+  try {
+    const result = userService.getLoginPublicKey();
+    res.sendSuccess(result, '获取登录公钥成功');
+  } catch (error) {
+    if (error instanceof UserBusinessError) {
+      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
+    }
+
+    return res.status(HttpStatus.ERROR).sendFail('获取登录公钥失败', HttpStatus.ERROR);
+  }
+};
+
 const loginUser = async (req: Request, res: Response) => {
   try {
     const loginResult = await userService.loginUser(req.body as LoginUserRequestDto);
@@ -102,4 +115,13 @@ const registerUser = async (req: Request, res: Response) => {
   }
 };
 
-export { createUser, deleteUser, getUser, getUserDetail, loginUser, registerUser, updateUser };
+export {
+  createUser,
+  deleteUser,
+  getLoginPublicKey,
+  getUser,
+  getUserDetail,
+  loginUser,
+  registerUser,
+  updateUser,
+};

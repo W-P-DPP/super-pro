@@ -14,6 +14,7 @@ const METHOD_TYPE_MAP: Record<string, string> = {
 
 const SENSITIVE_FIELD_NAMES = new Set([
   'password',
+  'passwordCiphertext',
   'passwordHash',
   'token',
   'accessToken',

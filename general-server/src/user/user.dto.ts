@@ -54,7 +54,7 @@ export interface UpdateUserRequestDto {
 
 export interface LoginUserRequestDto {
   username: string
-  password: string
+  passwordCiphertext: string
 }
 
 export interface RegisterUserRequestDto {
@@ -62,9 +62,12 @@ export interface RegisterUserRequestDto {
   password: string
 }
 
+export interface GetLoginPublicKeyResponseDto {
+  publicKey: string
+}
+
 export interface LoginUserResponseDto {
   token: string
   tokenType: 'Bearer'
   expiresIn: number
-  user: UserResponseDto
 }

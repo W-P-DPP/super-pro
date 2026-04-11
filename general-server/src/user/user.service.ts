@@ -1,8 +1,18 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import {
+  constants,
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  privateDecrypt,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from 'crypto';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
 import { generateToken } from '../../utils/middleware/jwtMiddleware.ts';
 import type {
   CreateUserRequestDto,
+  GetLoginPublicKeyResponseDto,
   LoginUserRequestDto,
   LoginUserResponseDto,
   RegisterUserRequestDto,
@@ -22,6 +32,14 @@ const DEFAULT_LOGIN_PASSWORD = '123456';
 const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_KEY_LENGTH = 64;
 const LOGIN_TOKEN_EXPIRES_IN = 7200;
+const LOGIN_PASSWORD_KEY_FIELD = 'passwordCiphertext';
+
+type LoginEncryptionKeyPair = {
+  publicKey: string
+  privateKey: string
+}
+
+let cachedLoginEncryptionKeyPair: LoginEncryptionKeyPair | null = null;
 
 export class UserBusinessError extends Error {
   constructor(
@@ -31,6 +49,119 @@ export class UserBusinessError extends Error {
   ) {
     super(message);
     this.name = 'UserBusinessError';
+  }
+}
+
+function createEphemeralLoginEncryptionKeyPair(): LoginEncryptionKeyPair {
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: {
+      type: 'spki',
+      format: 'pem',
+    },
+    privateKeyEncoding: {
+      type: 'pkcs8',
+      format: 'pem',
+    },
+  });
+
+  return {
+    publicKey,
+    privateKey,
+  };
+}
+
+function normalizePem(value?: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().replace(/\\n/g, '\n');
+  return normalized ? normalized : null;
+}
+
+function buildLoginKeyConfigError(): UserBusinessError {
+  return new UserBusinessError(
+    '登录加密密钥配置无效',
+    {
+      nodePath: 'user',
+      field: 'loginEncryptionKey',
+      reason: '登录加密密钥不可用',
+    },
+    HttpStatus.ERROR,
+  );
+}
+
+function getLoginEncryptionKeyPair(): LoginEncryptionKeyPair {
+  if (cachedLoginEncryptionKeyPair) {
+    return cachedLoginEncryptionKeyPair;
+  }
+
+  const publicKey = normalizePem(process.env.LOGIN_PASSWORD_PUBLIC_KEY);
+  const privateKey = normalizePem(process.env.LOGIN_PASSWORD_PRIVATE_KEY);
+
+  if (publicKey || privateKey) {
+    if (!publicKey || !privateKey) {
+      throw buildLoginKeyConfigError();
+    }
+
+    try {
+      createPublicKey(publicKey);
+      createPrivateKey(privateKey);
+    } catch {
+      throw buildLoginKeyConfigError();
+    }
+
+    cachedLoginEncryptionKeyPair = {
+      publicKey,
+      privateKey,
+    };
+
+    return cachedLoginEncryptionKeyPair;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw buildLoginKeyConfigError();
+  }
+
+  cachedLoginEncryptionKeyPair = createEphemeralLoginEncryptionKeyPair();
+  return cachedLoginEncryptionKeyPair;
+}
+
+export function getLoginPublicKeyPem(): string {
+  return getLoginEncryptionKeyPair().publicKey;
+}
+
+function decryptLoginPassword(passwordCiphertext: string): string {
+  try {
+    const decrypted = privateDecrypt(
+      {
+        key: getLoginEncryptionKeyPair().privateKey,
+        padding: constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256',
+      },
+      Buffer.from(passwordCiphertext, 'base64'),
+    ).toString('utf8');
+
+    if (!decrypted.trim()) {
+      throw new Error('empty-password');
+    }
+
+    return decrypted;
+  } catch (error) {
+    if (error instanceof UserBusinessError) {
+      throw error;
+    }
+
+    throw new UserBusinessError(
+      '登录密码密文无效',
+      {
+        nodePath: 'user',
+        field: LOGIN_PASSWORD_KEY_FIELD,
+        reason: '登录密码无法解密',
+      },
+      HttpStatus.BAD_REQUEST,
+    );
   }
 }
 
@@ -285,7 +416,11 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateUserRequestD
 function validateLoginInput(input: Record<string, unknown>): LoginUserRequestDto {
   return {
     username: ensureString(input.username, 'username', '用户名'),
-    password: ensureString(input.password, 'password', '密码'),
+    passwordCiphertext: ensureString(
+      input.passwordCiphertext,
+      LOGIN_PASSWORD_KEY_FIELD,
+      '登录密码密文',
+    ),
   };
 }
 
@@ -336,6 +471,12 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 
 export class UserService {
   constructor(private readonly repository: UserRepositoryPort = userRepository) {}
+
+  getLoginPublicKey(): GetLoginPublicKeyResponseDto {
+    return {
+      publicKey: getLoginPublicKeyPem(),
+    };
+  }
 
   async getUserList(): Promise<UserListDto> {
     try {
@@ -493,9 +634,10 @@ export class UserService {
 
   async loginUser(input: LoginUserRequestDto | Record<string, unknown>): Promise<LoginUserResponseDto> {
     const payload = validateLoginInput(input as Record<string, unknown>);
+    const password = decryptLoginPassword(payload.passwordCiphertext);
     const entity = await this.repository.getUserAuthByUsername(payload.username);
 
-    if (!entity || !entity.passwordHash || !verifyPassword(payload.password, entity.passwordHash)) {
+    if (!entity || !entity.passwordHash || !verifyPassword(password, entity.passwordHash)) {
       throw new UserBusinessError(
         '用户名或密码错误',
         {
@@ -531,7 +673,6 @@ export class UserService {
       ),
       tokenType: 'Bearer',
       expiresIn: LOGIN_TOKEN_EXPIRES_IN,
-      user: toResponseDto(entity),
     };
   }
 

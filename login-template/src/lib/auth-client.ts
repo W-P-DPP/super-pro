@@ -15,11 +15,19 @@ export type LoginRequest = {
   password: string
 }
 
+type EncryptedLoginRequest = {
+  username: string
+  passwordCiphertext: string
+}
+
+type LoginPublicKeyResponse = {
+  publicKey: string
+}
+
 export type LoginResponse = {
   token: string
   tokenType: 'Bearer'
   expiresIn: number
-  user: AuthenticatedUser
 }
 
 export type RegisterRequest = {
@@ -86,6 +94,18 @@ function isAuthenticatedUser(value: unknown): value is AuthenticatedUser {
   )
 }
 
+function isLoginPublicKeyResponse(value: unknown): value is LoginPublicKeyResponse {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.publicKey === 'string' &&
+    candidate.publicKey.includes('BEGIN PUBLIC KEY')
+  )
+}
+
 function isLoginResponse(value: unknown): value is LoginResponse {
   if (!value || typeof value !== 'object') {
     return false
@@ -97,8 +117,7 @@ function isLoginResponse(value: unknown): value is LoginResponse {
     candidate.token.length > 0 &&
     candidate.tokenType === 'Bearer' &&
     typeof candidate.expiresIn === 'number' &&
-    candidate.expiresIn > 0 &&
-    isAuthenticatedUser(candidate.user)
+    candidate.expiresIn > 0
   )
 }
 
@@ -126,20 +145,23 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-async function postJson<T>(
+async function requestJson<T>(
   path: string,
-  input: Record<string, unknown>,
+  method: 'GET' | 'POST',
   guard: (data: unknown) => data is T,
+  input?: Record<string, unknown>,
 ): Promise<T> {
   let response: Response
 
   try {
     response = await fetch(getEndpoint(path), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
+      method,
+      headers: input
+        ? {
+            'Content-Type': 'application/json',
+          }
+        : undefined,
+      ...(input ? { body: JSON.stringify(input) } : {}),
     })
   } catch {
     throw new AuthApiError('请求发送失败，请确认后端服务已启动')
@@ -166,8 +188,91 @@ async function postJson<T>(
   return body.data
 }
 
-export function loginUser(input: LoginRequest) {
-  return postJson('/api/user/loginUser', input, isLoginResponse)
+function pemToArrayBuffer(pem: string) {
+  const base64 = pem
+    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+    .replace(/-----END PUBLIC KEY-----/g, '')
+    .replace(/\s+/g, '')
+
+  const binary = window.atob(base64)
+  const bytes = new Uint8Array(binary.length)
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+
+  return bytes.buffer
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+
+  return window.btoa(binary)
+}
+
+function getWebCrypto() {
+  if (!globalThis.crypto?.subtle) {
+    throw new AuthApiError('当前浏览器不支持登录加密，请更换浏览器后重试')
+  }
+
+  return globalThis.crypto
+}
+
+async function encryptPassword(password: string, publicKey: string) {
+  const cryptoApi = getWebCrypto()
+
+  try {
+    const importedKey = await cryptoApi.subtle.importKey(
+      'spki',
+      pemToArrayBuffer(publicKey),
+      {
+        name: 'RSA-OAEP',
+        hash: 'SHA-256',
+      },
+      false,
+      ['encrypt'],
+    )
+
+    const encrypted = await cryptoApi.subtle.encrypt(
+      {
+        name: 'RSA-OAEP',
+      },
+      importedKey,
+      new TextEncoder().encode(password),
+    )
+
+    return arrayBufferToBase64(encrypted)
+  } catch {
+    throw new AuthApiError('登录密码加密失败，请刷新页面后重试')
+  }
+}
+
+function getLoginPublicKey() {
+  return requestJson('/api/user/getLoginPublicKey', 'GET', isLoginPublicKeyResponse)
+}
+
+function postJson<T>(
+  path: string,
+  input: Record<string, unknown>,
+  guard: (data: unknown) => data is T,
+) {
+  return requestJson(path, 'POST', guard, input)
+}
+
+export async function loginUser(input: LoginRequest) {
+  const keyPayload = await getLoginPublicKey()
+  const passwordCiphertext = await encryptPassword(input.password, keyPayload.publicKey)
+  const payload: EncryptedLoginRequest = {
+    username: input.username,
+    passwordCiphertext,
+  }
+
+  return postJson('/api/user/loginUser', payload, isLoginResponse)
 }
 
 export function registerUser(input: RegisterRequest) {

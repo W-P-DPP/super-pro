@@ -1,3 +1,4 @@
+import { constants, publicEncrypt } from 'crypto';
 import { readFile, writeFile } from 'fs/promises';
 import type { Express } from 'express';
 import request from 'supertest';
@@ -76,6 +77,25 @@ const USER_TABLE_COLUMNS = [
 
 const ZHANGSAN_PASSWORD = '123456';
 const LISI_PASSWORD = '654321';
+
+async function createEncryptedLoginPayload(username: string, password: string) {
+  const keyRes = await request(app).get('/api/user/getLoginPublicKey');
+
+  expect(keyRes.status).toBe(200);
+  expect(keyRes.body.code).toBe(200);
+
+  return {
+    username,
+    passwordCiphertext: publicEncrypt(
+      {
+        key: keyRes.body.data.publicKey as string,
+        padding: constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256',
+      },
+      Buffer.from(password, 'utf8'),
+    ).toString('base64'),
+  };
+}
 
 const USER_SEED_ROWS: UserRow[] = [
   {
@@ -759,11 +779,21 @@ describe('user CRUD role integration', () => {
 });
 
 describe('user login role integration', () => {
-  it('POST /api/user/loginUser returns role in user payload', async () => {
-    const res = await request(app).post('/api/user/loginUser').send({
-      username: 'zhangsan',
-      password: ZHANGSAN_PASSWORD,
-    });
+  it('GET /api/user/getLoginPublicKey returns anonymous encryption key', async () => {
+    const res = await request(app).get('/api/user/getLoginPublicKey');
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.objectContaining({
+        publicKey: expect.stringContaining('BEGIN PUBLIC KEY'),
+      }),
+    );
+  });
+
+  it('POST /api/user/loginUser returns token metadata only', async () => {
+    const loginPayload = await createEncryptedLoginPayload('zhangsan', ZHANGSAN_PASSWORD);
+    const res = await request(app).post('/api/user/loginUser').send(loginPayload);
 
     expect(res.status).toBe(200);
     expect(res.body.code).toBe(200);
@@ -771,23 +801,27 @@ describe('user login role integration', () => {
       token: expect.any(String),
       tokenType: 'Bearer',
       expiresIn: 7200,
-      user: expect.objectContaining({
-        id: 1,
-        username: 'zhangsan',
-        role: UserRoleEnum.Admin,
-      }),
     });
-    expect(res.body.data.user).not.toHaveProperty('passwordHash');
+    expect(res.body.data).not.toHaveProperty('user');
   });
 
   it('login error paths remain stable', async () => {
     const missingPassword = await request(app).post('/api/user/loginUser').send({ username: 'zhangsan' });
-    const wrongPassword = await request(app).post('/api/user/loginUser').send({ username: 'zhangsan', password: 'wrong-password' });
-    const disabledUser = await request(app).post('/api/user/loginUser').send({ username: 'lisi', password: LISI_PASSWORD });
+    const wrongPassword = await request(app)
+      .post('/api/user/loginUser')
+      .send(await createEncryptedLoginPayload('zhangsan', 'wrong-password'));
+    const disabledUser = await request(app)
+      .post('/api/user/loginUser')
+      .send(await createEncryptedLoginPayload('lisi', LISI_PASSWORD));
+    const invalidCiphertext = await request(app).post('/api/user/loginUser').send({
+      username: 'zhangsan',
+      passwordCiphertext: 'invalid-ciphertext',
+    });
 
     expect(missingPassword.status).toBe(400);
     expect(wrongPassword.status).toBe(401);
     expect(disabledUser.status).toBe(403);
+    expect(invalidCiphertext.status).toBe(400);
   });
 });
 
@@ -837,10 +871,9 @@ describe('JWT 中间件（中文返回）', () => {
   });
 
   it('登录接口在 JWT 开启时应允许匿名访问', async () => {
-    const res = await request(app).post('/api/user/loginUser').send({
-      username: 'zhangsan',
-      password: ZHANGSAN_PASSWORD,
-    });
+    const res = await request(app)
+      .post('/api/user/loginUser')
+      .send(await createEncryptedLoginPayload('zhangsan', ZHANGSAN_PASSWORD));
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
@@ -868,10 +901,9 @@ describe('JWT route mounting', () => {
       msg: '缺少授权信息或授权格式错误',
     });
 
-    const loginRes = await request(app).post('/api/user/loginUser').send({
-      username: 'zhangsan',
-      password: ZHANGSAN_PASSWORD,
-    });
+    const loginRes = await request(app)
+      .post('/api/user/loginUser')
+      .send(await createEncryptedLoginPayload('zhangsan', ZHANGSAN_PASSWORD));
 
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.code).toBe(200);
@@ -903,10 +935,9 @@ describe('JWT route mounting', () => {
       }),
     });
 
-    const loginRes = await request(app).post('/api/user/loginUser').send({
-      username: 'register-user',
-      password: '123456',
-    });
+    const loginRes = await request(app)
+      .post('/api/user/loginUser')
+      .send(await createEncryptedLoginPayload('register-user', '123456'));
 
     expect(loginRes.status).toBe(200);
     expect(loginRes.body).toMatchObject({
@@ -914,10 +945,7 @@ describe('JWT route mounting', () => {
       msg: '用户登录成功',
       data: expect.objectContaining({
         token: expect.any(String),
-        user: expect.objectContaining({
-          username: 'register-user',
-          role: UserRoleEnum.Guest,
-        }),
+        tokenType: 'Bearer',
       }),
     });
   });

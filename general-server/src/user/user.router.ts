@@ -3,6 +3,7 @@ import { jwtMiddleware } from '../../utils/middleware/jwtMiddleware.ts';
 import {
   createUser,
   deleteUser,
+  getLoginPublicKey,
   getUser,
   getUserDetail,
   loginUser,
@@ -12,6 +13,7 @@ import {
 
 const userRouter: Router = express.Router();
 
+userRouter.get('/getLoginPublicKey', getLoginPublicKey);
 userRouter.post('/loginUser', loginUser);
 userRouter.post('/registerUser', registerUser);
 userRouter.use(jwtMiddleware);

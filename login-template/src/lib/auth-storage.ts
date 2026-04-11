@@ -1,0 +1,75 @@
+import type { LoginResponse } from '@/lib/auth-client'
+
+export type StoredAuthSession = {
+  token: string
+  tokenType: 'Bearer'
+  expiresAt: number
+}
+
+const AUTH_STORAGE_KEY = 'login-template.auth'
+
+function getStorage() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  return window.localStorage
+}
+
+function isStoredAuthSession(value: unknown): value is StoredAuthSession {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.token === 'string' &&
+    candidate.token.length > 0 &&
+    candidate.tokenType === 'Bearer' &&
+    typeof candidate.expiresAt === 'number' &&
+    Number.isFinite(candidate.expiresAt)
+  )
+}
+
+export function saveAuthSession(payload: LoginResponse) {
+  const storage = getStorage()
+  if (!storage) {
+    return
+  }
+
+  const session: StoredAuthSession = {
+    token: payload.token,
+    tokenType: payload.tokenType,
+    expiresAt: Date.now() + payload.expiresIn * 1000,
+  }
+
+  storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
+}
+
+export function readAuthSession(): StoredAuthSession | null {
+  const storage = getStorage()
+  if (!storage) {
+    return null
+  }
+
+  const rawValue = storage.getItem(AUTH_STORAGE_KEY)
+  if (!rawValue) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown
+    return isStoredAuthSession(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function getAuthToken() {
+  return readAuthSession()?.token ?? null
+}
+
+export function clearAuthSession() {
+  const storage = getStorage()
+  storage?.removeItem(AUTH_STORAGE_KEY)
+}

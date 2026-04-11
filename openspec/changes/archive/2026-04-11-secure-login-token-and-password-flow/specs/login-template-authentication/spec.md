@@ -1,8 +1,5 @@
-# login-template-authentication Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change connect-login-template-to-user-login-api. Update Purpose after archive.
-## Requirements
 ### Requirement: Login template SHALL authenticate through the backend login API
 The login template SHALL obtain the backend login public key before login submission, SHALL encrypt the entered password on the client, and SHALL submit the username plus encrypted password ciphertext to `POST /api/user/loginUser` instead of sending the raw password.
 
@@ -31,17 +28,6 @@ The login template SHALL persist successful login token data in persistent brows
 #### Scenario: Do not overwrite storage on failed login
 - **WHEN** a login request fails
 - **THEN** the system SHALL keep the existing stored authentication token state unchanged
-
-### Requirement: Login template SHALL align visible interactions with current backend capabilities
-The login template SHALL present a login-only experience that matches the currently available backend capability and SHALL not expose a misleading locally successful registration flow.
-
-#### Scenario: Backend supports login only
-- **WHEN** the login page is rendered
-- **THEN** the system SHALL present login as the primary available action and SHALL not allow a mock registration submission to complete as a real account operation
-
-#### Scenario: Prevent duplicate submission
-- **WHEN** a login request is in progress
-- **THEN** the system SHALL disable repeated form submission and SHALL present a loading state
 
 ### Requirement: Login template SHALL preserve the existing themed feedback experience
 The login template SHALL keep all new success, error, loading, and disabled states within the existing theme token system, SHALL present user-facing copy in Simplified Chinese by default, and SHALL present login success feedback without assuming that the login API returns user profile data.

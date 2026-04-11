@@ -1,3 +1,4 @@
+import { constants, publicEncrypt } from 'crypto';
 import type {
   CreateUserEntityInput,
   UpdateUserEntityInput,
@@ -61,6 +62,17 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
       return current ? cloneUser(current) : null;
     },
   };
+}
+
+function encryptPassword(publicKey: string, password: string): string {
+  return publicEncrypt(
+    {
+      key: publicKey,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256',
+    },
+    Buffer.from(password, 'utf8'),
+  ).toString('base64');
 }
 
 describe('UserService', () => {
@@ -207,10 +219,11 @@ describe('UserService', () => {
 
   it('登录成功时应返回带角色的脱敏用户信息', async () => {
     const service = new UserService(createRepositoryMock(records));
+    const publicKey = service.getLoginPublicKey().publicKey;
 
     const result = await service.loginUser({
       username: 'zhangsan',
-      password: TEST_PASSWORD,
+      passwordCiphertext: encryptPassword(publicKey, TEST_PASSWORD),
     });
 
     expect(result).toEqual(
@@ -218,23 +231,19 @@ describe('UserService', () => {
         token: expect.any(String),
         tokenType: 'Bearer',
         expiresIn: 7200,
-        user: expect.objectContaining({
-          id: 1,
-          username: 'zhangsan',
-          role: UserRoleEnum.Admin,
-        }),
       }),
     );
-    expect(result.user).not.toHaveProperty('passwordHash');
+    expect(result).not.toHaveProperty('user');
   });
 
   it('登录凭证错误时应返回统一中文错误', async () => {
     const service = new UserService(createRepositoryMock(records));
+    const publicKey = service.getLoginPublicKey().publicKey;
 
     await expect(
       service.loginUser({
         username: 'zhangsan',
-        password: 'wrong-password',
+        passwordCiphertext: encryptPassword(publicKey, 'wrong-password'),
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
       message: '用户名或密码错误',
@@ -243,11 +252,12 @@ describe('UserService', () => {
 
   it('停用用户登录时应返回中文业务错误', async () => {
     const service = new UserService(createRepositoryMock(records));
+    const publicKey = service.getLoginPublicKey().publicKey;
 
     await expect(
       service.loginUser({
         username: 'lisi',
-        password: DISABLED_USER_PASSWORD,
+        passwordCiphertext: encryptPassword(publicKey, DISABLED_USER_PASSWORD),
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
       message: '用户已停用，无法登录',

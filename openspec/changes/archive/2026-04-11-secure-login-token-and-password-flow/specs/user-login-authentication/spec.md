@@ -1,14 +1,4 @@
-# user-login-authentication Specification
-
-## Purpose
-TBD - created by archiving change add-user-login-api. Update Purpose after archive.
-## Requirements
-### Requirement: System SHALL expose a user login API under the user business prefix
-The system SHALL provide a login API in the existing `user` business domain and SHALL expose it as `POST /api/user/loginUser`.
-
-#### Scenario: Access login API through user business prefix
-- **WHEN** a client sends a `POST` request to `/api/user/loginUser`
-- **THEN** the system SHALL route the request through the `user` module instead of creating a separate business prefix
+## ADDED Requirements
 
 ### Requirement: System SHALL expose a login public key API under the user business prefix
 The system SHALL provide a login public key API in the existing `user` business domain and SHALL expose it as `GET /api/user/getLoginPublicKey`. The API SHALL remain anonymously accessible through explicit route design and SHALL return the public key material required by the frontend to encrypt the login password.
@@ -18,12 +8,7 @@ The system SHALL provide a login public key API in the existing `user` business 
 - **THEN** the system SHALL process the request instead of rejecting it for missing token
 - **THEN** the response data SHALL include the login public key required for client-side password encryption
 
-### Requirement: System SHALL allow the user login API to bypass JWT token verification
-The system SHALL allow anonymous access to `POST /api/user/loginUser` even when JWT verification is enabled, and SHALL continue enforcing JWT verification for other protected `/api` routes.
-
-#### Scenario: Login remains accessible when JWT is enabled
-- **WHEN** `JWT_ENABLED` is `true` and a client sends `POST /api/user/loginUser` without an `Authorization` header
-- **THEN** the system SHALL process the login request instead of rejecting it for missing token
+## MODIFIED Requirements
 
 ### Requirement: System SHALL authenticate users with username and password and issue a JWT
 The system SHALL authenticate users with username and encrypted password credentials, SHALL decrypt the submitted login password on the server before password-hash verification, SHALL reject users in a non-loginable status, and SHALL return only JWT token data required by the caller on successful login.
@@ -38,13 +23,6 @@ The system SHALL authenticate users with username and encrypted password credent
 #### Scenario: Disabled user cannot log in
 - **WHEN** a client sends `POST /api/user/loginUser` with credentials that decrypt and verify successfully for a disabled user
 - **THEN** the system SHALL reject the login request with a controlled Chinese error response
-
-### Requirement: System SHALL store and process login credentials without exposing sensitive fields
-The system SHALL maintain a password hash for login verification, SHALL avoid returning the password hash in CRUD or login responses, and SHALL keep credential handling inside the defined user module layers.
-
-#### Scenario: Password hash is not exposed in user-facing responses
-- **WHEN** the system returns user data from `POST /api/user/loginUser`, `GET /api/user/getUser`, or `GET /api/user/getUser/:id`
-- **THEN** the response SHALL NOT include the stored password hash field
 
 ### Requirement: System SHALL return controlled Chinese errors for invalid login attempts
 The system SHALL validate login input, SHALL reject malformed or undecryptable login password ciphertext, and SHALL return controlled Chinese errors instead of raw runtime or database errors when login fails.

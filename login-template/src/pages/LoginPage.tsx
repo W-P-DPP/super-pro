@@ -1,12 +1,7 @@
 import type { ChangeEvent, FormEvent } from 'react'
 import { useState } from 'react'
-import {
-  AuthApiError,
-  loginUser,
-  registerUser,
-  type LoginResponse,
-  type RegisterResponse,
-} from '@/lib/auth-client'
+import { AuthApiError, loginUser, registerUser } from '@/lib/auth-client'
+import { saveAuthSession } from '@/lib/auth-storage'
 import {
   type AuthFormErrors,
   type AuthMode,
@@ -35,8 +30,6 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
-  const [loginResult, setLoginResult] = useState<LoginResponse | null>(null)
-  const [registeredUser, setRegisteredUser] = useState<RegisterResponse | null>(null)
 
   const isLogin = mode === 'login'
 
@@ -99,9 +92,12 @@ export function LoginPage() {
           password: loginForm.password,
         })
 
-        setLoginResult(result)
-        setRegisteredUser(null)
-        setSuccessMessage('登录成功')
+        saveAuthSession(result)
+        setLoginForm((current) => ({
+          ...current,
+          password: '',
+        }))
+        setSuccessMessage('登录成功，已保存登录凭证')
         return
       }
 
@@ -110,8 +106,6 @@ export function LoginPage() {
         password: registerForm.password,
       })
 
-      setRegisteredUser(result)
-      setLoginResult(null)
       setSuccessMessage('注册成功，请使用新账号登录')
       setMode('login')
       setLoginForm({
@@ -177,17 +171,7 @@ export function LoginPage() {
 
         {successMessage ? (
           <div className="mb-5 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-foreground">
-            <div>{successMessage}</div>
-            {loginResult ? (
-              <div className="mt-1 text-muted-foreground">
-                当前登录账号：{loginResult.user.username}
-              </div>
-            ) : null}
-            {registeredUser ? (
-              <div className="mt-1 text-muted-foreground">
-                已创建账号：{registeredUser.username}
-              </div>
-            ) : null}
+            {successMessage}
           </div>
         ) : null}
 

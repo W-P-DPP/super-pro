@@ -5,6 +5,7 @@ import { Logger } from './Logger.ts';
 
 const SENSITIVE_FIELD_NAMES = new Set([
   'password',
+  'passwordCiphertext',
   'passwordHash',
   'token',
   'accessToken',
