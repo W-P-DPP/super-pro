@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "dev:file-server": "pnpm --filter @super-pro/file-server dev",
     "dev:frontend": "pnpm --filter @super-pro/frontend dev",
     "dev:login-template": "pnpm --filter @super-pro/login-template dev",
     "dev:server": "pnpm --filter @super-pro/server dev",

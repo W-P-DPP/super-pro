@@ -2,3 +2,4 @@ packages:
   - frontend-template
   - login-template
   - general-server
+  - file-server
