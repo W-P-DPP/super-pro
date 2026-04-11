@@ -1,3 +1,8 @@
+export enum UserRoleEnum {
+  Admin = 'admin',
+  Guest = 'guest',
+}
+
 export interface UserResponseDto {
   id: number
   username: string
@@ -5,6 +10,7 @@ export interface UserResponseDto {
   email: string
   phone: string
   status: number
+  role: UserRoleEnum
   createBy?: string
   createTime?: string
   updateBy?: string
@@ -31,7 +37,9 @@ export interface CreateUserRequestDto {
   email?: string
   phone?: string
   status?: number
+  role?: UserRoleEnum
   remark?: string
+  password?: string
 }
 
 export interface UpdateUserRequestDto {
@@ -40,5 +48,23 @@ export interface UpdateUserRequestDto {
   email?: string
   phone?: string
   status?: number
+  role?: UserRoleEnum
   remark?: string
+}
+
+export interface LoginUserRequestDto {
+  username: string
+  password: string
+}
+
+export interface RegisterUserRequestDto {
+  username: string
+  password: string
+}
+
+export interface LoginUserResponseDto {
+  token: string
+  tokenType: 'Bearer'
+  expiresIn: number
+  user: UserResponseDto
 }

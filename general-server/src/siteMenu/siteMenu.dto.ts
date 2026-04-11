@@ -5,6 +5,7 @@ export interface RawSiteMenuNodeDto {
   path?: unknown
   icon?: unknown
   isTop?: unknown
+  strict?: unknown
   sort?: unknown
   children?: unknown
   createBy?: unknown
@@ -21,6 +22,7 @@ export interface SiteMenuResponseDto {
   path: string
   icon: string
   isTop: boolean
+  strict: boolean
   sort: number
   children: SiteMenuResponseDto[]
   createBy?: string
@@ -53,6 +55,7 @@ export interface CreateSiteMenuRequestDto {
   path: string
   icon: string
   isTop?: boolean
+  strict?: boolean
   sort?: number
   remark?: string
 }
@@ -63,6 +66,7 @@ export interface UpdateSiteMenuRequestDto {
   path?: string
   icon?: string
   isTop?: boolean
+  strict?: boolean
   sort?: number
   remark?: string
 }

@@ -1,3 +1,4 @@
 packages:
   - frontend-template
+  - login-template
   - general-server

@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
 import type {
   CreateUserRequestDto,
+  LoginUserRequestDto,
+  RegisterUserRequestDto,
   UpdateUserRequestDto,
 } from './user.dto.ts';
 import { UserBusinessError, userService } from './user.service.ts';
@@ -74,4 +76,30 @@ const deleteUser = async (req: Request, res: Response) => {
   }
 };
 
-export { createUser, deleteUser, getUser, getUserDetail, updateUser };
+const loginUser = async (req: Request, res: Response) => {
+  try {
+    const loginResult = await userService.loginUser(req.body as LoginUserRequestDto);
+    res.sendSuccess(loginResult, '用户登录成功');
+  } catch (error) {
+    if (error instanceof UserBusinessError) {
+      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
+    }
+
+    return res.status(HttpStatus.ERROR).sendFail('用户登录失败', HttpStatus.ERROR);
+  }
+};
+
+const registerUser = async (req: Request, res: Response) => {
+  try {
+    const registered = await userService.registerUser(req.body as RegisterUserRequestDto);
+    res.sendSuccess(registered, '用户注册成功');
+  } catch (error) {
+    if (error instanceof UserBusinessError) {
+      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
+    }
+
+    return res.status(HttpStatus.ERROR).sendFail('用户注册失败', HttpStatus.ERROR);
+  }
+};
+
+export { createUser, deleteUser, getUser, getUserDetail, loginUser, registerUser, updateUser };

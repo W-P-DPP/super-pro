@@ -4,6 +4,8 @@ import request from 'supertest';
 import { createApp } from '../../app.ts';
 import { initSiteMenuModule } from '../../src/siteMenu/siteMenu.repository.ts';
 import { saveSiteMenuSource, siteMenuFilePath } from '../../src/siteMenu.ts';
+import { UserRoleEnum } from '../../src/user/user.dto.ts';
+import { hashPassword } from '../../src/user/user.service.ts';
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
 
 type SiteMenuRow = {
@@ -13,6 +15,7 @@ type SiteMenuRow = {
   path: string
   icon: string
   is_top: number
+  strict: number | boolean
   sort: number
   create_by: string | null
   create_time: Date | string | null
@@ -28,6 +31,8 @@ type UserRow = {
   email: string
   phone: string
   status: number
+  role: UserRoleEnum
+  password_hash: string
   create_by: string | null
   create_time: Date | string | null
   update_by: string | null
@@ -43,6 +48,7 @@ const SITE_MENU_TABLE_COLUMNS = [
   'path',
   'icon',
   'is_top',
+  'strict',
   'sort',
   'create_by',
   'create_time',
@@ -59,12 +65,17 @@ const USER_TABLE_COLUMNS = [
   'email',
   'phone',
   'status',
+  'role',
+  'password_hash',
   'create_by',
   'create_time',
   'update_by',
   'update_time',
   'remark',
 ].join(', ');
+
+const ZHANGSAN_PASSWORD = '123456';
+const LISI_PASSWORD = '654321';
 
 const USER_SEED_ROWS: UserRow[] = [
   {
@@ -74,6 +85,8 @@ const USER_SEED_ROWS: UserRow[] = [
     email: 'zhangsan@example.com',
     phone: '13800000001',
     status: 1,
+    role: UserRoleEnum.Admin,
+    password_hash: hashPassword(ZHANGSAN_PASSWORD),
     create_by: 'system',
     create_time: '2026-04-09 10:00:00',
     update_by: 'system',
@@ -86,7 +99,9 @@ const USER_SEED_ROWS: UserRow[] = [
     nickname: '李四',
     email: 'lisi@example.com',
     phone: '13800000002',
-    status: 1,
+    status: 0,
+    role: UserRoleEnum.Guest,
+    password_hash: hashPassword(LISI_PASSWORD),
     create_by: 'system',
     create_time: '2026-04-09 10:00:00',
     update_by: 'system',
@@ -131,7 +146,7 @@ async function insertSiteMenuRows(rows: SiteMenuRow[]): Promise<void> {
       `
         REPLACE INTO ${SITE_MENU_TABLE_NAME}
           (${SITE_MENU_TABLE_COLUMNS})
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         row.id,
@@ -140,6 +155,7 @@ async function insertSiteMenuRows(rows: SiteMenuRow[]): Promise<void> {
         row.path,
         row.icon,
         row.is_top,
+        row.strict,
         row.sort,
         row.create_by,
         row.create_time,
@@ -192,7 +208,7 @@ async function insertUserRows(rows: UserRow[]): Promise<void> {
       `
         REPLACE INTO ${USER_TABLE_NAME}
           (${USER_TABLE_COLUMNS})
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         row.id,
@@ -201,6 +217,8 @@ async function insertUserRows(rows: UserRow[]): Promise<void> {
         row.email,
         row.phone,
         row.status,
+        row.role,
+        row.password_hash,
         row.create_by,
         row.create_time,
         row.update_by,
@@ -279,6 +297,7 @@ describe('siteMenu 查询接口', () => {
         path: expect.any(String),
         icon: expect.any(String),
         isTop: expect.any(Boolean),
+        strict: expect.any(Boolean),
         sort: expect.any(Number),
         remark: '',
         children: expect.any(Array),
@@ -300,6 +319,7 @@ describe('siteMenu 查询接口', () => {
       expect.objectContaining({
         id: 3,
         name: '工具',
+        strict: false,
       }),
     );
   });
@@ -316,6 +336,7 @@ describe('siteMenu 查询接口', () => {
       expect.objectContaining({
         id: 3,
         name: '工具',
+        strict: false,
         remark: '',
       }),
     );
@@ -330,6 +351,7 @@ describe('siteMenu 查询接口', () => {
     expect(updateRes.body.data).toEqual(
       expect.objectContaining({
         id: 31,
+        strict: false,
         remark: '用于在线解析 JSON 文本',
       }),
     );
@@ -341,6 +363,7 @@ describe('siteMenu 查询接口', () => {
     expect(menuItem).toEqual(
       expect.objectContaining({
         id: 31,
+        strict: false,
         remark: '用于在线解析 JSON 文本',
       }),
     );
@@ -350,6 +373,7 @@ describe('siteMenu 查询接口', () => {
     expect(detailRes.body.data).toEqual(
       expect.objectContaining({
         id: 31,
+        strict: false,
         remark: '用于在线解析 JSON 文本',
       }),
     );
@@ -363,6 +387,7 @@ describe('siteMenu CRUD 接口', () => {
       name: '测试菜单',
       path: '/test-menu',
       icon: '/icons/test.svg',
+      strict: true,
     });
 
     expect(res.status).toBe(200);
@@ -375,8 +400,42 @@ describe('siteMenu CRUD 接口', () => {
         id: expect.any(Number),
         parentId: null,
         name: '测试菜单',
+        strict: true,
       }),
     );
+  });
+
+  it('POST /api/site-menu/createMenu 未传 strict 时应默认返回 false', async () => {
+    const res = await request(app).post('/api/site-menu/createMenu').send({
+      parentId: null,
+      name: '默认严格菜单',
+      path: '/default-strict',
+      icon: '/icons/default.svg',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.objectContaining({
+        name: '默认严格菜单',
+        strict: false,
+      }),
+    );
+  });
+
+  it('POST /api/site-menu/createMenu strict 类型错误时应返回中文错误', async () => {
+    const res = await request(app).post('/api/site-menu/createMenu').send({
+      parentId: null,
+      name: '非法 strict 菜单',
+      path: '/invalid-strict',
+      icon: '/icons/default.svg',
+      strict: 'yes',
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      code: 400,
+      msg: '菜单 strict 字段必须是布尔值',
+    });
   });
 
   it('POST /api/site-menu/createMenu 父级菜单不存在时应返回中文错误', async () => {
@@ -398,6 +457,7 @@ describe('siteMenu CRUD 接口', () => {
     const res = await request(app).put('/api/site-menu/updateMenu/2').send({
       name: 'Git工具',
       path: '/git-tools',
+      strict: true,
     });
 
     expect(res.status).toBe(200);
@@ -410,6 +470,7 @@ describe('siteMenu CRUD 接口', () => {
         id: 2,
         name: 'Git工具',
         path: '/git-tools',
+        strict: true,
       }),
     );
   });
@@ -444,6 +505,7 @@ describe('siteMenu 文件上传导入接口', () => {
         path: '/import-root',
         icon: '/icons/import-root.svg',
         isTop: true,
+        strict: true,
         children: [
           {
             id: 101,
@@ -470,10 +532,12 @@ describe('siteMenu 文件上传导入接口', () => {
         expect.objectContaining({
           id: 100,
           name: '导入根菜单',
+          strict: true,
           children: [
             expect.objectContaining({
               id: 101,
               name: '导入子菜单',
+              strict: false,
             }),
           ],
         }),
@@ -486,10 +550,12 @@ describe('siteMenu 文件上传导入接口', () => {
       expect.objectContaining({
         id: 100,
         name: '导入根菜单',
+        strict: true,
         children: [
           expect.objectContaining({
             id: 101,
             name: '导入子菜单',
+            strict: false,
           }),
         ],
       }),
@@ -497,6 +563,18 @@ describe('siteMenu 文件上传导入接口', () => {
 
     const rows = await getSiteMenuRows();
     expect(rows.map((row) => row.id)).toEqual([100, 101]);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 100,
+          strict: 1,
+        }),
+        expect.objectContaining({
+          id: 101,
+          strict: 0,
+        }),
+      ]),
+    );
 
     const currentSiteMenuFileContent = await readFile(siteMenuFilePath, 'utf8');
     expect(JSON.parse(currentSiteMenuFileContent)).toEqual(importedMenu);
@@ -556,130 +634,160 @@ describe('siteMenu 文件上传导入接口', () => {
   });
 });
 
-describe('user CRUD 接口', () => {
-  it('GET /api/user/getUser 应返回用户列表', async () => {
+describe('user CRUD role integration', () => {
+  it('GET /api/user/getUser returns role field', async () => {
     const res = await request(app).get('/api/user/getUser');
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      code: 200,
-      msg: '获取用户列表成功',
-    });
+    expect(res.body.code).toBe(200);
     expect(res.body.data).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 1,
           username: 'zhangsan',
+          role: UserRoleEnum.Admin,
         }),
       ]),
     );
+    expect(res.body.data[0]).not.toHaveProperty('passwordHash');
   });
 
-  it('GET /api/user/getUser/:id 应返回用户详情', async () => {
+  it('GET /api/user/getUser/:id returns role field', async () => {
     const res = await request(app).get('/api/user/getUser/1');
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      code: 200,
-      msg: '获取用户详情成功',
-    });
+    expect(res.body.code).toBe(200);
     expect(res.body.data).toEqual(
       expect.objectContaining({
         id: 1,
         username: 'zhangsan',
-        nickname: '张三',
+        role: UserRoleEnum.Admin,
+      }),
+    );
+    expect(res.body.data).not.toHaveProperty('passwordHash');
+  });
+
+  it('POST /api/user/createUser accepts explicit role', async () => {
+    const res = await request(app).post('/api/user/createUser').send({
+      username: 'wangwu',
+      nickname: 'wangwu',
+      email: 'wangwu@example.com',
+      phone: '13800000003',
+      status: 1,
+      role: UserRoleEnum.Admin,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.objectContaining({
+        username: 'wangwu',
+        role: UserRoleEnum.Admin,
       }),
     );
   });
 
-  it('POST /api/user/createUser 应新增用户', async () => {
+  it('POST /api/user/createUser defaults role to guest', async () => {
     const res = await request(app).post('/api/user/createUser').send({
-      username: 'wangwu',
-      nickname: '王五',
-      email: 'wangwu@example.com',
-      phone: '13800000003',
+      username: 'zhaoliu',
+      nickname: 'zhaoliu',
+      email: 'zhaoliu@example.com',
+      phone: '13800000004',
       status: 1,
     });
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      code: 200,
-      msg: '新增用户成功',
-    });
     expect(res.body.data).toEqual(
       expect.objectContaining({
-        username: 'wangwu',
-        nickname: '王五',
+        username: 'zhaoliu',
+        role: UserRoleEnum.Guest,
       }),
     );
   });
 
-  it('PUT /api/user/updateUser/:id 应更新用户', async () => {
+  it('POST /api/user/createUser rejects invalid role', async () => {
+    const res = await request(app).post('/api/user/createUser').send({
+      username: 'guest-user',
+      nickname: 'guest-user',
+      role: 'invalid-role',
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe(400);
+  });
+
+  it('PUT /api/user/updateUser/:id updates role', async () => {
     const res = await request(app).put('/api/user/updateUser/1').send({
-      nickname: '张三丰',
+      nickname: 'zhangsan-updated',
       phone: '13900000001',
       status: 0,
+      role: UserRoleEnum.Guest,
     });
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      code: 200,
-      msg: '更新用户成功',
-    });
+    expect(res.body.code).toBe(200);
     expect(res.body.data).toEqual(
       expect.objectContaining({
         id: 1,
-        nickname: '张三丰',
         phone: '13900000001',
         status: 0,
+        role: UserRoleEnum.Guest,
       }),
     );
   });
 
-  it('DELETE /api/user/deleteUser/:id 应删除用户', async () => {
+  it('DELETE /api/user/deleteUser/:id deletes user', async () => {
     const res = await request(app).delete('/api/user/deleteUser/1');
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      code: 200,
-      msg: '删除用户成功',
-    });
+    expect(res.body.code).toBe(200);
 
     const listRes = await request(app).get('/api/user/getUser');
     const ids = (listRes.body.data as Array<{ id: number }>).map((item) => item.id);
     expect(ids).not.toContain(1);
   });
 
-  it('GET /api/user/getUser/:id 查询不存在用户时应返回中文错误', async () => {
-    const res = await request(app).get('/api/user/getUser/99999');
+  it('missing user still returns 404', async () => {
+    const detailRes = await request(app).get('/api/user/getUser/99999');
+    const updateRes = await request(app).put('/api/user/updateUser/99999').send({ nickname: 'none' });
+    const deleteRes = await request(app).delete('/api/user/deleteUser/99999');
 
-    expect(res.status).toBe(404);
-    expect(res.body).toMatchObject({
-      code: 404,
-      msg: '用户不存在',
+    expect(detailRes.status).toBe(404);
+    expect(updateRes.status).toBe(404);
+    expect(deleteRes.status).toBe(404);
+  });
+});
+
+describe('user login role integration', () => {
+  it('POST /api/user/loginUser returns role in user payload', async () => {
+    const res = await request(app).post('/api/user/loginUser').send({
+      username: 'zhangsan',
+      password: ZHANGSAN_PASSWORD,
     });
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toMatchObject({
+      token: expect.any(String),
+      tokenType: 'Bearer',
+      expiresIn: 7200,
+      user: expect.objectContaining({
+        id: 1,
+        username: 'zhangsan',
+        role: UserRoleEnum.Admin,
+      }),
+    });
+    expect(res.body.data.user).not.toHaveProperty('passwordHash');
   });
 
-  it('PUT /api/user/updateUser/:id 更新不存在用户时应返回中文错误', async () => {
-    const res = await request(app).put('/api/user/updateUser/99999').send({
-      nickname: '不存在',
-    });
+  it('login error paths remain stable', async () => {
+    const missingPassword = await request(app).post('/api/user/loginUser').send({ username: 'zhangsan' });
+    const wrongPassword = await request(app).post('/api/user/loginUser').send({ username: 'zhangsan', password: 'wrong-password' });
+    const disabledUser = await request(app).post('/api/user/loginUser').send({ username: 'lisi', password: LISI_PASSWORD });
 
-    expect(res.status).toBe(404);
-    expect(res.body).toMatchObject({
-      code: 404,
-      msg: '用户不存在',
-    });
-  });
-
-  it('DELETE /api/user/deleteUser/:id 删除不存在用户时应返回中文错误', async () => {
-    const res = await request(app).delete('/api/user/deleteUser/99999');
-
-    expect(res.status).toBe(404);
-    expect(res.body).toMatchObject({
-      code: 404,
-      msg: '用户不存在',
-    });
+    expect(missingPassword.status).toBe(400);
+    expect(wrongPassword.status).toBe(401);
+    expect(disabledUser.status).toBe(403);
   });
 });
 
@@ -725,6 +833,92 @@ describe('JWT 中间件（中文返回）', () => {
     expect(res.body).toMatchObject({
       code: 200,
       msg: '获取菜单成功',
+    });
+  });
+
+  it('登录接口在 JWT 开启时应允许匿名访问', async () => {
+    const res = await request(app).post('/api/user/loginUser').send({
+      username: 'zhangsan',
+      password: ZHANGSAN_PASSWORD,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      code: 200,
+      msg: '用户登录成功',
+    });
+  });
+});
+
+describe('JWT route mounting', () => {
+  beforeEach(() => {
+    process.env.JWT_ENABLED = 'true';
+  });
+
+  afterEach(() => {
+    process.env.JWT_ENABLED = 'false';
+  });
+
+  it('protects user CRUD routes while keeping login anonymous', async () => {
+    const unauthorizedRes = await request(app).get('/api/user/getUser');
+
+    expect(unauthorizedRes.status).toBe(401);
+    expect(unauthorizedRes.body).toMatchObject({
+      code: 401,
+      msg: '缺少授权信息或授权格式错误',
+    });
+
+    const loginRes = await request(app).post('/api/user/loginUser').send({
+      username: 'zhangsan',
+      password: ZHANGSAN_PASSWORD,
+    });
+
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.code).toBe(200);
+
+    const { generateToken } = await import('../../utils/middleware/jwtMiddleware.ts');
+    const token = generateToken({ userId: 1, username: 'zhangsan' });
+    const authorizedRes = await request(app)
+      .get('/api/user/getUser')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(authorizedRes.status).toBe(200);
+    expect(authorizedRes.body.code).toBe(200);
+  });
+
+  it('allows anonymous register and then login with the new account', async () => {
+    const registerRes = await request(app).post('/api/user/registerUser').send({
+      username: 'register-user',
+      password: '123456',
+    });
+
+    expect(registerRes.status).toBe(200);
+    expect(registerRes.body).toMatchObject({
+      code: 200,
+      msg: '用户注册成功',
+      data: expect.objectContaining({
+        username: 'register-user',
+        nickname: 'register-user',
+        role: UserRoleEnum.Guest,
+      }),
+    });
+
+    const loginRes = await request(app).post('/api/user/loginUser').send({
+      username: 'register-user',
+      password: '123456',
+    });
+
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body).toMatchObject({
+      code: 200,
+      msg: '用户登录成功',
+      data: expect.objectContaining({
+        token: expect.any(String),
+        user: expect.objectContaining({
+          username: 'register-user',
+          role: UserRoleEnum.Guest,
+        }),
+      }),
     });
   });
 });

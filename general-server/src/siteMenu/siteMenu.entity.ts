@@ -7,6 +7,7 @@ export interface RawSiteMenuSeedNode {
   path?: unknown
   isTop?: unknown
   icon?: unknown
+  strict?: unknown
   remark?: unknown
   children?: unknown
 }
@@ -18,6 +19,7 @@ export class SiteMenuEntity extends BaseEntity {
   path!: string
   icon!: string
   isTop!: boolean
+  strict!: boolean
   sort!: number
   children: SiteMenuEntity[] = []
 }
@@ -70,6 +72,13 @@ export const SiteMenuEntitySchema = new EntitySchema<SiteMenuEntity>({
       default: false,
       comment: '是否置顶菜单',
     },
+    strict: {
+      name: 'strict',
+      type: Boolean,
+      nullable: false,
+      default: false,
+      comment: '是否启用严格模式',
+    },
     sort: {
       name: 'sort',
       type: Number,
@@ -115,6 +124,22 @@ function assertString(value: unknown, field: string, allowEmpty = false): string
   }
 
   return allowEmpty ? value : value.trim();
+}
+
+function normalizeSeedBoolean(
+  value: unknown,
+  field: string,
+  defaultValue: boolean,
+): boolean {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  if (typeof value !== 'boolean') {
+    throw new Error(`菜单种子字段 ${field} 必须是布尔值`);
+  }
+
+  return value;
 }
 
 export function cloneSiteMenuNode(node: SiteMenuEntity): SiteMenuEntity {
@@ -203,7 +228,8 @@ export function flattenSiteMenuSeedNodes(
       name: assertString(raw.name, 'name'),
       path: assertString(raw.path, 'path', true),
       icon: assertString(raw.icon, 'icon', true),
-      isTop: typeof raw.isTop === 'boolean' ? raw.isTop : parentId == null,
+      isTop: normalizeSeedBoolean(raw.isTop, 'isTop', parentId == null),
+      strict: normalizeSeedBoolean(raw.strict, 'strict', false),
       sort: index,
       createBy: 'system',
       updateBy: 'system',

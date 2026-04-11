@@ -150,6 +150,9 @@
 - 优先使用 `siteMenuRouter`、`userRouter`、`orderRouter`、`getMenu`、`createMenu` 这类功能清晰的名字
 - 禁止使用 `tempRouter`、`router2`、`commonRouter`、`crudRouter` 这类无法直接体现接口功能的命名，除非仓库已有稳定且更清晰的业务语义
 - 版本化接口优先使用 `/api/v1/...`
+- 后端新增接口如无特别说明，默认必须启用 JWT 鉴权
+- 默认在 `general-server/src/index.ts` 挂载业务 router 时接入 `jwtMiddleware`
+- 匿名接口必须在需求、设计或实现说明中显式声明，并通过路由接入层或业务 router 显式省略 JWT，而不是通过 `jwtMiddleware` 内部白名单放行
 
 ## 4. API 与 DTO 规范
 

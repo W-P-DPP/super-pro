@@ -17,6 +17,7 @@ export interface CreateSiteMenuEntityInput {
   path: string
   icon: string
   isTop: boolean
+  strict: boolean
   sort?: number
   remark?: string
 }
@@ -27,6 +28,7 @@ export interface UpdateSiteMenuEntityInput {
   path?: string
   icon?: string
   isTop?: boolean
+  strict?: boolean
   sort?: number
   remark?: string
 }
@@ -143,6 +145,7 @@ export class SiteMenuRepository implements SiteMenuRepositoryPort {
         'siteMenu.path',
         'siteMenu.icon',
         'siteMenu.isTop',
+        'siteMenu.strict',
         'siteMenu.sort',
         'siteMenu.createBy',
         'siteMenu.createTime',
@@ -187,6 +190,7 @@ export class SiteMenuRepository implements SiteMenuRepositoryPort {
           path: '',
           icon: '',
           isTop: input.parentId == null,
+          strict: false,
           sort: insertSort,
         }),
         ...siblings.slice(insertSort),
@@ -202,6 +206,7 @@ export class SiteMenuRepository implements SiteMenuRepositoryPort {
         path: input.path,
         icon: input.icon,
         isTop: input.parentId == null,
+        strict: input.strict,
         sort: insertSort,
         createBy: 'system',
         updateBy: 'system',
@@ -249,6 +254,7 @@ export class SiteMenuRepository implements SiteMenuRepositoryPort {
       current.name = input.name ?? current.name;
       current.path = input.path ?? current.path;
       current.icon = input.icon ?? current.icon;
+      current.strict = input.strict ?? current.strict;
       current.remark = input.remark ?? current.remark;
       current.updateBy = 'system';
 

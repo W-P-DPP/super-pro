@@ -4,7 +4,6 @@ import bodyParser from 'body-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { responseMiddleware } from './utils/middleware/responseMiddleware.ts';
-import { jwtMiddleware } from './utils/middleware/jwtMiddleware.ts';
 import { operationLogMiddleware } from './utils/middleware/operationLogMiddleware.ts';
 import router from './src/index.ts';
 import { RequestLogger, ErrorLogger } from './utils/index.ts';
@@ -25,7 +24,7 @@ export function createApp() {
   app.get('/',(req,res)=>{
     res.sendSuccess()
   })
-  app.use('/api', jwtMiddleware, operationLogMiddleware, router);
+  app.use('/api', operationLogMiddleware, router);
   app.use(ErrorLogger.middleware());
   return app;
 }

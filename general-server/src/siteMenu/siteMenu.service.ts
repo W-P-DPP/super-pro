@@ -92,6 +92,41 @@ function normalizeOptionalParentId(value: unknown): number | null {
   return value;
 }
 
+function normalizeOptionalBoolean(
+  value: unknown,
+  field: string,
+  label: string,
+): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'boolean') {
+    throw new SiteMenuBusinessError(
+      `${label}必须是布尔值`,
+      {
+        nodePath: 'siteMenu',
+        field,
+        reason: `${label}必须是布尔值`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return value;
+}
+
+function normalizeRequiredBoolean(
+  value: unknown,
+  field: string,
+  label: string,
+  defaultValue: boolean,
+): boolean {
+  const normalized = normalizeOptionalBoolean(value, field, label);
+  return normalized === undefined ? defaultValue : normalized;
+}
+
 function normalizeDateTime(value: unknown): string | undefined {
   if (!value) {
     return undefined;
@@ -244,6 +279,7 @@ function toResponseDto(entity: SiteMenuEntity): SiteMenuResponseDto {
     path: entity.path,
     icon: entity.icon,
     isTop: entity.isTop,
+    strict: entity.strict,
     sort: entity.sort,
     children: entity.children.map(toResponseDto),
     createBy: entity.createBy,
@@ -261,6 +297,7 @@ function validateCreateInput(input: Record<string, unknown>): CreateSiteMenuRequ
     path: ensureString(input.path, '路径', true),
     icon: ensureString(input.icon, '图标', true),
     isTop: input.parentId == null,
+    strict: normalizeRequiredBoolean(input.strict, 'strict', '菜单 strict 字段', false),
     sort:
       input.sort === undefined
         ? undefined
@@ -296,6 +333,9 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateSiteMenuRequ
   }
   if (Object.prototype.hasOwnProperty.call(input, 'icon') && input.icon !== undefined) {
     nextInput.icon = ensureString(input.icon, '图标', true);
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'strict')) {
+    nextInput.strict = normalizeRequiredBoolean(input.strict, 'strict', '菜单 strict 字段', false);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'sort') && input.sort !== undefined) {
     if (typeof input.sort !== 'number' || !Number.isInteger(input.sort) || input.sort < 0) {
@@ -403,6 +443,7 @@ export class SiteMenuService {
     const created = await this.repository.createNode({
       ...payload,
       isTop: payload.parentId == null,
+      strict: payload.strict ?? false,
     });
 
     if (!created) {

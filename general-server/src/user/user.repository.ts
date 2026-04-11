@@ -1,6 +1,7 @@
 import type { EntityManager, Repository } from 'typeorm';
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
 import { UserEntity } from './user.entity.ts';
+import type { UserRoleEnum } from './user.dto.ts';
 
 export interface CreateUserEntityInput {
   username: string
@@ -8,6 +9,8 @@ export interface CreateUserEntityInput {
   email: string
   phone: string
   status: number
+  role: UserRoleEnum
+  passwordHash: string
   remark?: string
 }
 
@@ -17,6 +20,7 @@ export interface UpdateUserEntityInput {
   email?: string
   phone?: string
   status?: number
+  role?: UserRoleEnum
   remark?: string
 }
 
@@ -24,6 +28,7 @@ export interface UserRepositoryPort {
   getUserList(): Promise<UserEntity[]>
   getUserById(id: number): Promise<UserEntity | null>
   getUserByUsername(username: string): Promise<UserEntity | null>
+  getUserAuthByUsername(username: string): Promise<UserEntity | null>
   createUser(input: CreateUserEntityInput): Promise<UserEntity | null>
   updateUser(id: number, input: UpdateUserEntityInput): Promise<UserEntity | null>
   deleteUser(id: number): Promise<UserEntity | null>
@@ -72,6 +77,15 @@ export class UserRepository implements UserRepositoryPort {
     });
   }
 
+  async getUserAuthByUsername(username: string): Promise<UserEntity | null> {
+    const repository = await this.getRepository();
+    return repository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.username = :username', { username })
+      .getOne();
+  }
+
   async createUser(input: CreateUserEntityInput): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     const entity = repository.create({
@@ -80,6 +94,8 @@ export class UserRepository implements UserRepositoryPort {
       email: input.email,
       phone: input.phone,
       status: input.status,
+      role: input.role,
+      passwordHash: input.passwordHash,
       createBy: 'system',
       updateBy: 'system',
       ...(input.remark ? { remark: input.remark } : {}),
@@ -115,6 +131,9 @@ export class UserRepository implements UserRepositoryPort {
     }
     if (input.status !== undefined) {
       current.status = input.status;
+    }
+    if (input.role !== undefined) {
+      current.role = input.role;
     }
     if (input.remark !== undefined) {
       current.remark = input.remark;

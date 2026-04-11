@@ -1,16 +1,27 @@
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { generateToken } from '../../utils/middleware/jwtMiddleware.ts';
 import type {
   CreateUserRequestDto,
+  LoginUserRequestDto,
+  LoginUserResponseDto,
+  RegisterUserRequestDto,
   UpdateUserRequestDto,
   UserListDto,
+  UserRoleEnum,
   UserResponseDto,
   UserValidationErrorContextDto,
 } from './user.dto.ts';
-import { type UserEntity } from './user.entity.ts';
+import type { UserEntity } from './user.entity.ts';
 import {
   userRepository,
   type UserRepositoryPort,
 } from './user.repository.ts';
+
+const DEFAULT_LOGIN_PASSWORD = '123456';
+const PASSWORD_SALT_BYTES = 16;
+const PASSWORD_KEY_LENGTH = 64;
+const LOGIN_TOKEN_EXPIRES_IN = 7200;
 
 export class UserBusinessError extends Error {
   constructor(
@@ -25,12 +36,16 @@ export class UserBusinessError extends Error {
 
 function ensurePositiveInteger(value: number, field: string): number {
   if (!Number.isInteger(value) || value <= 0) {
-    throw new UserBusinessError('用户标识不合法', {
-      nodePath: 'user',
-      field,
-      reason: '用户标识必须为正整数',
-      value,
-    }, HttpStatus.BAD_REQUEST);
+    throw new UserBusinessError(
+      '用户标识不合法',
+      {
+        nodePath: 'user',
+        field,
+        reason: '用户标识必须为正整数',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   return value;
@@ -38,12 +53,16 @@ function ensurePositiveInteger(value: number, field: string): number {
 
 function ensureString(value: unknown, field: string, label: string): string {
   if (typeof value !== 'string' || !value.trim()) {
-    throw new UserBusinessError(`${label}不能为空`, {
-      nodePath: 'user',
-      field,
-      reason: `${label}必须是非空字符串`,
-      value,
-    }, HttpStatus.BAD_REQUEST);
+    throw new UserBusinessError(
+      `${label}不能为空`,
+      {
+        nodePath: 'user',
+        field,
+        reason: `${label}必须是非空字符串`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   return value.trim();
@@ -55,12 +74,16 @@ function normalizeOptionalString(value: unknown, field: string, label: string): 
   }
 
   if (typeof value !== 'string') {
-    throw new UserBusinessError(`${label}必须是字符串`, {
-      nodePath: 'user',
-      field,
-      reason: `${label}必须是字符串`,
-      value,
-    }, HttpStatus.BAD_REQUEST);
+    throw new UserBusinessError(
+      `${label}必须是字符串`,
+      {
+        nodePath: 'user',
+        field,
+        reason: `${label}必须是字符串`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   return value.trim();
@@ -72,12 +95,16 @@ function normalizeStatus(value: unknown): number {
   }
 
   if (value !== 0 && value !== 1) {
-    throw new UserBusinessError('用户状态不合法', {
-      nodePath: 'user',
-      field: 'status',
-      reason: '用户状态只能为0或1',
-      value,
-    }, HttpStatus.BAD_REQUEST);
+    throw new UserBusinessError(
+      '用户状态不合法',
+      {
+        nodePath: 'user',
+        field: 'status',
+        reason: '用户状态只允许为 0 或 1',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   return value;
@@ -89,6 +116,35 @@ function normalizeOptionalStatus(value: unknown): number | undefined {
   }
 
   return normalizeStatus(value);
+}
+
+function normalizeRole(value: unknown): UserRoleEnum {
+  if (value === undefined) {
+    return 'guest' as UserRoleEnum;
+  }
+
+  if (value === 'admin' || value === 'guest') {
+    return value as UserRoleEnum;
+  }
+
+  throw new UserBusinessError(
+    '用户角色不合法',
+    {
+      nodePath: 'user',
+      field: 'role',
+      reason: '用户角色只允许为 admin 或 guest',
+      value,
+    },
+    HttpStatus.BAD_REQUEST,
+  );
+}
+
+function normalizeOptionalRole(value: unknown): UserRoleEnum | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return normalizeRole(value);
 }
 
 function normalizeDateTime(value: unknown): string | undefined {
@@ -108,6 +164,9 @@ function normalizeDateTime(value: unknown): string | undefined {
 }
 
 function toResponseDto(entity: UserEntity): UserResponseDto {
+  const createTime = normalizeDateTime(entity.createTime);
+  const updateTime = normalizeDateTime(entity.updateTime);
+
   return {
     id: entity.id,
     username: entity.username,
@@ -115,10 +174,11 @@ function toResponseDto(entity: UserEntity): UserResponseDto {
     email: entity.email,
     phone: entity.phone,
     status: entity.status,
+    role: entity.role,
     ...(entity.createBy ? { createBy: entity.createBy } : {}),
-    ...(normalizeDateTime(entity.createTime) ? { createTime: normalizeDateTime(entity.createTime) } : {}),
+    ...(createTime ? { createTime } : {}),
     ...(entity.updateBy ? { updateBy: entity.updateBy } : {}),
-    ...(normalizeDateTime(entity.updateTime) ? { updateTime: normalizeDateTime(entity.updateTime) } : {}),
+    ...(updateTime ? { updateTime } : {}),
     ...(entity.remark ? { remark: entity.remark } : {}),
   };
 }
@@ -130,17 +190,26 @@ function validateCreateInput(input: Record<string, unknown>): CreateUserRequestD
     email: normalizeOptionalString(input.email, 'email', '用户邮箱'),
     phone: normalizeOptionalString(input.phone, 'phone', '用户手机号'),
     status: normalizeStatus(input.status),
+    role: normalizeRole(input.role),
   };
 
   if (typeof input.remark === 'string') {
     payload.remark = input.remark.trim();
   } else if (input.remark !== undefined && input.remark !== null) {
-    throw new UserBusinessError('用户备注必须是字符串', {
-      nodePath: 'user',
-      field: 'remark',
-      reason: '用户备注必须是字符串',
-      value: input.remark,
-    }, HttpStatus.BAD_REQUEST);
+    throw new UserBusinessError(
+      '用户备注必须是字符串',
+      {
+        nodePath: 'user',
+        field: 'remark',
+        reason: '用户备注必须是字符串',
+        value: input.remark,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'password')) {
+    payload.password = ensureString(input.password, 'password', '用户密码');
   }
 
   return payload;
@@ -172,30 +241,97 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateUserRequestD
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(input, 'role')) {
+    const role = normalizeOptionalRole(input.role);
+    if (role !== undefined) {
+      payload.role = role;
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(input, 'remark')) {
     if (input.remark === undefined || input.remark === null) {
       payload.remark = '';
     } else if (typeof input.remark === 'string') {
       payload.remark = input.remark.trim();
     } else {
-      throw new UserBusinessError('用户备注必须是字符串', {
-        nodePath: 'user',
-        field: 'remark',
-        reason: '用户备注必须是字符串',
-        value: input.remark,
-      }, HttpStatus.BAD_REQUEST);
+      throw new UserBusinessError(
+        '用户备注必须是字符串',
+        {
+          nodePath: 'user',
+          field: 'remark',
+          reason: '用户备注必须是字符串',
+          value: input.remark,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 
   if (Object.keys(payload).length === 0) {
-    throw new UserBusinessError('更新用户参数不能为空', {
-      nodePath: 'user',
-      field: 'payload',
-      reason: '至少需要提供一个可更新字段',
-    }, HttpStatus.BAD_REQUEST);
+    throw new UserBusinessError(
+      '更新用户参数不能为空',
+      {
+        nodePath: 'user',
+        field: 'payload',
+        reason: '至少需要提供一个可更新字段',
+      },
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   return payload;
+}
+
+function validateLoginInput(input: Record<string, unknown>): LoginUserRequestDto {
+  return {
+    username: ensureString(input.username, 'username', '用户名'),
+    password: ensureString(input.password, 'password', '密码'),
+  };
+}
+
+function validateRegisterInput(input: Record<string, unknown>): RegisterUserRequestDto {
+  const username = ensureString(input.username, 'username', '用户名');
+  const password = ensureString(input.password, 'password', '密码');
+
+  if (password.length < 6) {
+    throw new UserBusinessError(
+      '密码至少需要 6 位',
+      {
+        nodePath: 'user',
+        field: 'password',
+        reason: '密码长度至少需要 6 位',
+        value: password.length,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return {
+    username,
+    password,
+  };
+}
+
+export function hashPassword(password: string): string {
+  const salt = randomBytes(PASSWORD_SALT_BYTES).toString('hex');
+  const derivedKey = scryptSync(password, salt, PASSWORD_KEY_LENGTH).toString('hex');
+  return `${salt}:${derivedKey}`;
+}
+
+export function verifyPassword(password: string, storedHash: string): boolean {
+  const [salt, expectedHash] = storedHash.split(':');
+  if (!salt || !expectedHash) {
+    return false;
+  }
+
+  const actualHash = scryptSync(password, salt, PASSWORD_KEY_LENGTH);
+  const expectedBuffer = Buffer.from(expectedHash, 'hex');
+
+  if (expectedBuffer.length !== actualHash.length) {
+    return false;
+  }
+
+  return timingSafeEqual(actualHash, expectedBuffer);
 }
 
 export class UserService {
@@ -205,16 +341,16 @@ export class UserService {
     try {
       const entities = await this.repository.getUserList();
       return entities.map(toResponseDto);
-    } catch (error) {
-      if (error instanceof UserBusinessError) {
-        throw error;
-      }
-
-      throw new UserBusinessError('读取用户列表失败', {
-        nodePath: 'user',
-        field: 'source',
-        reason: '用户数据源读取失败',
-      }, HttpStatus.ERROR);
+    } catch {
+      throw new UserBusinessError(
+        '读取用户列表失败',
+        {
+          nodePath: 'user',
+          field: 'source',
+          reason: '用户数据源读取失败',
+        },
+        HttpStatus.ERROR,
+      );
     }
   }
 
@@ -223,12 +359,16 @@ export class UserService {
     const entity = await this.repository.getUserById(targetId);
 
     if (!entity) {
-      throw new UserBusinessError('用户不存在', {
-        nodePath: 'user',
-        field: 'id',
-        reason: '未找到对应用户',
-        value: id,
-      }, HttpStatus.NOT_FOUND);
+      throw new UserBusinessError(
+        '用户不存在',
+        {
+          nodePath: 'user',
+          field: 'id',
+          reason: '未找到对应用户',
+          value: id,
+        },
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return toResponseDto(entity);
@@ -239,12 +379,16 @@ export class UserService {
     const existed = await this.repository.getUserByUsername(payload.username);
 
     if (existed) {
-      throw new UserBusinessError('用户名已存在', {
-        nodePath: 'user',
-        field: 'username',
-        reason: '用户名不能重复',
-        value: payload.username,
-      }, HttpStatus.CONFLICT);
+      throw new UserBusinessError(
+        '用户名已存在',
+        {
+          nodePath: 'user',
+          field: 'username',
+          reason: '用户名不能重复',
+          value: payload.username,
+        },
+        HttpStatus.CONFLICT,
+      );
     }
 
     const created = await this.repository.createUser({
@@ -253,15 +397,21 @@ export class UserService {
       email: payload.email ?? '',
       phone: payload.phone ?? '',
       status: payload.status ?? 1,
+      role: payload.role ?? ('guest' as UserRoleEnum),
+      passwordHash: hashPassword(payload.password ?? DEFAULT_LOGIN_PASSWORD),
       ...(payload.remark !== undefined ? { remark: payload.remark } : {}),
     });
 
     if (!created) {
-      throw new UserBusinessError('新增用户失败', {
-        nodePath: 'user',
-        field: 'create',
-        reason: '用户创建失败',
-      }, HttpStatus.ERROR);
+      throw new UserBusinessError(
+        '新增用户失败',
+        {
+          nodePath: 'user',
+          field: 'create',
+          reason: '用户创建失败',
+        },
+        HttpStatus.ERROR,
+      );
     }
 
     return toResponseDto(created);
@@ -275,35 +425,47 @@ export class UserService {
     const current = await this.repository.getUserById(targetId);
 
     if (!current) {
-      throw new UserBusinessError('用户不存在', {
-        nodePath: 'user',
-        field: 'id',
-        reason: '未找到对应用户',
-        value: id,
-      }, HttpStatus.NOT_FOUND);
+      throw new UserBusinessError(
+        '用户不存在',
+        {
+          nodePath: 'user',
+          field: 'id',
+          reason: '未找到对应用户',
+          value: id,
+        },
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const payload = validateUpdateInput(input as Record<string, unknown>);
     if (payload.username && payload.username !== current.username) {
       const existed = await this.repository.getUserByUsername(payload.username);
       if (existed && existed.id !== targetId) {
-        throw new UserBusinessError('用户名已存在', {
-          nodePath: 'user',
-          field: 'username',
-          reason: '用户名不能重复',
-          value: payload.username,
-        }, HttpStatus.CONFLICT);
+        throw new UserBusinessError(
+          '用户名已存在',
+          {
+            nodePath: 'user',
+            field: 'username',
+            reason: '用户名不能重复',
+            value: payload.username,
+          },
+          HttpStatus.CONFLICT,
+        );
       }
     }
 
     const updated = await this.repository.updateUser(targetId, payload);
     if (!updated) {
-      throw new UserBusinessError('更新用户失败', {
-        nodePath: 'user',
-        field: 'update',
-        reason: '用户更新失败',
-        value: id,
-      }, HttpStatus.ERROR);
+      throw new UserBusinessError(
+        '更新用户失败',
+        {
+          nodePath: 'user',
+          field: 'update',
+          reason: '用户更新失败',
+          value: id,
+        },
+        HttpStatus.ERROR,
+      );
     }
 
     return toResponseDto(updated);
@@ -314,15 +476,77 @@ export class UserService {
     const deleted = await this.repository.deleteUser(targetId);
 
     if (!deleted) {
-      throw new UserBusinessError('用户不存在', {
-        nodePath: 'user',
-        field: 'id',
-        reason: '未找到对应用户',
-        value: id,
-      }, HttpStatus.NOT_FOUND);
+      throw new UserBusinessError(
+        '用户不存在',
+        {
+          nodePath: 'user',
+          field: 'id',
+          reason: '未找到对应用户',
+          value: id,
+        },
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return toResponseDto(deleted);
+  }
+
+  async loginUser(input: LoginUserRequestDto | Record<string, unknown>): Promise<LoginUserResponseDto> {
+    const payload = validateLoginInput(input as Record<string, unknown>);
+    const entity = await this.repository.getUserAuthByUsername(payload.username);
+
+    if (!entity || !entity.passwordHash || !verifyPassword(payload.password, entity.passwordHash)) {
+      throw new UserBusinessError(
+        '用户名或密码错误',
+        {
+          nodePath: 'user',
+          field: 'credentials',
+          reason: '登录凭证校验失败',
+          value: payload.username,
+        },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    if (entity.status !== 1) {
+      throw new UserBusinessError(
+        '用户已停用，无法登录',
+        {
+          nodePath: 'user',
+          field: 'status',
+          reason: '用户状态不允许登录',
+          value: entity.status,
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    return {
+      token: generateToken(
+        {
+          userId: entity.id,
+          username: entity.username,
+        },
+        LOGIN_TOKEN_EXPIRES_IN,
+      ),
+      tokenType: 'Bearer',
+      expiresIn: LOGIN_TOKEN_EXPIRES_IN,
+      user: toResponseDto(entity),
+    };
+  }
+
+  async registerUser(
+    input: RegisterUserRequestDto | Record<string, unknown>,
+  ): Promise<UserResponseDto> {
+    const payload = validateRegisterInput(input as Record<string, unknown>);
+
+    return this.createUser({
+      username: payload.username,
+      nickname: payload.username,
+      status: 1,
+      role: 'guest' as UserRoleEnum,
+      password: payload.password,
+    });
   }
 }
 

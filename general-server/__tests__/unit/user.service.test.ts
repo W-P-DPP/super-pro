@@ -3,8 +3,16 @@ import type {
   UpdateUserEntityInput,
   UserRepositoryPort,
 } from '../../src/user/user.repository.ts';
+import { UserRoleEnum } from '../../src/user/user.dto.ts';
 import { UserEntity } from '../../src/user/user.entity.ts';
-import { UserBusinessError, UserService } from '../../src/user/user.service.ts';
+import {
+  hashPassword,
+  UserBusinessError,
+  UserService,
+} from '../../src/user/user.service.ts';
+
+const TEST_PASSWORD = '123456';
+const DISABLED_USER_PASSWORD = '654321';
 
 function cloneUser(user: UserEntity): UserEntity {
   return Object.assign(new UserEntity(), user);
@@ -23,6 +31,10 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
       const target = records.find((record) => record.username === username);
       return target ? cloneUser(target) : null;
     },
+    async getUserAuthByUsername(username: string) {
+      const target = records.find((record) => record.username === username);
+      return target ? cloneUser(target) : null;
+    },
     async createUser(input: CreateUserEntityInput) {
       return Object.assign(new UserEntity(), {
         id: 99,
@@ -31,6 +43,8 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
         email: input.email,
         phone: input.phone,
         status: input.status,
+        role: input.role,
+        passwordHash: input.passwordHash,
         ...(input.remark !== undefined ? { remark: input.remark } : {}),
       });
     },
@@ -58,6 +72,8 @@ describe('UserService', () => {
       email: 'zhangsan@example.com',
       phone: '13800000001',
       status: 1,
+      role: UserRoleEnum.Admin,
+      passwordHash: hashPassword(TEST_PASSWORD),
       remark: '初始用户',
     }),
     Object.assign(new UserEntity(), {
@@ -66,11 +82,13 @@ describe('UserService', () => {
       nickname: '李四',
       email: 'lisi@example.com',
       phone: '13800000002',
-      status: 1,
+      status: 0,
+      role: UserRoleEnum.Guest,
+      passwordHash: hashPassword(DISABLED_USER_PASSWORD),
     }),
   ];
 
-  it('新增用户成功时应返回中文字段结构', async () => {
+  it('新增用户成功时应返回角色字段', async () => {
     const service = new UserService(createRepositoryMock(records));
 
     const result = await service.createUser({
@@ -79,6 +97,7 @@ describe('UserService', () => {
       email: 'wangwu@example.com',
       phone: '13800000003',
       status: 1,
+      role: UserRoleEnum.Admin,
     });
 
     expect(result).toEqual(
@@ -86,6 +105,26 @@ describe('UserService', () => {
         id: 99,
         username: 'wangwu',
         nickname: '王五',
+        role: UserRoleEnum.Admin,
+      }),
+    );
+  });
+
+  it('未传角色时应默认创建为 guest', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    const result = await service.createUser({
+      username: 'zhaoliu',
+      nickname: '赵六',
+      email: 'zhaoliu@example.com',
+      phone: '13800000004',
+      status: 1,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        username: 'zhaoliu',
+        role: UserRoleEnum.Guest,
       }),
     );
   });
@@ -103,6 +142,23 @@ describe('UserService', () => {
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
       message: '用户名已存在',
+    });
+  });
+
+  it('传入非法角色时应返回角色字段错误', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    await expect(
+      service.createUser({
+        username: 'guest-user',
+        nickname: '访客',
+        role: 'invalid-role' as UserRoleEnum,
+      }),
+    ).rejects.toMatchObject<Partial<UserBusinessError>>({
+      statusCode: 400,
+      context: expect.objectContaining({
+        field: 'role',
+      }),
     });
   });
 
@@ -131,6 +187,70 @@ describe('UserService', () => {
 
     await expect(service.deleteUser(99999)).rejects.toMatchObject<Partial<UserBusinessError>>({
       message: '用户不存在',
+    });
+  });
+
+  it('更新用户角色时应返回最新角色', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    const result = await service.updateUser(1, {
+      role: UserRoleEnum.Guest,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 1,
+        role: UserRoleEnum.Guest,
+      }),
+    );
+  });
+
+  it('登录成功时应返回带角色的脱敏用户信息', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    const result = await service.loginUser({
+      username: 'zhangsan',
+      password: TEST_PASSWORD,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        token: expect.any(String),
+        tokenType: 'Bearer',
+        expiresIn: 7200,
+        user: expect.objectContaining({
+          id: 1,
+          username: 'zhangsan',
+          role: UserRoleEnum.Admin,
+        }),
+      }),
+    );
+    expect(result.user).not.toHaveProperty('passwordHash');
+  });
+
+  it('登录凭证错误时应返回统一中文错误', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    await expect(
+      service.loginUser({
+        username: 'zhangsan',
+        password: 'wrong-password',
+      }),
+    ).rejects.toMatchObject<Partial<UserBusinessError>>({
+      message: '用户名或密码错误',
+    });
+  });
+
+  it('停用用户登录时应返回中文业务错误', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    await expect(
+      service.loginUser({
+        username: 'lisi',
+        password: DISABLED_USER_PASSWORD,
+      }),
+    ).rejects.toMatchObject<Partial<UserBusinessError>>({
+      message: '用户已停用，无法登录',
     });
   });
 });
