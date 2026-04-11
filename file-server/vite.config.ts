@@ -9,12 +9,17 @@ export default defineConfig(({ mode }) => {
   return {
     base: '/file-server',
     plugins: [react(), tailwindcss()],
+    test: {
+      environment: 'jsdom',
+      setupFiles: './src/test/setup.ts',
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
       },
     },
     server: {
+      allowedHosts:['www.zwpsite.icu'],
       host: '0.0.0.0',
       port: 56447,
       proxy: {

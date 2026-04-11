@@ -87,6 +87,25 @@ describe('jwtMiddleware', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
+  it('attaches decoded payload for a valid preview cookie token', () => {
+    process.env.JWT_ENABLED = 'true';
+    const payload: JwtPayload = { userId: 2, role: 'viewer' };
+    const token = generateToken(payload);
+    const req = createRequest({
+      headers: {
+        cookie: `theme=dark; file_preview_token=${encodeURIComponent(token)}`,
+      },
+    });
+    const res = createMockResponse();
+    const next = jest.fn() as NextFunction;
+
+    jwtMiddleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.jwtPayload).toEqual(expect.objectContaining(payload));
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid bearer token', () => {
     process.env.JWT_ENABLED = 'true';
     const req = createRequest({

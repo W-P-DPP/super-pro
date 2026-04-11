@@ -25,6 +25,11 @@ export class HttpStatus {
     public static readonly NO_CONTENT: number = 204;
 
     /**
+     * 部分内容
+     */
+    public static readonly PARTIAL_CONTENT: number = 206;
+
+    /**
      * 资源已被移除
      */
     public static readonly MOVED_PERM: number = 301;
@@ -73,6 +78,11 @@ export class HttpStatus {
      * 不支持的数据，媒体类型
      */
     public static readonly UNSUPPORTED_TYPE: number = 415;
+
+    /**
+     * 请求的范围无效
+     */
+    public static readonly REQUESTED_RANGE_NOT_SATISFIABLE: number = 416;
 
     /**
      * 系统内部错误

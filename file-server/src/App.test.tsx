@@ -1,0 +1,307 @@
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import App from './App'
+import { ThemeProvider } from './components/theme-provider'
+
+function renderApp() {
+  return render(
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <App />
+    </ThemeProvider>,
+  )
+}
+
+function jsonResponse(data: unknown, msg = '成功', status = 200) {
+  return new Response(
+    JSON.stringify({
+      code: status,
+      msg,
+      data,
+      timestamp: Date.now(),
+    }),
+    {
+      status,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  )
+}
+
+function textResponse(text: string, contentType = 'text/plain; charset=utf-8') {
+  return new Response(text, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType,
+    },
+  })
+}
+
+describe('App', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+    document.cookie = 'file_preview_token=; Max-Age=0; Path=/'
+  })
+
+  it('should switch preview when selecting file and folder', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'guide.md',
+              relativePath: '/docs/guide.md',
+              type: 'file',
+              size: 8,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    fetchMock.mockResolvedValueOnce(textResponse('# guide', 'text/markdown; charset=utf-8'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    expect(await screen.findByText('当前选中的是文件夹。你可以继续在左侧完成新建、上传、删除或拖动移动。')).toBeInTheDocument()
+    const docsNode = (await screen.findByRole('button', { name: '树节点 docs' })).closest('[draggable="true"]')
+    if (!(docsNode instanceof HTMLElement)) {
+      throw new Error('docs 节点未正确渲染')
+    }
+    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
+
+    await userEvent.click(await screen.findByRole('button', { name: '树节点 guide.md' }))
+
+    expect(await screen.findByText('guide')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '树节点 docs' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('guide')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('当前选中的是文件夹。你可以继续在左侧完成新建、上传、删除或拖动移动。')).toBeInTheDocument()
+  })
+
+  it('should move file by drag and drop and keep moved path selected after refresh', async () => {
+    const initialTree = [
+      {
+        name: 'docs',
+        relativePath: '/docs',
+        type: 'folder',
+        children: [
+          {
+            name: 'report.md',
+            relativePath: '/docs/report.md',
+            type: 'file',
+            size: 8,
+            children: [],
+          },
+        ],
+      },
+      {
+        name: 'archive',
+        relativePath: '/archive',
+        type: 'folder',
+        children: [],
+      },
+    ]
+
+    const movedTree = [
+      {
+        name: 'docs',
+        relativePath: '/docs',
+        type: 'folder',
+        children: [],
+      },
+      {
+        name: 'archive',
+        relativePath: '/archive',
+        type: 'folder',
+        children: [
+          {
+            name: 'report.md',
+            relativePath: '/archive/report.md',
+            type: 'file',
+            size: 8,
+            children: [],
+          },
+        ],
+      },
+    ]
+
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(jsonResponse(initialTree))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          name: 'report.md',
+          relativePath: '/archive/report.md',
+          type: 'file',
+          size: 8,
+          children: [],
+        },
+        '移动文件成功',
+      ),
+    )
+    fetchMock.mockResolvedValueOnce(jsonResponse(movedTree))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    const docsNode = (await screen.findByRole('button', { name: '树节点 docs' })).closest('[draggable="true"]')
+    if (!(docsNode instanceof HTMLElement)) {
+      throw new Error('docs 节点未正确渲染')
+    }
+    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
+    const sourceButton = await screen.findByRole('button', { name: '树节点 report.md' })
+    const sourceNode = sourceButton.closest('[draggable="true"]')
+    const targetNode = (await screen.findByRole('button', { name: '树节点 archive' })).closest('[draggable="true"]')
+
+    if (!sourceNode || !targetNode) {
+      throw new Error('树节点未正确渲染')
+    }
+
+    fireEvent.dragStart(sourceNode)
+    fireEvent.dragOver(targetNode)
+    fireEvent.drop(targetNode)
+
+    expect(await screen.findByText('移动文件成功')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getAllByText('/archive/report.md').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('should show preview failure message when preview request fails', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'guide.md',
+              relativePath: '/docs/guide.md',
+              type: 'file',
+              size: 8,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    fetchMock.mockResolvedValueOnce(jsonResponse(null, '读取预览文件失败', 500))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    const docsNode = (await screen.findByRole('button', { name: '树节点 docs' })).closest('[draggable="true"]')
+    if (!(docsNode instanceof HTMLElement)) {
+      throw new Error('docs 节点未正确渲染')
+    }
+    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
+    await userEvent.click(await screen.findByRole('button', { name: '树节点 guide.md' }))
+
+    expect(await screen.findByText('读取预览文件失败')).toBeInTheDocument()
+  })
+
+  it('should stream audio preview through direct preview url instead of fetching a blob first', async () => {
+    localStorage.setItem('token', 'preview-token')
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'song.mp3',
+              relativePath: '/docs/song.mp3',
+              type: 'file',
+              size: 1024,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const view = renderApp()
+
+    const docsNode = (await screen.findByRole('button', { name: /docs/ })).closest('[draggable="true"]')
+    if (!(docsNode instanceof HTMLElement)) {
+      throw new Error('docs 节点未正确渲染')
+    }
+    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
+    await userEvent.click(await screen.findByRole('button', { name: /song\.mp3/ }))
+
+    await waitFor(() => {
+      expect(view.container.querySelector('audio')).not.toBeNull()
+    })
+
+    expect(view.container.querySelector('audio')?.getAttribute('src')).toBe(
+      '/api/file/preview?targetPath=%2Fdocs%2Fsong.mp3',
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(document.cookie).toContain('file_preview_token=preview-token')
+  })
+
+  it('should reuse login session token for audio preview when raw token key is absent', async () => {
+    localStorage.setItem(
+      'login-template.auth',
+      JSON.stringify({
+        token: 'session-token',
+        tokenType: 'Bearer',
+        expiresAt: Date.now() + 60_000,
+      }),
+    )
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'song.mp3',
+              relativePath: '/docs/song.mp3',
+              type: 'file',
+              size: 1024,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const view = renderApp()
+
+    const docsNode = (await screen.findByRole('button', { name: /docs/ })).closest('[draggable="true"]')
+    if (!(docsNode instanceof HTMLElement)) {
+      throw new Error('docs 节点未正确渲染')
+    }
+    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
+    await userEvent.click(await screen.findByRole('button', { name: /song\.mp3/ }))
+
+    await waitFor(() => {
+      expect(view.container.querySelector('audio')).not.toBeNull()
+    })
+
+    expect(view.container.querySelector('audio')?.getAttribute('src')).toBe(
+      '/api/file/preview?targetPath=%2Fdocs%2Fsong.mp3',
+    )
+    expect(document.cookie).toContain('file_preview_token=session-token')
+  })
+})
