@@ -6,6 +6,7 @@ export interface SiteMenuResponseDto {
   name: string
   path: string
   icon: string
+  strict: boolean
   isTop: boolean
   sort: number
   children: SiteMenuResponseDto[]

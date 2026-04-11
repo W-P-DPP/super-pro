@@ -1,6 +1,7 @@
 import type { ChangeEvent, FormEvent } from 'react'
 import { useState } from 'react'
 import { AuthApiError, loginUser, registerUser } from '@/lib/auth-client'
+import { getRedirectTargetFromLocation } from '@/lib/auth-redirect'
 import { saveAuthSession } from '@/lib/auth-storage'
 import {
   type AuthFormErrors,
@@ -93,10 +94,18 @@ export function LoginPage() {
         })
 
         saveAuthSession(result)
+        const redirectTarget = getRedirectTargetFromLocation()
+
         setLoginForm((current) => ({
           ...current,
           password: '',
         }))
+
+        if (redirectTarget) {
+          window.location.assign(redirectTarget)
+          return
+        }
+
         setSuccessMessage('登录成功，已保存登录凭证')
         return
       }

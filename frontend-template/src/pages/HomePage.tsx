@@ -37,32 +37,42 @@ import {
   searchEngines,
   type ToolDirectoryContextValue,
 } from '@/data/tool-directory'
+import { buildStrictMenuLoginRedirectUrl } from '@/lib/strict-menu-redirect'
 
-const compactSectionNames = new Set(['置顶', 'git', '工具'])
+const compactSectionNames = new Set(['网址大全', 'git', '工具'])
 
 function openSearch(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-function openTool(path: string, fallbackName: string) {
-  if (isExternalLink(path)) {
-    openSearch(path)
+function openTool(path: string, fallbackName: string, strict = false) {
+  const normalizedPath = path.trim()
+
+  if (strict) {
+    openSearch(buildStrictMenuLoginRedirectUrl(normalizedPath))
     return
   }
 
-  toast.info(`入口 ${path || fallbackName} 暂未接入页面。`)
+  if (isExternalLink(normalizedPath)) {
+    openSearch(normalizedPath)
+    return
+  }
+
+  toast.info(`入口 ${normalizedPath || fallbackName} 暂未接入页面。`)
 }
 
 function formatTarget(link: string) {
-  if (!link.trim()) {
+  const normalizedLink = link.trim()
+
+  if (!normalizedLink) {
     return '未配置路径'
   }
 
   try {
-    const url = new URL(link)
+    const url = new URL(normalizedLink)
     return url.hostname
   } catch {
-    return link
+    return normalizedLink
   }
 }
 
@@ -84,6 +94,7 @@ export function HomePage() {
 
     handleScroll()
     window.addEventListener('scroll', handleScroll, { passive: true })
+
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
@@ -189,9 +200,7 @@ export function HomePage() {
                     <LayoutGridIcon className="size-4" />
                   </EmptyMedia>
                   <EmptyTitle>暂无目录数据</EmptyTitle>
-                  <EmptyDescription>
-                    当前后端菜单尚未配置可展示入口。
-                  </EmptyDescription>
+                  <EmptyDescription>当前后端菜单尚未配置可展示入口。</EmptyDescription>
                 </EmptyHeader>
               </Empty>
             </CardContent>
@@ -257,7 +266,7 @@ export function HomePage() {
                           <button
                             key={String(item.id)}
                             type="button"
-                            onClick={() => openTool(itemPath, item.name)}
+                            onClick={() => openTool(itemPath, item.name, item.strict)}
                             className="group flex min-h-[9.25rem] flex-col rounded-xl border border-border/80 bg-background/65 p-4 text-left shadow-2xs transition-[border-color,box-shadow,background-color] duration-200 hover:border-primary/35 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                           >
                             <div className="flex gap-3">

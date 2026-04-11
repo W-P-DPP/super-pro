@@ -40,13 +40,13 @@ function sortSiteMenuNodes(nodes: SiteMenuResponseDto[]) {
 }
 
 export function normalizeSiteMenuRemark(remark: string | undefined) {
-  const normalizedRemark = remark?.trim() ?? ''
-  return normalizedRemark
+  return remark?.trim() ?? ''
 }
 
 export function normalizeSiteMenuTree(nodes: SiteMenuResponseDto[]): SiteMenuResponseDto[] {
   return sortSiteMenuNodes(nodes).map((node) => ({
     ...node,
+    strict: Boolean(node.strict),
     remark: normalizeSiteMenuRemark(node.remark),
     children: normalizeSiteMenuTree(node.children),
   }))

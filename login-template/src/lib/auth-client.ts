@@ -1,3 +1,5 @@
+import forge from 'node-forge'
+
 export type UserRole = 'admin' | 'guest'
 
 export type AuthenticatedUser = {
@@ -43,7 +45,7 @@ type ApiEnvelope<T> = {
   data: T
 }
 
-const DEFAULT_DEV_API_BASE_URL = 'http://127.0.0.1:30010'
+const DEFAULT_DEV_API_BASE_URL = 'http://www.zwpsite.icu:8082'
 
 export class AuthApiError extends Error {
   readonly statusCode?: number
@@ -83,6 +85,7 @@ function isAuthenticatedUser(value: unknown): value is AuthenticatedUser {
   }
 
   const candidate = value as Record<string, unknown>
+
   return (
     typeof candidate.id === 'number' &&
     typeof candidate.username === 'string' &&
@@ -100,6 +103,7 @@ function isLoginPublicKeyResponse(value: unknown): value is LoginPublicKeyRespon
   }
 
   const candidate = value as Record<string, unknown>
+
   return (
     typeof candidate.publicKey === 'string' &&
     candidate.publicKey.includes('BEGIN PUBLIC KEY')
@@ -112,6 +116,7 @@ function isLoginResponse(value: unknown): value is LoginResponse {
   }
 
   const candidate = value as Record<string, unknown>
+
   return (
     typeof candidate.token === 'string' &&
     candidate.token.length > 0 &&
@@ -130,6 +135,7 @@ function isApiEnvelope<T>(
   }
 
   const candidate = value as Record<string, unknown>
+
   return (
     typeof candidate.code === 'number' &&
     typeof candidate.msg === 'string' &&
@@ -188,65 +194,17 @@ async function requestJson<T>(
   return body.data
 }
 
-function pemToArrayBuffer(pem: string) {
-  const base64 = pem
-    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
-    .replace(/-----END PUBLIC KEY-----/g, '')
-    .replace(/\s+/g, '')
-
-  const binary = window.atob(base64)
-  const bytes = new Uint8Array(binary.length)
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-
-  return bytes.buffer
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte)
-  }
-
-  return window.btoa(binary)
-}
-
-function getWebCrypto() {
-  if (!globalThis.crypto?.subtle) {
-    throw new AuthApiError('当前浏览器不支持登录加密，请更换浏览器后重试')
-  }
-
-  return globalThis.crypto
-}
-
-async function encryptPassword(password: string, publicKey: string) {
-  const cryptoApi = getWebCrypto()
-
+function encryptPassword(password: string, publicKey: string) {
   try {
-    const importedKey = await cryptoApi.subtle.importKey(
-      'spki',
-      pemToArrayBuffer(publicKey),
-      {
-        name: 'RSA-OAEP',
-        hash: 'SHA-256',
+    const rsaPublicKey = forge.pki.publicKeyFromPem(publicKey)
+    const encrypted = rsaPublicKey.encrypt(forge.util.encodeUtf8(password), 'RSA-OAEP', {
+      md: forge.md.sha256.create(),
+      mgf1: {
+        md: forge.md.sha256.create(),
       },
-      false,
-      ['encrypt'],
-    )
+    })
 
-    const encrypted = await cryptoApi.subtle.encrypt(
-      {
-        name: 'RSA-OAEP',
-      },
-      importedKey,
-      new TextEncoder().encode(password),
-    )
-
-    return arrayBufferToBase64(encrypted)
+    return forge.util.encode64(encrypted)
   } catch {
     throw new AuthApiError('登录密码加密失败，请刷新页面后重试')
   }
@@ -266,7 +224,7 @@ function postJson<T>(
 
 export async function loginUser(input: LoginRequest) {
   const keyPayload = await getLoginPublicKey()
-  const passwordCiphertext = await encryptPassword(input.password, keyPayload.publicKey)
+  const passwordCiphertext = encryptPassword(input.password, keyPayload.publicKey)
   const payload: EncryptedLoginRequest = {
     username: input.username,
     passwordCiphertext,
