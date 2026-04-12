@@ -26,7 +26,7 @@ async function initRedis() {
 async function initApp() {
   const app = createApp();
 
-  const PORT = process.env.PORT || 30010;
+  const PORT = process.env.PORT || 30011;
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
@@ -36,7 +36,11 @@ async function bootstrap() {
   try {
     await injectEnv()
     await initRedis()
-    await initDataBase();
+    try {
+      await initDataBase();
+    } catch (error) {
+      console.error('Database init failed, continuing without database:', error);
+    }
     await initApp();
   } catch (err) {
     console.error('Bootstrap error:', err);
