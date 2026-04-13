@@ -2,19 +2,22 @@ import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { HttpStatus } from '../constant/HttpStatus.ts';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default_secret_key';
 const PREVIEW_TOKEN_COOKIE_NAME = 'file_preview_token';
 
 export interface JwtPayload {
-  [key: string]: unknown
+  [key: string]: unknown;
 }
 
 declare global {
   namespace Express {
     interface Request {
-      jwtPayload?: JwtPayload
+      jwtPayload?: JwtPayload;
     }
   }
+}
+
+function getJwtSecret() {
+  return process.env.JWT_SECRET || 'default_secret_key';
 }
 
 export function jwtMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -30,7 +33,7 @@ export function jwtMiddleware(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    req.jwtPayload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    req.jwtPayload = jwt.verify(token, getJwtSecret()) as JwtPayload;
     return next();
   } catch {
     return res
@@ -40,7 +43,7 @@ export function jwtMiddleware(req: Request, res: Response, next: NextFunction) {
 }
 
 export function generateToken(payload: JwtPayload, expiresIn: number = 7200): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn });
 }
 
 function getRequestToken(req: Request): string | null {

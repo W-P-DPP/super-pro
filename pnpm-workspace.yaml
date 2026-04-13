@@ -1,4 +1,5 @@
 packages:
+  - agent-front
   - frontend-template
   - login-template
   - general-server

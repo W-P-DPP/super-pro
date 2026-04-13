@@ -6,6 +6,10 @@ export type StoredAuthSession = {
   expiresAt: number
 }
 
+export function isExpiredAuthSession(session: StoredAuthSession) {
+  return session.expiresAt <= Date.now()
+}
+
 const AUTH_STORAGE_KEY = 'login-template.auth'
 
 function getStorage() {
@@ -31,19 +35,21 @@ function isStoredAuthSession(value: unknown): value is StoredAuthSession {
   )
 }
 
+export function createStoredAuthSession(payload: LoginResponse): StoredAuthSession {
+  return {
+    token: payload.token,
+    tokenType: payload.tokenType,
+    expiresAt: Date.now() + payload.expiresIn * 1000,
+  }
+}
+
 export function saveAuthSession(payload: LoginResponse) {
   const storage = getStorage()
   if (!storage) {
     return
   }
 
-  const session: StoredAuthSession = {
-    token: payload.token,
-    tokenType: payload.tokenType,
-    expiresAt: Date.now() + payload.expiresIn * 1000,
-  }
-
-  storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
+  storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(createStoredAuthSession(payload)))
 }
 
 export function readAuthSession(): StoredAuthSession | null {

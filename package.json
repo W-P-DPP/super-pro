@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "dev:agent-front": "pnpm --filter @super-pro/agent-front dev",
     "dev:agent-server": "pnpm --filter @super-pro/agent-server dev",
     "build:agent-server": "pnpm --filter @super-pro/agent-server build",
     "dev:file-server": "pnpm --filter @super-pro/file-server dev",
@@ -13,6 +14,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "start:agent-server": "pnpm --filter @super-pro/agent-server start",
+    "build:agent-front": "pnpm --filter @super-pro/agent-front build",
     "test": "turbo run test",
     "test:agent-server": "pnpm --filter @super-pro/agent-server test",
     "test:unit": "pnpm --filter @super-pro/server test:unit",
