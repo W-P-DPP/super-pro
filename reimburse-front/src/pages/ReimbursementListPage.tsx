@@ -93,7 +93,7 @@ export function ReimbursementListPage() {
             <CardDescription>查看我的报销单，提交审批或处理待办。</CardDescription>
           </div>
           <div className="flex flex-col gap-2 md:flex-row">
-            <Select value={status} onValueChange={(value) => setStatus(value as 'all' | ReimbursementStatus)}>
+            <Select value={status} onValueChange={(value: string) => setStatus(value as 'all' | ReimbursementStatus)}>
               <SelectTrigger className="w-full md:w-40">
                 <SelectValue placeholder="筛选状态" />
               </SelectTrigger>

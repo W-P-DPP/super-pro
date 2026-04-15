@@ -94,7 +94,7 @@ export function ReimbursementFormPage() {
 
           <div className="space-y-2">
             <Label>报销类型</Label>
-            <Select value={category} onValueChange={(value) => setCategory(value as ReimbursementCategory)}>
+            <Select value={category} onValueChange={(value: string) => setCategory(value as ReimbursementCategory)}>
               <SelectTrigger>
                 <SelectValue placeholder="选择报销类型" />
               </SelectTrigger>

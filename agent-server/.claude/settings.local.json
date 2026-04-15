@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(cp -R \"C:/Users/admin/Desktop/my/super-pro/agent-server\" \"C:/Users/admin/Desktop/my/super-pro/reimburse-server\")",
-      "Bash(cp -R \"C:/Users/admin/Desktop/my/super-pro/agent-front\" \"C:/Users/admin/Desktop/my/super-pro/reimburse-front\")"
+      "Bash(cp -R \"C:/Users/admin/Desktop/my/super-pro/agent-front\" \"C:/Users/admin/Desktop/my/super-pro/reimburse-front\")",
+      "Bash(pnpm:*)",
+      "Bash(node:*)",
+      "Bash(node -p \"require\\(''C:/Users/admin/Desktop/my/super-pro/reimburse-front/node_modules/react-router-dom/package.json''\\).version\")",
+      "Bash(node -p \"require\\(''C:/Users/admin/Desktop/my/super-pro/reimburse-front/node_modules/vitest/package.json''\\).version\")",
+      "Bash(node -p \"require\\(''C:/Users/admin/Desktop/my/super-pro/reimburse-server/node_modules/cross-env/package.json''\\).version\")"
     ]
   }
 }

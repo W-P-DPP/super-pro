@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '');
 
   return {
-    base: '/agent',
+    base: '/reimburse',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -17,12 +17,12 @@ export default defineConfig(({ mode }) => {
     server: {
       allowedHosts: ['www.zwpsite.icu'],
       host: '0.0.0.0',
-      port: 56448,
+      port: 56449,
       proxy: {
-        '/agent-api': {
-          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30012',
+        '/reimburse-api': {
+          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30014',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/agent-api/, '/api'),
+          rewrite: (path) => path.replace(/^\/reimburse-api/, '/api'),
         },
       },
     },
