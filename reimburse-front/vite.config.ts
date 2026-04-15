@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
       port: 56449,
       proxy: {
         '/reimburse-api': {
-          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30014',
+          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30022',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/reimburse-api/, '/api'),
         },
