@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
+  const devPort = Number(env.VITE_DEV_PORT)
 
   return {
     base: '/file-server',
@@ -19,9 +20,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      allowedHosts:['www.zwpsite.icu'],
+      allowedHosts: ['www.zwpsite.icu'],
       host: '0.0.0.0',
-      port: env.VITE_DEV_PORT||16697,
+      port: Number.isFinite(devPort) && devPort > 0 ? devPort : 16697,
       proxy: {
         '/api': {
           target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30010',

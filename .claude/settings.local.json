@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py --version)",
+      "Bash(winget:*)",
+      "Bash(choco:*)",
+      "Bash(scoop:*)",
+      "Bash(pip --version)",
+      "Bash('/c/Users/admin/AppData/Local/Programs/Python/Python312/python.exe' --version)",
+      "Bash('/c/Users/admin/AppData/Local/Programs/Python/Python312/Scripts/pip.exe' --version)",
+      "Bash(pip install:*)",
+      "Bash(graphify install:*)"
+    ]
+  }
+}

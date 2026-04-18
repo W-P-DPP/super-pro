@@ -6,5 +6,6 @@ packages:
   - general-server
   - file-server
   - agent-server
+  - summary-front
   - reimburse-front
   - reimburse-server

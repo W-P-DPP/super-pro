@@ -568,26 +568,18 @@ export default function App() {
         <div className="grid min-h-0 flex-1 lg:grid-cols-[400px_minmax(0,1fr)]">
           <aside className="flex min-h-0 flex-col border-b border-border/70 bg-card/75 lg:border-b-0 lg:border-r">
             <div className="space-y-3 border-b border-border/70 px-4 py-4 sm:px-5">
-              <div className="rounded-lg border border-border/80 bg-background/80 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">当前选中</p>
-                    <p className="mt-1 truncate text-sm font-medium">{selectedNode.relativePath}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{selectedNode.type === 'folder' ? '文件夹' : '文件'}</p>
-                  </div>
-                  <div className="flex shrink-0 items-start gap-2">
-                    <span className="rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">操作目录 {activeFolderPath}</span>
-                    <button type="button" aria-label="刷新文件树" title="刷新文件树" onClick={() => void refreshTree(selectedPath)} className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-foreground">
-                      <RefreshCw className={['size-4', loading ? 'animate-spin' : ''].join(' ')} />
-                    </button>
-                    <button type="button" aria-label={resolvedTheme === 'dark' ? '切换浅色模式' : '切换深色模式'} title={resolvedTheme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-foreground">
-                      {resolvedTheme === 'dark' ? <SunMedium className="size-4" /> : <MoonStar className="size-4" />}
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-background/80 p-4">
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span className="rounded-full border border-border bg-card px-2.5 py-1">文件夹 {treeStats.folders}</span>
                   <span className="rounded-full border border-border bg-card px-2.5 py-1">文件 {treeStats.files}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" aria-label="刷新文件树" title="刷新文件树" onClick={() => void refreshTree(selectedPath)} className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-foreground">
+                      <RefreshCw className={['size-4', loading ? 'animate-spin' : ''].join(' ')} />
+                  </button>
+                  <button type="button" aria-label={resolvedTheme === 'dark' ? '切换浅色模式' : '切换深色模式'} title={resolvedTheme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-foreground">
+                    {resolvedTheme === 'dark' ? <SunMedium className="size-4" /> : <MoonStar className="size-4" />}
+                  </button>
                 </div>
               </div>
 

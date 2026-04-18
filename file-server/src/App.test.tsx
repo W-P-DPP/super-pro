@@ -335,6 +335,52 @@ describe('App', () => {
     expect(await screen.findByText('登录状态已失效，请重新登录')).toBeInTheDocument()
   })
 
+  it('should expose full long names through titles in the tree without rendering the header path summary', async () => {
+    const longFileName = 'this-is-a-very-long-file-name-used-for-hover-checking-and-layout-validation.md'
+    const folderPath = '/nested-folder-with-a-very-long-name'
+    const filePath = `${folderPath}/${longFileName}`
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'nested-folder-with-a-very-long-name',
+          relativePath: folderPath,
+          type: 'folder',
+          children: [
+            {
+              name: longFileName,
+              relativePath: filePath,
+              type: 'file',
+              size: 2048,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    fetchMock.mockResolvedValueOnce(textResponse('# preview', 'text/markdown; charset=utf-8'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    const folderNode = (
+      await screen.findByRole('button', { name: /nested-folder-with-a-very-long-name/ })
+    ).closest('[draggable="true"]')
+    if (!(folderNode instanceof HTMLElement)) {
+      throw new Error('folder node was not rendered correctly')
+    }
+
+    await userEvent.click(within(folderNode).getByRole('button', { name: '展开目录' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: new RegExp(longFileName.replace(/\./g, '\\.')) }),
+    )
+
+    expect(screen.getByText(longFileName)).toHaveAttribute('title', longFileName)
+    expect(screen.getAllByTitle(filePath).length).toBeGreaterThan(0)
+    expect(screen.queryByText('当前选中')).not.toBeInTheDocument()
+    expect(screen.queryByText('操作目录')).not.toBeInTheDocument()
+  })
+
   it('should redirect to login when audio preview preflight returns 403', async () => {
     const fetchMock = vi.fn()
     fetchMock.mockResolvedValueOnce(

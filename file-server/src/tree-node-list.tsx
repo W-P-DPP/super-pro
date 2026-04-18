@@ -46,6 +46,10 @@ function formatTime(value?: string): string {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
+function getNodeLabel(node: FileNode): string {
+  return node.relativePath === '/' ? 'file' : node.name
+}
+
 function ActionButton({
   label,
   disabled,
@@ -138,6 +142,7 @@ export function TreeNodeList({
         const isSelected = selectedPath === node.relativePath
         const isDragging = dragState.sourcePath === node.relativePath
         const isDropTarget = dragState.dropTargetPath === node.relativePath
+        const nodeLabel = getNodeLabel(node)
         const metaText = isFolder
           ? `${children.length} 个子项`
           : `${formatFileSize(node.size)} · ${formatTime(node.modifiedTime)}`
@@ -159,7 +164,9 @@ export function TreeNodeList({
                     : 'border-transparent hover:border-border/80 hover:bg-background/70',
                 isDragging ? 'opacity-60' : '',
                 !isRoot && !submitting ? 'cursor-grab active:cursor-grabbing' : '',
-                dragState.sourcePath && isFolder && isValidDropTarget(node) ? 'ring-1 ring-primary/20' : '',
+                dragState.sourcePath && isFolder && isValidDropTarget(node)
+                  ? 'ring-1 ring-primary/20'
+                  : '',
               ].join(' ')}
             >
               <div
@@ -174,10 +181,16 @@ export function TreeNodeList({
                     onClick={() => onToggleExpand(node.relativePath)}
                     className={[
                       'inline-flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition',
-                      isRoot ? 'cursor-default opacity-70' : 'hover:bg-background hover:text-foreground',
+                      isRoot
+                        ? 'cursor-default opacity-70'
+                        : 'hover:bg-background hover:text-foreground',
                     ].join(' ')}
                   >
-                    {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                    {isExpanded ? (
+                      <ChevronDown className="size-4" />
+                    ) : (
+                      <ChevronRight className="size-4" />
+                    )}
                   </button>
                 ) : (
                   <span className="inline-flex size-7 shrink-0 items-center justify-center" />
@@ -186,8 +199,9 @@ export function TreeNodeList({
                 <button
                   type="button"
                   onClick={() => onSelect(node.relativePath)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  aria-label={`树节点 ${isRoot ? 'file' : node.name}`}
+                  className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden text-left"
+                  aria-label={`树节点 ${nodeLabel}`}
+                  title={node.relativePath}
                 >
                   <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card/80">
                     {isFolder ? (
@@ -200,11 +214,11 @@ export function TreeNodeList({
                       <FileText className="size-4 text-muted-foreground" />
                     )}
                   </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
-                      {isRoot ? 'file' : node.name}
+                  <span className="min-w-0 flex-1 overflow-hidden">
+                    <span className="block truncate text-sm font-medium" title={nodeLabel}>
+                      {nodeLabel}
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate text-xs text-muted-foreground" title={metaText}>
                       {isRoot ? '根目录' : metaText}
                     </span>
                   </span>
@@ -212,7 +226,7 @@ export function TreeNodeList({
 
                 <div
                   className={[
-                    'flex shrink-0 items-center gap-1 transition',
+                    'flex shrink-0 items-center gap-1 self-start transition',
                     isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
                   ].join(' ')}
                 >
