@@ -1,19 +1,24 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// https://vitejs.dev/config/
-export default defineConfig({
-    base: '/zwpsummary/',
-    plugins: [vue()],
-    css: {
-        preprocessorOptions: {
-            scss: {
-                silenceDeprecations: ["mixed-decls", "color-functions", "global-builtin", "import"],
+export default defineConfig(({ mode }) => {
+    const env = loadEnv(mode, __dirname, '')
+    const devPort = Number(env.VITE_DEV_PORT)
+
+    return {
+        base: env.VITE_APP_BASE || '/resume/',
+        plugins: [vue()],
+        css: {
+            preprocessorOptions: {
+                scss: {
+                    silenceDeprecations: ["mixed-decls", "color-functions", "global-builtin", "import"],
+                },
             },
         },
-    },
-    server:{
-        port:30011,
-        allowedHosts:['www.zwpsite.icu']
+        server: {
+            host: '0.0.0.0',
+            port: Number.isFinite(devPort) && devPort > 0 ? devPort : 19697,
+            allowedHosts: ['localhost', '127.0.0.1'],
+        },
     }
 })

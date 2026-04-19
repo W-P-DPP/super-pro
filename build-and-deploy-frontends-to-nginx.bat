@@ -37,6 +37,9 @@ if errorlevel 1 exit /b 1
 call :build_and_sync "summary-front" "@super-pro/summary-front" "summary-front"
 if errorlevel 1 exit /b 1
 
+call :build_and_sync "resume-template" "@super-pro/resume-template" "resume"
+if errorlevel 1 exit /b 1
+
 call :build_and_sync "file-server" "@super-pro/file-server" "file-server"
 if errorlevel 1 exit /b 1
 

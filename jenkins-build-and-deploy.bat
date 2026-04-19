@@ -53,6 +53,8 @@ call :build_package "@super-pro/reimburse-front"
 if errorlevel 1 exit /b 1
 call :build_package "@super-pro/summary-front"
 if errorlevel 1 exit /b 1
+call :build_package "@super-pro/resume-template"
+if errorlevel 1 exit /b 1
 call :build_package "@super-pro/file-server"
 if errorlevel 1 exit /b 1
 echo.
@@ -67,6 +69,8 @@ if errorlevel 1 exit /b 1
 call :sync_dist "reimburse-front" "reimburse"
 if errorlevel 1 exit /b 1
 call :sync_dist "summary-front" "summary-front"
+if errorlevel 1 exit /b 1
+call :sync_dist "resume-template" "resume"
 if errorlevel 1 exit /b 1
 call :sync_dist "file-server" "file-server"
 if errorlevel 1 exit /b 1
