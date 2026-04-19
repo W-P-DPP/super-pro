@@ -4,7 +4,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig(({ mode }) => {
- const env = loadEnv(mode, __dirname, '')
+  const env = loadEnv(mode, __dirname, '')
+  const devPort = Number(env.VITE_DEV_PORT)
 
   return {
     base: '/login',
@@ -17,7 +18,7 @@ export default defineConfig(({ mode }) => {
     server: {
       allowedHosts: ['www.zwpsite.icu'],
       host: '0.0.0.0',
-      port: env.VITE_DEV_PORT||12697,
+      port: Number.isFinite(devPort) && devPort > 0 ? devPort : 12697,
     },
   }
 })

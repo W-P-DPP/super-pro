@@ -34,7 +34,7 @@ describe('shared-web auth session helpers', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     if (originalWindow === undefined) {
-      delete (globalThis as typeof globalThis & { window?: Window }).window;
+      Reflect.deleteProperty(globalThis, 'window');
       return;
     }
 
