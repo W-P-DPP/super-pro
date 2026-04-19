@@ -17,7 +17,7 @@ const menuTreeFixture = [
     parentId: null,
     name: '工具',
     path: '/tool',
-    icon: '/icons/tool.svg',
+    icon: '/public/icons/tool.svg',
     strict: false,
     hide: false,
     isTop: false,
@@ -29,7 +29,7 @@ const menuTreeFixture = [
         parentId: 1,
         name: 'JSON解析',
         path: 'https://www.json.cn/',
-        icon: '/icons/json.ico',
+        icon: '/public/icons/json.ico',
         strict: true,
         hide: false,
         isTop: false,
@@ -42,7 +42,7 @@ const menuTreeFixture = [
         parentId: 1,
         name: '调试面板',
         path: '/debug-panel',
-        icon: '/icons/debug.svg',
+        icon: '/public/icons/debug.svg',
         strict: false,
         hide: true,
         isTop: false,
@@ -57,7 +57,7 @@ const menuTreeFixture = [
     parentId: null,
     name: '隐藏应用',
     path: '/secret-app',
-    icon: '/icons/secret.svg',
+    icon: '/public/icons/secret.svg',
     strict: false,
     hide: true,
     isTop: false,
@@ -241,7 +241,7 @@ describe('tool-directory', () => {
   })
 
   it('直接使用后端返回的根路径图标地址', () => {
-    expect(resolveSiteMenuIcon('/icons/tool.svg')).toBe('/icons/tool.svg')
+    expect(resolveSiteMenuIcon('/public/icons/tool.svg')).toBe('/public/icons/tool.svg')
   })
 
   it('把相对路径图标规范化为根路径', () => {
@@ -255,9 +255,9 @@ describe('tool-directory', () => {
   })
 
   it('空图标或占位值使用统一兜底图标', () => {
-    expect(resolveSiteMenuIcon('')).toBe('/icons/tool.svg')
-    expect(resolveSiteMenuIcon('   ')).toBe('/icons/tool.svg')
-    expect(resolveSiteMenuIcon('icon-path')).toBe('/icons/tool.svg')
-    expect(resolveSiteMenuIcon(undefined)).toBe('/icons/tool.svg')
+    expect(resolveSiteMenuIcon('')).toBe('/public/icons/tool.svg')
+    expect(resolveSiteMenuIcon('   ')).toBe('/public/icons/tool.svg')
+    expect(resolveSiteMenuIcon('icon-path')).toBe('/public/icons/tool.svg')
+    expect(resolveSiteMenuIcon(undefined)).toBe('/public/icons/tool.svg')
   })
 })

@@ -1,6 +1,6 @@
 import type { SiteMenuResponseDto } from '@/api/modules/site-menu'
 
-const DEFAULT_SITE_MENU_ICON = '/icons/tool.svg'
+const DEFAULT_SITE_MENU_ICON = '/public/icons/tool.svg'
 const DEFAULT_HIDDEN_MENU_KEYWORD = 'dpp'
 
 export type ToolStats = {

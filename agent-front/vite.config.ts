@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      allowedHosts: ['www.zwpsite.icu'],
+      allowedHosts: ['localhost', '127.0.0.1'],
       host: '0.0.0.0',
       port: Number.isFinite(devPort) && devPort > 0 ? devPort : 15697,
       proxy: {
@@ -24,6 +24,10 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30012',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/agent-api/, '/api'),
+        },
+        '/public': {
+          target: env.VITE_PUBLIC_ASSET_PROXY_TARGET || 'http://127.0.0.1:30010',
+          changeOrigin: true,
         },
       },
     },
