@@ -18,7 +18,7 @@ describe('shared-constants', () => {
   });
 
   it('exports workspace production defaults', () => {
-    expect(WORKSPACE_PRODUCTION_ORIGIN).toBe('http://www.zwpsite.icu:8082');
+    expect(WORKSPACE_PRODUCTION_ORIGIN).toBe('http://www.zwpsite.icu');
     expect(WORKSPACE_LOGIN_PATH).toBe('/login/');
     expect(ENV_FILE_NAMES.production).toBe('.env.production');
   });

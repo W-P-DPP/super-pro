@@ -23,8 +23,8 @@ describe('shared-web url helpers', () => {
       location: { protocol: 'https:' },
     });
 
-    expect(normalizeAbsoluteUrl('www.zwpsite.icu:8082/login')).toBe(
-      'https://www.zwpsite.icu:8082/login',
+    expect(normalizeAbsoluteUrl('www.zwpsite.icu/login')).toBe(
+      'https://www.zwpsite.icu/login',
     );
   });
 
@@ -39,11 +39,11 @@ describe('shared-web url helpers', () => {
   it('builds login redirect urls with encoded targets', () => {
     expect(
       buildLoginRedirectUrl(
-        'http://www.zwpsite.icu:8082/login/',
+        'http://www.zwpsite.icu/login/',
         'http://localhost:3000/agent?tab=chat',
       ),
     ).toBe(
-      'http://www.zwpsite.icu:8082/login/?redirect=http%3A%2F%2Flocalhost%3A3000%2Fagent%3Ftab%3Dchat',
+      'http://www.zwpsite.icu/login/?redirect=http%3A%2F%2Flocalhost%3A3000%2Fagent%3Ftab%3Dchat',
     );
   });
 

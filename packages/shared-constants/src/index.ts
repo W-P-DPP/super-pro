@@ -1,4 +1,4 @@
-export const WORKSPACE_PRODUCTION_ORIGIN = 'http://www.zwpsite.icu:8082';
+export const WORKSPACE_PRODUCTION_ORIGIN = 'http://www.zwpsite.icu';
 export const WORKSPACE_LOGIN_PATH = '/login/';
 
 export const ENV_FILE_NAMES = {
