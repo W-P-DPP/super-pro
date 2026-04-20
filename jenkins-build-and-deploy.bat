@@ -5,8 +5,9 @@ set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 set "REPO_DIR=%SCRIPT_DIR%"
 
-set "PNPM_CMD=pnpm"
-set "PM2_CMD=pm2"
+set "NODE_CMD=node.exe"
+set "PNPM_CMD=pnpm.cmd"
+set "PM2_CMD=pm2.cmd"
 
 set "NGINX_EXE=D:\Programs\nginx-1.26.3\nginx.exe"
 set "NGINX_DIR=D:\Programs\nginx-1.26.3"
@@ -16,178 +17,56 @@ set "NGINX_HTML_ROOT=%NGINX_DIR%\html"
 if not "%~1"=="" set "NGINX_HTML_ROOT=%~1"
 if not "%~2"=="" set "NGINX_CONF=%~2"
 
-set "PM2_ECOSYSTEM=%REPO_DIR%\ecosystem.config.cjs"
-
 echo [INFO] Repo dir        : %REPO_DIR%
 echo [INFO] Nginx html root : %NGINX_HTML_ROOT%
 echo [INFO] Nginx config    : %NGINX_CONF%
-echo [INFO] PM2 ecosystem   : %PM2_ECOSYSTEM%
 echo.
 
-call :ensure_command "%PNPM_CMD%" "pnpm"
+call :resolve_command NODE_CMD "node" "%NVM_SYMLINK%\node.exe" "%ProgramFiles%\nodejs\node.exe" ""
 if errorlevel 1 exit /b 1
 
-call :ensure_command "%PM2_CMD%" "pm2"
+call :resolve_command PNPM_CMD "pnpm" "%APPDATA%\npm\pnpm.cmd" "%NVM_SYMLINK%\pnpm.cmd" "%ProgramFiles%\nodejs\pnpm.cmd"
 if errorlevel 1 exit /b 1
 
-call :ensure_file "%NGINX_EXE%"
+call :resolve_command PM2_CMD "pm2" "%APPDATA%\npm\pm2.cmd" "%NVM_SYMLINK%\pm2.cmd" "%ProgramFiles%\nodejs\pm2.cmd"
 if errorlevel 1 exit /b 1
 
-call :ensure_file "%NGINX_CONF%"
-if errorlevel 1 exit /b 1
-
-call :ensure_file "%PM2_ECOSYSTEM%"
-if errorlevel 1 exit /b 1
-
-call :ensure_dir "%NGINX_HTML_ROOT%"
-if errorlevel 1 exit /b 1
-
-echo [STEP 1/5] Build frontend apps
-call :build_package "@super-pro/frontend"
-if errorlevel 1 exit /b 1
-call :build_package "@super-pro/login-template"
-if errorlevel 1 exit /b 1
-call :build_package "@super-pro/agent-front"
-if errorlevel 1 exit /b 1
-call :build_package "@super-pro/reimburse-front"
-if errorlevel 1 exit /b 1
-call :build_package "@super-pro/summary-front"
-if errorlevel 1 exit /b 1
-call :build_package "@super-pro/resume-template"
-if errorlevel 1 exit /b 1
-call :build_package "@super-pro/file-server"
-if errorlevel 1 exit /b 1
-echo.
-
-echo [STEP 2/5] Sync frontend bundles to nginx html
-call :sync_dist "frontend-template" "zwpsite"
-if errorlevel 1 exit /b 1
-call :sync_dist "login-template" "login"
-if errorlevel 1 exit /b 1
-call :sync_dist "agent-front" "agent"
-if errorlevel 1 exit /b 1
-call :sync_dist "reimburse-front" "reimburse"
-if errorlevel 1 exit /b 1
-call :sync_dist "summary-front" "summary-front"
-if errorlevel 1 exit /b 1
-call :sync_dist "resume-template" "resume"
-if errorlevel 1 exit /b 1
-call :sync_dist "file-server" "file-server"
-if errorlevel 1 exit /b 1
-echo.
-
-echo [STEP 3/5] Build backend services
-call :build_package "@super-pro/server"
-if errorlevel 1 exit /b 1
-call :build_package "@super-pro/agent-server"
-if errorlevel 1 exit /b 1
-call :build_package "@super-pro/reimburse-server"
-if errorlevel 1 exit /b 1
-echo.
-
-echo [STEP 4/5] Reload backend services with PM2
-pushd "%REPO_DIR%" >nul
-call %PM2_CMD% startOrReload "%PM2_ECOSYSTEM%" --update-env
-set "PM2_EXIT=!ERRORLEVEL!"
-popd >nul
-if !PM2_EXIT! NEQ 0 (
-  echo [ERROR] PM2 startOrReload failed with exit code !PM2_EXIT!
-  exit /b !PM2_EXIT!
-)
-echo [OK] PM2 services reloaded.
-call %PM2_CMD% save >nul
-echo.
-
-echo [STEP 5/5] Restart nginx
-call :restart_nginx
-if errorlevel 1 exit /b 1
-echo.
-
-echo [OK] Jenkins build and deploy completed successfully.
-exit /b 0
-
-:build_package
-set "PACKAGE_NAME=%~1"
-echo   [BUILD] %PACKAGE_NAME%
-call %PNPM_CMD% --dir "%REPO_DIR%" --filter %PACKAGE_NAME% build
-if errorlevel 1 (
-  echo [ERROR] Build failed: %PACKAGE_NAME%
-  exit /b 1
-)
-exit /b 0
-
-:sync_dist
-set "PACKAGE_DIR=%~1"
-set "TARGET_SUBDIR=%~2"
-set "SOURCE_DIR=%REPO_DIR%\%PACKAGE_DIR%\dist"
-set "TARGET_DIR=%NGINX_HTML_ROOT%\%TARGET_SUBDIR%"
-
-call :ensure_dir "%TARGET_DIR%"
-if errorlevel 1 exit /b 1
-
-if not exist "%SOURCE_DIR%" (
-  echo [ERROR] Dist folder not found: %SOURCE_DIR%
+if not exist "%NGINX_EXE%" (
+  echo [ERROR] File not found: %NGINX_EXE%
   exit /b 1
 )
 
-echo   [SYNC ] %PACKAGE_DIR%\dist ^> %TARGET_SUBDIR%
-robocopy "%SOURCE_DIR%" "%TARGET_DIR%" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul
-set "ROBOCOPY_EXIT=!ERRORLEVEL!"
-if !ROBOCOPY_EXIT! GEQ 8 (
-  echo [ERROR] robocopy failed for %PACKAGE_DIR% with exit code !ROBOCOPY_EXIT!
-  exit /b !ROBOCOPY_EXIT!
-)
-exit /b 0
-
-:restart_nginx
-echo   [NGINX] Stop old nginx processes
-taskkill /F /IM nginx.exe >nul 2>&1
-
-echo   [NGINX] Wait for process cleanup
-timeout /t 2 /nobreak >nul
-
-echo   [NGINX] Validate config
-"%NGINX_EXE%" -t -p "%NGINX_DIR%" -c "%NGINX_CONF%"
-if errorlevel 1 (
-  echo [ERROR] nginx config validation failed.
+if not exist "%NGINX_CONF%" (
+  echo [ERROR] File not found: %NGINX_CONF%
   exit /b 1
 )
 
-echo   [NGINX] Start nginx
-start "nginx" /D "%NGINX_DIR%" "%NGINX_EXE%" -p "%NGINX_DIR%" -c "%NGINX_CONF%"
-if errorlevel 1 (
-  echo [ERROR] nginx failed to start.
-  exit /b 1
-)
+call "%NODE_CMD%" "%REPO_DIR%\scripts\workspace-deploy.cjs" all --repo-dir "%REPO_DIR%" --deploy-root "%NGINX_HTML_ROOT%" --pnpm "%PNPM_CMD%" --pm2 "%PM2_CMD%" --nginx-exe "%NGINX_EXE%" --nginx-dir "%NGINX_DIR%" --nginx-conf "%NGINX_CONF%"
+exit /b %ERRORLEVEL%
 
-echo [OK] nginx restarted successfully.
-exit /b 0
-
-:ensure_command
-set "COMMAND_NAME=%~1"
+:resolve_command
+set "TARGET_VAR=%~1"
 set "DISPLAY_NAME=%~2"
-where %COMMAND_NAME% >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] %DISPLAY_NAME% command not found in PATH.
+set "FALLBACK_ONE=%~3"
+set "FALLBACK_TWO=%~4"
+set "FALLBACK_THREE=%~5"
+set "RESOLVED_COMMAND="
+
+for /f "delims=" %%I in ('where %TARGET_VAR% 2^>nul') do (
+  set "RESOLVED_COMMAND=%%~fI"
+  goto :resolve_command_found
+)
+
+if not defined RESOLVED_COMMAND if not "%FALLBACK_ONE%"=="" if exist "%FALLBACK_ONE%" set "RESOLVED_COMMAND=%FALLBACK_ONE%"
+if not defined RESOLVED_COMMAND if not "%FALLBACK_TWO%"=="" if exist "%FALLBACK_TWO%" set "RESOLVED_COMMAND=%FALLBACK_TWO%"
+if not defined RESOLVED_COMMAND if not "%FALLBACK_THREE%"=="" if exist "%FALLBACK_THREE%" set "RESOLVED_COMMAND=%FALLBACK_THREE%"
+
+:resolve_command_found
+if not defined RESOLVED_COMMAND (
+  echo [ERROR] %DISPLAY_NAME% command not found.
   exit /b 1
 )
-exit /b 0
 
-:ensure_file
-set "FILE_PATH=%~1"
-if not exist "%FILE_PATH%" (
-  echo [ERROR] File not found: %FILE_PATH%
-  exit /b 1
-)
-exit /b 0
-
-:ensure_dir
-set "DIR_PATH=%~1"
-if exist "%DIR_PATH%" exit /b 0
-
-mkdir "%DIR_PATH%" >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] Failed to create directory: %DIR_PATH%
-  exit /b 1
-)
+set "%TARGET_VAR%=%RESOLVED_COMMAND%"
+echo [INFO] %DISPLAY_NAME% command  : %RESOLVED_COMMAND%
 exit /b 0

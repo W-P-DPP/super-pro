@@ -5,7 +5,9 @@ set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 set "REPO_DIR=%SCRIPT_DIR%"
 
-rem Default nginx install path. Override by passing the target root as arg1.
+set "NODE_CMD=node.exe"
+set "PNPM_CMD=pnpm.cmd"
+
 set "NGINX_DIR=D:\Programs\nginx-1.26.3"
 set "DEPLOY_ROOT=%NGINX_DIR%\html"
 
@@ -13,81 +15,42 @@ if not "%~1"=="" (
   set "DEPLOY_ROOT=%~1"
 )
 
-set "PNPM_CMD=pnpm"
-
 echo [INFO] Repo dir   : %REPO_DIR%
 echo [INFO] Deploy root: %DEPLOY_ROOT%
 echo.
 
-call :ensure_dir "%DEPLOY_ROOT%"
+call :resolve_command NODE_CMD "node" "%NVM_SYMLINK%\node.exe" "%ProgramFiles%\nodejs\node.exe" ""
 if errorlevel 1 exit /b 1
 
-call :build_and_sync "frontend-template" "@super-pro/frontend" "zwpsite"
+call :resolve_command PNPM_CMD "pnpm" "%APPDATA%\npm\pnpm.cmd" "%NVM_SYMLINK%\pnpm.cmd" "%ProgramFiles%\nodejs\pnpm.cmd"
 if errorlevel 1 exit /b 1
 
-call :build_and_sync "login-template" "@super-pro/login-template" "login"
-if errorlevel 1 exit /b 1
+call "%NODE_CMD%" "%REPO_DIR%\scripts\workspace-deploy.cjs" frontends --repo-dir "%REPO_DIR%" --deploy-root "%DEPLOY_ROOT%" --pnpm "%PNPM_CMD%"
+exit /b %ERRORLEVEL%
 
-call :build_and_sync "agent-front" "@super-pro/agent-front" "agent"
-if errorlevel 1 exit /b 1
+:resolve_command
+set "TARGET_VAR=%~1"
+set "DISPLAY_NAME=%~2"
+set "FALLBACK_ONE=%~3"
+set "FALLBACK_TWO=%~4"
+set "FALLBACK_THREE=%~5"
+set "RESOLVED_COMMAND="
 
-call :build_and_sync "reimburse-front" "@super-pro/reimburse-front" "reimburse"
-if errorlevel 1 exit /b 1
+for /f "delims=" %%I in ('where %TARGET_VAR% 2^>nul') do (
+  set "RESOLVED_COMMAND=%%~fI"
+  goto :resolve_command_found
+)
 
-call :build_and_sync "summary-front" "@super-pro/summary-front" "summary-front"
-if errorlevel 1 exit /b 1
+if not defined RESOLVED_COMMAND if not "%FALLBACK_ONE%"=="" if exist "%FALLBACK_ONE%" set "RESOLVED_COMMAND=%FALLBACK_ONE%"
+if not defined RESOLVED_COMMAND if not "%FALLBACK_TWO%"=="" if exist "%FALLBACK_TWO%" set "RESOLVED_COMMAND=%FALLBACK_TWO%"
+if not defined RESOLVED_COMMAND if not "%FALLBACK_THREE%"=="" if exist "%FALLBACK_THREE%" set "RESOLVED_COMMAND=%FALLBACK_THREE%"
 
-call :build_and_sync "resume-template" "@super-pro/resume-template" "resume"
-if errorlevel 1 exit /b 1
-
-call :build_and_sync "file-server" "@super-pro/file-server" "file-server"
-if errorlevel 1 exit /b 1
-
-echo.
-echo [OK] All frontend bundles were deployed to nginx successfully.
-exit /b 0
-
-:build_and_sync
-set "PACKAGE_DIR=%~1"
-set "PACKAGE_NAME=%~2"
-set "TARGET_SUBDIR=%~3"
-set "SOURCE_DIR=%REPO_DIR%\%PACKAGE_DIR%\dist"
-set "TARGET_DIR=%DEPLOY_ROOT%\%TARGET_SUBDIR%"
-
-echo [BUILD] %PACKAGE_NAME%
-call %PNPM_CMD% --dir "%REPO_DIR%" --filter %PACKAGE_NAME% build
-if errorlevel 1 (
-  echo [ERROR] Build failed: %PACKAGE_NAME%
+:resolve_command_found
+if not defined RESOLVED_COMMAND (
+  echo [ERROR] %DISPLAY_NAME% command not found.
   exit /b 1
 )
 
-if not exist "%SOURCE_DIR%" (
-  echo [ERROR] Dist folder not found: %SOURCE_DIR%
-  exit /b 1
-)
-
-call :ensure_dir "%TARGET_DIR%"
-if errorlevel 1 exit /b 1
-
-echo [SYNC ] %SOURCE_DIR% ^> %TARGET_DIR%
-robocopy "%SOURCE_DIR%" "%TARGET_DIR%" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul
-set "ROBOCOPY_EXIT=!ERRORLEVEL!"
-if !ROBOCOPY_EXIT! GEQ 8 (
-  echo [ERROR] robocopy failed for %PACKAGE_NAME% with exit code !ROBOCOPY_EXIT!
-  exit /b !ROBOCOPY_EXIT!
-)
-
-echo [DONE ] %PACKAGE_NAME%
-echo.
-exit /b 0
-
-:ensure_dir
-set "DIR_TO_CREATE=%~1"
-if exist "%DIR_TO_CREATE%" exit /b 0
-
-mkdir "%DIR_TO_CREATE%" >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] Failed to create directory: %DIR_TO_CREATE%
-  exit /b 1
-)
+set "%TARGET_VAR%=%RESOLVED_COMMAND%"
+echo [INFO] %DISPLAY_NAME% command  : %RESOLVED_COMMAND%
 exit /b 0
