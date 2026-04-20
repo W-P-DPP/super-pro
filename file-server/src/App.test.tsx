@@ -54,6 +54,7 @@ function textResponse(text: string, contentType = 'text/plain; charset=utf-8') {
 
 describe('App', () => {
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     redirectToLoginPageMock.mockReset()
     localStorage.clear()
@@ -506,5 +507,89 @@ describe('App', () => {
       expect(redirectToLoginPageMock).toHaveBeenCalledTimes(1)
     })
     expect(await screen.findByText('登录状态已失效，请重新登录')).toBeInTheDocument()
+  })
+
+  it('should show download action for file preview and trigger browser download', async () => {
+    localStorage.setItem('token', 'download-token')
+
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'guide.md',
+              relativePath: '/docs/guide.md',
+              type: 'file',
+              size: 8,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    fetchMock.mockResolvedValueOnce(textResponse('# guide', 'text/markdown; charset=utf-8'))
+    fetchMock.mockResolvedValueOnce(textResponse('', 'text/markdown; charset=utf-8'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const originalCreateElement = document.createElement.bind(document)
+    const anchorClick = vi.fn()
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string, options?: ElementCreationOptions) => {
+      const element = originalCreateElement(tagName, options)
+      if (tagName.toLowerCase() === 'a') {
+        element.click = anchorClick as typeof element.click
+      }
+      return element
+    })
+
+    renderApp()
+
+    const docsNode = (await screen.findByRole('button', { name: '树节点 docs' })).closest('[draggable="true"]')
+    if (!(docsNode instanceof HTMLElement)) {
+      throw new Error('docs 节点未正确渲染')
+    }
+
+    const docsButtons = within(docsNode).getAllByRole('button')
+    await userEvent.click(docsButtons[0])
+    await userEvent.click(await screen.findByRole('button', { name: '树节点 guide.md' }))
+
+    const downloadButton = await screen.findByRole('button', { name: '下载文件' })
+    await userEvent.click(downloadButton)
+
+    await waitFor(() => {
+      expect(anchorClick).toHaveBeenCalledTimes(1)
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/file/download?targetPath=%2Fdocs%2Fguide.md',
+      expect.objectContaining({
+        headers: expect.any(Headers),
+        signal: expect.any(AbortSignal),
+      }),
+    )
+    expect(document.cookie).toContain('file_preview_token=download-token')
+  })
+
+  it('should not show download action for folder selection', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [],
+        },
+      ]),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    await screen.findByRole('button', { name: '树节点 docs' })
+    expect(screen.queryByRole('button', { name: '下载文件' })).not.toBeInTheDocument()
   })
 })

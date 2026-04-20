@@ -577,4 +577,51 @@ describe('file 文件服务接口', () => {
     expect(completeRes.status).toBe(409)
     expect(await readFile(path.join(context.fileRoot, 'docs', 'large.txt'), 'utf8')).toBe('old')
   })
+
+  it('GET /api/file/download should return attachment download response for a file', async () => {
+    await mkdir(path.join(context.fileRoot, 'docs'))
+    await writeFile(path.join(context.fileRoot, 'docs', 'guide.md'), '# guide')
+
+    const res = await request(app)
+      .get('/api/file/download')
+      .query({
+        targetPath: '/docs/guide.md',
+      })
+
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toContain('text/markdown')
+    expect(res.headers['content-disposition']).toContain('attachment;')
+    expect(res.headers['content-disposition']).toContain("filename*=UTF-8''guide.md")
+    expect(res.text).toBe('# guide')
+  })
+
+  it('GET /api/file/download should reject downloading a folder', async () => {
+    await mkdir(path.join(context.fileRoot, 'docs'))
+
+    const res = await request(app)
+      .get('/api/file/download')
+      .query({
+        targetPath: '/docs',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toMatchObject({
+      code: 400,
+      msg: expect.any(String),
+    })
+  })
+
+  it('GET /api/file/download should reject escaped paths', async () => {
+    const res = await request(app)
+      .get('/api/file/download')
+      .query({
+        targetPath: '/../outside.txt',
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toMatchObject({
+      code: 400,
+      msg: expect.any(String),
+    })
+  })
 })

@@ -5,6 +5,7 @@ import {
   completeChunkUpload,
   createFolder,
   deleteFile,
+  downloadFile,
   getFileTree,
   moveFile,
   previewFile,
@@ -21,6 +22,7 @@ const uploadChunkPayload = multer({
 })
 
 fileRouter.get('/tree', getFileTree)
+fileRouter.get('/download', downloadFile)
 fileRouter.get('/preview', previewFile)
 fileRouter.post('/folder', createFolder)
 fileRouter.post('/move', moveFile)

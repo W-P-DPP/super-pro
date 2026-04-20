@@ -1,3 +1,4 @@
+import { Download } from 'lucide-react'
 import type { PreviewKind } from './file-preview'
 import { getPreviewKind } from './file-preview'
 import type { PreviewState } from './file-server-types'
@@ -62,9 +63,11 @@ function getPreviewKindLabel(kind: PreviewKind): string {
 export function PreviewPanel({
   selectedNode,
   previewState,
+  onDownload,
 }: {
   selectedNode: FileNode
   previewState: PreviewState
+  onDownload?: () => void
 }) {
   const previewKind =
     previewState.status === 'ready' || previewState.status === 'loading'
@@ -88,7 +91,17 @@ export function PreviewPanel({
               {selectedNode.type === 'folder' ? '文件夹上下文' : '文件预览'}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
+            {onDownload ? (
+              <button
+                type="button"
+                onClick={onDownload}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              >
+                <Download className="size-4" />
+                <span>下载文件</span>
+              </button>
+            ) : null}
             {previewKind ? (
               <span className="rounded-full border border-border bg-card px-2.5 py-1">
                 {getPreviewKindLabel(previewKind)}

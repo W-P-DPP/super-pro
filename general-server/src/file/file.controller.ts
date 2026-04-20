@@ -6,6 +6,7 @@ import type {
   CompleteChunkUploadRequestDto,
   CreateFolderRequestDto,
   DeleteFileRequestDto,
+  DownloadFileRequestDto,
   MoveFileRequestDto,
   PreviewFileRequestDto,
   UploadedFileDto,
@@ -304,11 +305,46 @@ const previewFile = async (req: Request, res: Response) => {
   }
 }
 
+const downloadFile = async (req: Request, res: Response) => {
+  try {
+    const download = await fileService.getDownloadFile(req.query as unknown as DownloadFileRequestDto)
+    res.setHeader('Content-Type', download.mimeType)
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeContentDispositionFilename(download.name)}`,
+    )
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('Content-Length', String(download.size))
+
+    const stream = createReadStream(download.absolutePath)
+    res.status(HttpStatus.SUCCESS)
+
+    stream.on('error', () => {
+      if (!res.headersSent) {
+        res.status(HttpStatus.ERROR).sendFail('璇诲彇涓嬭浇鏂囦欢澶辫触', HttpStatus.ERROR)
+        return
+      }
+
+      res.end()
+    })
+
+    stream.pipe(res)
+    return
+  } catch (error) {
+    if (error instanceof FileBusinessError) {
+      return res.status(error.statusCode).sendFail(error.message, error.statusCode)
+    }
+
+    return res.status(HttpStatus.ERROR).sendFail('璇诲彇涓嬭浇鏂囦欢澶辫触', HttpStatus.ERROR)
+  }
+}
+
 export {
   completeChunkUploadBatch,
   completeChunkUpload,
   createFolder,
   deleteFile,
+  downloadFile,
   getFileTree,
   moveFile,
   previewFile,

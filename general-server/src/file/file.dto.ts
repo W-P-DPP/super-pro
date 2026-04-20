@@ -36,6 +36,10 @@ export interface PreviewFileRequestDto {
   targetPath: string
 }
 
+export interface DownloadFileRequestDto {
+  targetPath: string
+}
+
 export interface UploadFileRequestDto {
   targetPath: string
   relativePaths?: string[]
@@ -96,3 +100,5 @@ export interface PreviewFileResponseDto {
   modifiedTime?: string
   mimeType: string
 }
+
+export interface DownloadFileResponseDto extends PreviewFileResponseDto {}

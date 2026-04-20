@@ -6,6 +6,8 @@ import type {
   CompleteChunkUploadRequestDto,
   CreateFolderRequestDto,
   DeleteFileRequestDto,
+  DownloadFileRequestDto,
+  DownloadFileResponseDto,
   FileNodeResponseDto,
   FileTreeResponseDto,
   FileValidationErrorContextDto,
@@ -154,6 +156,14 @@ function validatePreviewInput(
 ): PreviewFileRequestDto {
   return {
     targetPath: normalizeTargetPath(input.targetPath, 'targetPath', '预览文件路径'),
+  }
+}
+
+function validateDownloadInput(
+  input: DownloadFileRequestDto | Record<string, unknown>,
+): DownloadFileRequestDto {
+  return {
+    targetPath: normalizeTargetPath(input.targetPath, 'targetPath', '涓嬭浇鏂囦欢璺緞'),
   }
 }
 
@@ -786,6 +796,41 @@ export class FileService {
           nodePath: 'file',
           field: 'targetPath',
           reason: '预览文件读取失败',
+        },
+        HttpStatus.ERROR,
+      )
+    }
+  }
+
+  async getDownloadFile(
+    input: DownloadFileRequestDto | Record<string, unknown>,
+  ): Promise<DownloadFileResponseDto> {
+    const payload = validateDownloadInput(input)
+
+    try {
+      const download = await this.repository.getPreviewFile(payload)
+
+      return {
+        absolutePath: download.absolutePath,
+        name: download.file.name,
+        relativePath: download.file.relativePath,
+        size: download.file.size ?? 0,
+        ...(download.file.modifiedTime
+          ? { modifiedTime: normalizeDateTime(download.file.modifiedTime) }
+          : {}),
+        mimeType: resolvePreviewMimeType(download.file.name),
+      }
+    } catch (error) {
+      if (error instanceof FileRepositoryError) {
+        throw normalizeRepositoryError(error)
+      }
+
+      throw new FileBusinessError(
+        '璇诲彇涓嬭浇鏂囦欢澶辫触',
+        {
+          nodePath: 'file',
+          field: 'targetPath',
+          reason: '涓嬭浇鏂囦欢璇诲彇澶辫触',
         },
         HttpStatus.ERROR,
       )

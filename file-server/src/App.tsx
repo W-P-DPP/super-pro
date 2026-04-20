@@ -66,6 +66,10 @@ function buildPreviewUrl(relativePath: string): string {
   return `${API_BASE_URL}/file/preview?targetPath=${encodeURIComponent(relativePath)}`
 }
 
+function buildDownloadUrl(relativePath: string): string {
+  return `${API_BASE_URL}/file/download?targetPath=${encodeURIComponent(relativePath)}`
+}
+
 function setPreviewAuthCookie(token?: string | null) {
   if (typeof document === 'undefined') {
     return
@@ -134,6 +138,45 @@ async function requestPreview(relativePath: string, signal?: AbortSignal): Promi
   }
 
   return response
+}
+
+async function requestDownloadAccess(relativePath: string, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(buildDownloadUrl(relativePath), {
+    headers: getAuthHeaders(),
+    signal,
+  })
+
+  if (shouldRedirectToLogin(response.status)) {
+    redirectToLoginPage()
+    throw new Error('鐧诲綍鐘舵€佸凡澶辨晥锛岃閲嶆柊鐧诲綍')
+  }
+
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') ?? ''
+    if (contentType.includes('application/json')) {
+      const payload = (await response.json()) as ApiResponse<unknown>
+      throw new Error(payload.msg || '璇诲彇涓嬭浇鏂囦欢澶辫触')
+    }
+
+    throw new Error('璇诲彇涓嬭浇鏂囦欢澶辫触')
+  }
+
+  await response.body?.cancel()
+}
+
+function triggerBrowserDownload(relativePath: string, filename: string) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const link = document.createElement('a')
+  link.href = buildDownloadUrl(relativePath)
+  link.download = filename
+  link.rel = 'noopener'
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
 }
 
 function toSpreadsheetSheets(
@@ -519,6 +562,26 @@ export default function App() {
     }
   }
 
+  async function handleDownloadTarget(node: FileNode) {
+    const controller = new AbortController()
+
+    try {
+      await requestDownloadAccess(node.relativePath, controller.signal)
+      const token = getAuthToken()
+      if (token) {
+        setPreviewAuthCookie(token)
+      }
+      triggerBrowserDownload(node.relativePath, node.name)
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        text: error instanceof Error ? error.message : '涓嬭浇鏂囦欢澶辫触',
+      })
+    } finally {
+      controller.abort()
+    }
+  }
+
   function resetDragState() {
     setDragState({ sourcePath: null, sourceType: null, dropTargetPath: null })
   }
@@ -632,7 +695,15 @@ export default function App() {
             </div>
           </aside>
 
-          <PreviewPanel selectedNode={selectedNode} previewState={previewState} />
+          <PreviewPanel
+            selectedNode={selectedNode}
+            previewState={previewState}
+            onDownload={
+              selectedNode.type === 'file'
+                ? () => void handleDownloadTarget(selectedNode)
+                : undefined
+            }
+          />
         </div>
       </section>
     </main>
