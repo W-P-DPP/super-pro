@@ -34,7 +34,10 @@
     "test:integration": "pnpm --filter @super-pro/server test:integration",
     "test:coverage": "pnpm --filter @super-pro/server test:coverage",
     "stress": "pnpm --filter @super-pro/server stress",
-    "typecheck:shared": "turbo run build --filter=@super-pro/tsconfig --filter=@super-pro/shared-*"
+    "typecheck:shared": "turbo run build --filter=@super-pro/tsconfig --filter=@super-pro/shared-*",
+    "docker:deploy": "sh scripts/docker-deploy.sh",
+    "docker:logs": "sh scripts/docker-logs.sh",
+    "docker:down": "sh scripts/docker-down.sh"
   },
   "devDependencies": {
     "turbo": "^2.5.8"
