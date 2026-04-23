@@ -9,7 +9,8 @@
       "Bash('/c/Users/admin/AppData/Local/Programs/Python/Python312/python.exe' --version)",
       "Bash('/c/Users/admin/AppData/Local/Programs/Python/Python312/Scripts/pip.exe' --version)",
       "Bash(pip install:*)",
-      "Bash(graphify install:*)"
+      "Bash(graphify install:*)",
+      "Bash(git check-ignore:*)"
     ]
   }
 }

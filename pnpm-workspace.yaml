@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - agent-front
+  - ai-demand-server
   - frontend-template
   - login-template
   - general-server

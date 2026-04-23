@@ -1,0 +1,17 @@
+{
+  "name": "@super-pro/ai-demand-server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@super-pro/ai-demand-config": "workspace:*",
+    "@super-pro/ai-demand-contracts": "workspace:*",
+    "dayjs": "^1.11.19",
+    "mysql2": "^3.16.0",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.28"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
