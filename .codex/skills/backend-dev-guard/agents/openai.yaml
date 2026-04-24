@@ -1,7 +1,7 @@
 interface:
-  display_name: "Backend Dev Guard"
-  short_description: "Enforce backend layering, shared-server infrastructure, typed config, secure logging, and tests."
-  default_prompt: "Use $backend-dev-guard for backend work in this repository. Inspect the code first, prefer packages/shared-server for reusable infrastructure, keep router/controller/service/repository/entity/dto boundaries clear, use typed config, sanitize logs, preserve API contracts, and run focused validation."
+  display_name: "后端开发守卫"
+  short_description: "强调后端分层、shared-server 基础设施、类型化配置、安全日志与测试。"
+  default_prompt: "在本仓库进行后端工作时使用 $backend-dev-guard。先检查现有代码，优先把可复用基础设施收敛到 packages/shared-server，保持 router/controller/service/repository/entity/dto 分层清晰，使用类型化配置，记录日志时做好脱敏，保持 API 契约稳定，并运行有针对性的验证。"
 
 policy:
   allow_implicit_invocation: true

@@ -1,130 +1,162 @@
 ---
 name: frontend-design-guard
-description: Enforce this repository's frontend engineering and design workflow. Use for React, Vite, Tailwind, shadcn, page work, component work, styling, interaction changes, frontend refactors, API integration, auth redirects, shared types/contracts, and frontend quality review in super-pro frontend packages. Before frontend analysis, planning, or code changes, read frontend-template/design.md first, then the bundled shadcn theme reference. Default user-facing copy to Simplified Chinese unless explicitly overridden.
+description: 约束本仓库的前端工程与设计工作流。适用于 super-pro 前端包中的 React、Vite、Tailwind、shadcn、页面开发、组件开发、样式调整、交互修改、前端重构、API 集成、鉴权跳转、响应式布局、移动端适配、共享类型/契约以及前端质量评审。在进行前端分析、规划或代码修改前，先读取仓库根目录的 design.md，再优先读取目标项目内的 theme.css；如果项目没有 theme.css，再回退到 skill 自带的默认主题参考。除非用户明确要求，否则默认生成简体中文的前端文案。
 ---
 
-# Frontend Design Guard
+# 前端设计守卫
 
-## Overview
+## 概述
 
-Use this skill for frontend work in this repository, especially React/Vite frontend packages such as `frontend-template`, `agent-front`, `reimburse-front`, `summary-front`, and `login-template`.
+这个 skill 用于本仓库中的前端工作，尤其适用于 `frontend-template`、`agent-front`、`reimburse-front`、`summary-front`、`login-template` 等 React/Vite 前端包。
 
-`frontend-template/design.md` is the primary design constraint document and must be read before any frontend implementation starts. After that, load the bundled shadcn theme reference and treat it as the default theme source for design and styling work unless the user explicitly requests a different theme.
+仓库根目录的 `design.md` 是最高优先级的前端设计约束文档。任何前端实现开始前都必须先读取它。读取完 `design.md` 之后，优先查找目标前端项目自己的 `theme.css` 并将其作为主题基线；只有当目标项目没有提供 `theme.css` 时，才允许回退到本 skill 中自带的默认主题参考文件。
 
-Frontend code should align with backend contracts and shared packages. API calls belong in `src/api/modules/*`, reusable browser infrastructure belongs in `packages/shared-web`, cross-app types belong in `packages/shared-types` or future contracts packages, and app pages should not directly call `fetch` or `axios`.
+前端代码必须与后端契约和共享包保持一致。API 请求应收敛在 `src/api/modules/*`，可复用的浏览器侧基础能力应放在 `packages/shared-web`，跨应用类型应放在 `packages/shared-types` 或后续的 contracts 包中，页面和纯视觉组件不应直接调用 `fetch` 或 `axios`。
 
-## Required Workflow
+本仓库的前端设计与实现默认必须支持响应式与移动端适配。除非用户明确要求只做桌面端，否则页面、组件、导航、表单、弹窗、表格和操作区都必须同时适配移动端与桌面端。
 
-1. Confirm that the task is frontend work in this repository, including page work, component work, styling, interaction changes, or UI refactors.
-2. Read `frontend-template/design.md` before further analysis, planning, code generation, styling, or component edits.
-3. Read `references/shadcn-theme.css` immediately after `design.md` and treat it as the preferred theme source.
-4. Unless the user explicitly requests another language, generate user-facing frontend content in Simplified Chinese, including page copy, labels, placeholders, helper text, status text, empty states, and validation messages.
-5. Default to a restrained, minimal UI direction unless the user explicitly asks for a stronger visual treatment. Prefer fewer layers, fewer decorative badges, and clearer information hierarchy over visual flourish.
-6. Summarize the design constraints and theme constraints that matter for the current task before implementation.
-7. Inspect the target app's API layer, auth/session utilities, shared package usage, and existing page/component patterns before changing code.
-8. Implement the task while keeping the output aligned with `design.md`, the bundled theme, and the repository's API/session conventions.
-9. Re-check the result against `design.md`, the bundled theme, API contract expectations, and auth behavior before finishing.
+## 必要流程
 
-## Hard Rules
+1. 先确认当前任务属于本仓库的前端工作，例如页面开发、组件开发、样式修改、交互调整或 UI 重构。
+2. 在进一步分析、规划、生成代码、修改样式或编辑组件前，先读取仓库根目录 `design.md`。
+3. 读取完 `design.md` 后，检查目标前端项目是否提供 `theme.css`；如果有，先读取它；如果没有，再读取 `references/shadcn-theme.css` 作为兜底主题参考。
+4. 除非用户明确要求其他语言，所有用户可见的前端文案默认使用简体中文，包括页面标题、按钮、占位符、帮助文本、状态文本、空状态和校验提示。
+5. 默认保持克制、简洁的界面方向。除非用户明确要求更强的视觉表达，否则优先减少装饰层、标签堆叠和无意义强调，突出清晰的信息层级。
+6. 在实施前，先总结当前任务相关的设计约束，以及本次实际采用的主题来源。
+7. 修改代码前，先检查目标应用现有的 API 层、认证/会话工具、共享包使用方式，以及已有页面和组件模式。
+8. 明确本次任务所需的响应式行为，包括移动端布局、堆叠顺序、点击热区、滚动、溢出处理，以及窄屏下的导航变化。
+9. 实现时保证结果同时符合 `design.md`、所选主题源、响应式/移动端要求，以及仓库既有的 API/会话约定。
+10. 完成前再次核对结果是否符合 `design.md`、所选主题源、移动端适配要求、API 契约要求与鉴权行为。
 
-- Do not skip reading `frontend-template/design.md`.
-- Do not start frontend implementation before reading `design.md`.
-- Do not skip reading `references/shadcn-theme.css` for frontend design work in `frontend-template`.
-- Do not introduce a separate visual language that conflicts with `design.md`.
-- Do not ignore the bundled theme unless the user explicitly asks for a different theme direction.
-- Do not turn existing `shadcn` components into a different UI style.
-- Do not over-design simple interactions. For straightforward utility UI such as search, filters, popovers, and small forms, prefer minimal structure and avoid decorative layers unless the user explicitly asks for them.
-- Do not validate only one theme for UI changes. Check both light and dark themes.
-- Do not default to English for generated frontend copy unless the user explicitly asks for English or another language.
-- Do not call `fetch` or raw `axios` directly from pages or visual components when an API module should own the request.
-- Do not duplicate browser infrastructure that belongs in `packages/shared-web`.
-- Do not invent response shapes that conflict with backend envelopes such as `code`, `msg`, `data`, `timestamp`.
-- Do not ignore `401` or `403`; protected frontend requests must route users back to login with a redirect target.
+## 硬性规则
 
-## Execution Details
+- 不要跳过仓库根目录 `design.md`。
+- 在读取 `design.md` 之前，不要开始前端实现。
+- 不要跳过对目标前端项目 `theme.css` 的检查。
+- 如果目标项目已经提供 `theme.css`，不要直接跳到 skill 自带的兜底主题。
+- 只有在目标项目没有 `theme.css` 时，才读取 `references/shadcn-theme.css`。
+- 不要引入与 `design.md` 冲突的另一套视觉语言。
+- 除非用户明确要求更换主题方向，否则不要忽略当前所选主题源。
+- 不要把现有 `shadcn` 组件改造成另一种 UI 风格。
+- 对搜索、筛选、弹出层、小型表单等简单工具型界面，不要过度设计；除非用户明确要求，否则保持结构简洁、装饰克制。
+- 不要只验证单一主题，界面修改必须同时检查浅色与深色主题。
+- 除非用户明确要求英文或其他语言，不要默认生成英文前端文案。
+- 当请求应该由 API 模块负责时，不要在页面或视觉组件中直接调用 `fetch` 或裸 `axios`。
+- 不要重复实现本应放在 `packages/shared-web` 中的浏览器基础能力。
+- 不要发明与后端响应包络不一致的结构，例如 `code`、`msg`、`data`、`timestamp`。
+- 不要忽略 `401` 或 `403`；受保护请求失败后，前端必须把用户带回登录页并保留 `redirect` 目标。
+- 除非用户明确要求桌面专用行为，不要交付仅适配桌面端的布局。
+- 不要让窄屏下出现横向溢出、弹窗裁切、表格不可用或操作区互相遮挡。
+- 不要把关键操作建立在仅 `hover` 可触发的交互上。
+- 不要使用在移动端难以点击或阅读的点击区域、间距或字体尺寸。
 
-### Step 1: Read the design spec
+## 执行细节
 
-Read this file first:
+### 第一步：读取设计与主题规范
 
-- `frontend-template/design.md`
+先读取：
 
-Read this file second:
+- `design.md`
+
+第二步读取：
+
+- 目标前端项目自己的 `theme.css`，如果存在
+
+如果目标前端项目没有提供 `theme.css`，则第二步读取以下兜底主题文件：
 
 - `references/shadcn-theme.css`
 
-If the task is directly related to theming, styling, component variants, or layout primitives, then read these after `design.md` and `references/shadcn-theme.css`:
+定位项目主题时，优先从当前实现目标出发。优先查找属于目标前端包自己的 `theme.css`。常见位置包括：
+
+- `<target-front>/src/theme.css`
+- `<target-front>/theme.css`
+
+如果任务直接涉及主题、样式、组件变体或布局基础能力，则在读取仓库根目录 `design.md` 和本次选定的主题源之后，再读取以下文件：
 
 - `frontend-template/src/index.css`
 - `frontend-template/components.json`
 
-The order is mandatory: `design.md` first, `references/shadcn-theme.css` second, then any other frontend context files. This order applies even when the implementation target is another frontend package such as `login-template`.
+读取顺序是强制的：先仓库根目录 `design.md`，然后项目 `theme.css`；如果项目没有 `theme.css`，则读取 `references/shadcn-theme.css`；最后再读取其他前端上下文文件。这个顺序即便在处理 `login-template` 这类其他前端包时也同样适用。
 
-If the task touches API integration, auth, navigation, protected routes, request utilities, or backend-facing data, also inspect the relevant files before implementation:
+如果任务涉及 API 集成、鉴权、导航、受保护路由、请求工具或后端数据，也要在实现前检查相关文件：
 
 - `src/api/request.ts`
 - `src/api/modules/*`
 - `src/lib/auth-session.ts`
 - `src/lib/login-redirect.ts`
-- shared types from `packages/shared-types`
-- browser utilities from `packages/shared-web`
+- `packages/shared-types` 中的共享类型
+- `packages/shared-web` 中的浏览器工具
 
-### Step 2: Summarize relevant constraints
+如果任务影响页面布局、导航、信息密集展示、表单、弹窗或操作密集视图，也要额外查看目标应用现有的响应式模式。
 
-Before writing code, summarize the constraints relevant to the task, such as:
+### 第二步：总结相关约束
 
-- required visual tone
-- required theme tokens, font choices, radius, and shadow style from `references/shadcn-theme.css`
-- light and dark theme consistency
-- reuse of the existing `shadcn` system
-- use of the existing token, spacing, radius, and interaction systems
-- whether the task should be visually restrained and simplified to the minimum useful hierarchy
-- default Simplified Chinese copy unless the user explicitly overrides the language
-- data ownership: page, feature component, hook, API module, or shared package
-- whether the request follows backend response envelopes and auth redirect rules
-- whether shared types or shared web utilities should be reused instead of local copies
+写代码前，需要先总结与本次任务相关的约束，例如：
 
-If the task conflicts with `design.md`, state the conflict and ask the user to confirm direction before continuing. If the bundled theme conflicts with an explicit user instruction, follow the user instruction.
+- 需要遵循的整体视觉气质
+- 从当前所选主题源中继承的 token、字体、圆角和阴影风格
+- 浅色与深色主题的一致性要求
+- 是否复用现有 `shadcn` 体系
+- 是否继续沿用既有的 token、间距、圆角和交互体系
+- 当前任务是否应进一步压缩视觉层级，保持必要的最小信息结构
+- 除非用户另行说明，默认使用简体中文文案
+- 数据归属应落在页面、业务组件、hook、API 模块还是共享包
+- 当前需求是否遵循后端响应包络与鉴权跳转规则
+- 是否应复用共享类型或 shared web 工具，而不是在本地复制
+- 预期的移动端断点与布局变化
+- 小屏下的区块是否需要堆叠、折叠、滚动、分页或切换表现形式
+- 密集控件在触屏设备上是否仍然可点、可读
 
-### Step 3: Implement
+如果任务与 `design.md` 冲突，先指出冲突再继续；如果当前选定的主题源与用户明确要求冲突，以用户要求为准。
 
-During implementation:
+### 第三步：实现
 
-- reuse existing components and styles first
-- prefer the current `shadcn` component system
-- prefer the bundled shadcn theme file as the baseline theme source
-- keep token usage consistent
-- avoid creating a parallel design system
-- when the user asks for simplicity, actively remove non-essential badges, helper blocks, nested containers, and ornamental emphasis instead of only restyling them
-- preserve the interaction and state patterns defined by the project
-- when a frontend request is protected by authentication, make the request path explicit and redirect to the login page with a `redirect` target when auth returns `401` or `403`
-- default generated user-facing content to Simplified Chinese unless the user explicitly requests another language
-- put backend-facing requests in `src/api/modules/*`
-- keep pages focused on composition, routing state, loading/error/empty states, and user intent
-- use shared response/session utilities from `packages/shared-web` when available
-- use shared DTO/type definitions from `packages/shared-types` or contracts packages when available
-- preserve backend response envelope handling: `code`, `msg`, `data`, `timestamp`
-- handle loading, empty, error, and auth-expired states explicitly
-- do not log sensitive tokens, passwords, cookies, authorization headers, or raw large API payloads in frontend code
+实现过程中：
 
-### Step 4: Validate
+- 优先复用现有组件和样式
+- 优先沿用当前 `shadcn` 组件体系
+- 如果目标项目有 `theme.css`，优先把它作为主题基线
+- 只有在目标项目没有 `theme.css` 时，才把 `references/shadcn-theme.css` 作为兜底基线
+- 保持 token 使用一致
+- 不要新建一套平行设计系统
+- 当用户要求更简洁时，要主动移除非必要标签、说明块、嵌套容器和装饰强调，而不是只做表面重绘
+- 保持项目既有的交互与状态模式
+- 如果前端请求受鉴权保护，要显式处理请求路径，并在 `401` 或 `403` 时带 `redirect` 参数跳回登录页
+- 除非用户明确要求其他语言，默认使用简体中文生成用户可见文案
+- 所有后端请求都放在 `src/api/modules/*`
+- 页面只负责组合、路由状态、加载/错误/空状态和用户意图表达
+- 有共享能力时，优先复用 `packages/shared-web` 中的响应/会话工具
+- 有共享 DTO 或契约时，优先复用 `packages/shared-types` 或 contracts 包
+- 保持后端响应包络处理一致：`code`、`msg`、`data`、`timestamp`
+- 显式处理 loading、empty、error、auth-expired 状态
+- 不要在前端代码中记录敏感 token、密码、cookie、认证头或原始大体积 API 载荷
+- 要主动实现移动端适配，不要寄希望于桌面布局自动缩放后还能正常使用
+- 要验证窄屏下的导航、筛选、表单、弹窗、表格、卡片和主操作区域
+- 当信息密度过高时，优先通过堆叠、换行、折叠、抽屉、滚动区或移动端替代表现解决问题
+- 保证移动端点击热区舒适，不要把关键操作做成仅 `hover` 可用
 
-Before finishing, check at least:
+### 第四步：验收
 
-- whether the result matches `design.md`
-- whether the result uses or remains compatible with the bundled shadcn theme
-- whether light and dark themes still express the same visual language
-- whether the work still fits the existing component system
-- whether there are stray color, radius, shadow, or spacing values that bypass project tokens
-- whether simple utility UI has been kept intentionally minimal instead of being over-structured
-- whether generated user-facing content stayed in Simplified Chinese unless the user explicitly requested another language
-- whether protected requests that fail auth now redirect to login with the correct redirect target
-- whether API calls are centralized in API modules instead of pages/components
-- whether response envelope parsing and error messages stay compatible with backend contracts
-- whether shared package utilities were reused instead of copied
-- whether loading, empty, error, and auth-expired states are visible and testable
+完成前至少检查：
 
-For API or auth changes, run focused tests if available. Prefer commands such as:
+- 结果是否符合 `design.md`
+- 结果是否符合当前所选主题源
+- 浅色与深色主题是否仍表达相同的视觉语言
+- 结果是否仍符合现有组件系统
+- 是否存在绕过项目 token 的零散颜色、圆角、阴影或间距值
+- 简单工具型界面是否仍保持必要的简洁，而不是被过度包装
+- 除非用户明确要求其他语言，用户可见文案是否保持为简体中文
+- 受保护请求失败后，是否正确跳转登录并带上正确的 `redirect` 目标
+- API 调用是否已集中在 API 模块，而不是散落在页面或组件中
+- 响应包络解析与错误处理是否仍兼容后端契约
+- 是否复用了共享包能力，而不是复制实现
+- loading、empty、error、auth-expired 状态是否清晰可见且可测试
+- 移动端宽度下是否没有横向溢出或关键内容裁切
+- 弹窗、抽屉、菜单、筛选和表单在触屏设备上是否仍可操作
+- 主操作在窄屏下是否始终可见且容易点击
+- 表格或高密度内容是否提供了有意识的移动端降级方案，而不是直接把布局撑坏
+
+如果涉及 API 或鉴权改动，尽量运行针对性的测试命令，例如：
 
 ```bash
 pnpm --filter @super-pro/shared-web test
@@ -132,11 +164,11 @@ pnpm --filter @super-pro/<target-front> build
 pnpm --filter @super-pro/<target-front> test
 ```
 
-Use the actual package name in place of `<target-front>`.
+将 `<target-front>` 替换为真实包名。
 
-## Missing or conflicting design rules
+## 缺失或冲突处理
 
-- If `frontend-template/design.md` is missing, stop implementation and ask the user to provide or confirm the design rules.
-- If `references/shadcn-theme.css` is missing, stop implementation and restore or recreate the bundled theme reference before continuing.
-- If new user instructions conflict with `design.md`, identify the conflict first and continue only after confirmation.
-- If the task is not frontend work, do not use this skill.
+- 如果仓库根目录缺少 `design.md`，停止实现，并要求补充或确认设计规则。
+- 如果目标项目没有 `theme.css`，且 `references/shadcn-theme.css` 也缺失，停止实现，并先恢复或重建 skill 自带的兜底主题参考。
+- 如果新的用户指令与 `design.md` 冲突，先指出冲突，再在确认后继续。
+- 如果当前任务并非前端工作，不要使用这个 skill。

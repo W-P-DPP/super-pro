@@ -8,6 +8,12 @@ This repository is now managed as a `pnpm` workspace monorepo.
 - `login-template`: standalone login frontend template
 - `general-server`: Node.js backend service
 
+## Repository Conventions
+
+- Frontend design rules are centralized in the repository-root `design.md`.
+- Frontend work should follow `.codex/skills/frontend-design-guard`.
+- Do not add or maintain per-app `design.md` copies inside frontend packages.
+
 ## Common Commands
 
 Run all dev processes:

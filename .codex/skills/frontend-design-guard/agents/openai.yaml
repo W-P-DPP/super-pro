@@ -1,7 +1,7 @@
 interface:
-  display_name: "Frontend Design Guard"
-  short_description: "Read design.md first, use the shadcn theme, preserve API/auth contracts, and keep UI restrained."
-  default_prompt: "Use $frontend-design-guard for frontend work in this repository. Read frontend-template/design.md first, then the bundled shadcn theme reference. Keep UI restrained unless asked otherwise, default copy to Simplified Chinese, centralize API calls in src/api/modules, preserve backend response envelopes, reuse shared-web/shared-types where available, and handle auth redirects for 401/403."
+  display_name: "前端设计守卫"
+  short_description: "先读 design.md，优先使用项目 theme.css，没有时再回退默认主题，并要求移动端适配。"
+  default_prompt: "在本仓库进行前端工作时使用 $frontend-design-guard。先读取仓库根目录 design.md，然后检查目标前端项目是否提供 theme.css；如果有，优先使用它作为主题来源；如果没有，再回退到 skill 自带的默认主题参考。除非用户明确要求，否则保持界面克制简洁，默认使用简体中文文案，将 API 请求集中在 src/api/modules 中，保持后端响应包络兼容，优先复用 shared-web/shared-types，并在 401/403 时正确处理登录跳转。同时要求结果具备明确的响应式与移动端适配，而不是只适配桌面端。"
 
 policy:
   allow_implicit_invocation: true

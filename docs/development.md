@@ -7,8 +7,9 @@
 1. 先识别目标 package 或应用。
 2. 在新增基础设施之前，先确认是否可以复用现有 shared 包。
 3. 保持依赖方向符合 `docs/architecture.md`。
-4. 对可能回归的行为补充或更新测试。
-5. 运行当前改动所需的最小有效验证命令。
+4. 前端相关工作先读取仓库根目录 `design.md`，不要再从具体前端应用中寻找或维护设计规范副本。
+5. 对可能回归的行为补充或更新测试。
+6. 运行当前改动所需的最小有效验证命令。
 
 ## 常用命令
 
@@ -36,7 +37,8 @@ pnpm lint
 4. 通过 `workspace:*` 依赖 shared 包。
 5. 应用专属 API 模块放在 `src/api/modules/*`。
 6. 通用 UI 基础组件应沉淀到 `shared-ui`，不要只留在应用内部。
-7. 补齐 `dev`、`build`、`test`、`lint` 等脚本（如果适用）。
+7. 前端设计规范统一复用仓库根目录 `design.md`，不要在新应用中新增本地 `design.md` 副本。
+8. 补齐 `dev`、`build`、`test`、`lint` 等脚本（如果适用）。
 
 推荐结构：
 
@@ -109,7 +111,8 @@ xxx-server/
 4. 可复用的数据加载和 mutation 逻辑收敛到 hooks。
 5. 页面组件只负责布局和路由级组合。
 6. 当某个业务域超出单页规模时，把专属组件移动到 `features/<domain>/components`。
-7. 明确处理 loading / empty / error 状态。
+7. 设计与交互实现前先对齐仓库根目录 `design.md`，包括响应式与移动端适配要求。
+8. 明确处理 loading / empty / error 状态。
 
 ## API Contracts
 
