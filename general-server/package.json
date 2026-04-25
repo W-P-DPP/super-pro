@@ -23,6 +23,7 @@
   "packageManager": "pnpm@10.32.1",
   "dependencies": {
     "@super-pro/shared-server": "workspace:*",
+    "@super-pro/shared-types": "workspace:*",
     "awaitqueue": "^3.3.0",
     "axios": "^1.13.2",
     "body-parser": "^2.2.1",
@@ -37,6 +38,7 @@
     "nodemailer": "^8.0.0",
     "redis": "^5.10.0",
     "reflect-metadata": "^0.2.2",
+    "systeminformation": "^5.31.5",
     "typeorm": "^0.3.28",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",

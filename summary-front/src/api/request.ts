@@ -2,7 +2,7 @@ import { createJsonRequestClient, type RequestConfig, RequestError } from '@supe
 import { getReusableAuthToken } from '@/lib/auth-session';
 import { redirectToLoginWithCurrentPage } from '@/lib/login-redirect';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL?.trim() || '/agent-api';
+const baseURL = import.meta.env.VITE_API_BASE_URL?.trim() || '/api';
 
 const client = createJsonRequestClient({
   baseURL,

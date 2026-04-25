@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { init, type EChartsOption } from 'echarts';
+import { init, type ECharts, type EChartsOption } from 'echarts';
 
 type EChartPanelProps = {
   option: EChartsOption;
@@ -8,6 +8,7 @@ type EChartPanelProps = {
 
 export function EChartPanel({ option, className }: EChartPanelProps) {
   const elementRef = useRef<HTMLDivElement | null>(null);
+  const chartRef = useRef<ECharts | null>(null);
 
   useEffect(() => {
     if (!elementRef.current) {
@@ -15,7 +16,7 @@ export function EChartPanel({ option, className }: EChartPanelProps) {
     }
 
     const chart = init(elementRef.current);
-    chart.setOption(option);
+    chartRef.current = chart;
 
     const handleResize = () => {
       chart.resize();
@@ -25,8 +26,16 @@ export function EChartPanel({ option, className }: EChartPanelProps) {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      chartRef.current = null;
       chart.dispose();
     };
+  }, []);
+
+  useEffect(() => {
+    chartRef.current?.setOption(option, {
+      notMerge: true,
+      lazyUpdate: true,
+    });
   }, [option]);
 
   return <div ref={elementRef} className={className ?? 'h-64 w-full'} />;

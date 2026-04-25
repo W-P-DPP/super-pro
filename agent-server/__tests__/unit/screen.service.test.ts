@@ -1,7 +1,6 @@
 import { jest } from '@jest/globals';
 
 const queryMock = jest.fn();
-const getSnapshotMock = jest.fn();
 const getDataSourceMock = jest.fn(() => ({
   isInitialized: true,
   query: queryMock,
@@ -17,18 +16,11 @@ jest.mock('../../utils/mysql.ts', () => ({
   getDataSource: getDataSourceMock,
 }));
 
-jest.mock('../../src/screen/device.collector.ts', () => ({
-  deviceMetricsCollector: {
-    getSnapshot: getSnapshotMock,
-  },
-}));
-
 import { screenService } from '../../src/screen/screen.service.ts';
 
 describe('screenService', () => {
   beforeEach(() => {
     queryMock.mockReset();
-    getSnapshotMock.mockReset();
     getDataSourceMock.mockClear();
     initDataBaseMock.mockClear();
   });
@@ -155,48 +147,4 @@ describe('screenService', () => {
     });
   });
 
-  it('delegates device snapshots to the collector', async () => {
-    const snapshot = {
-      generatedAt: '2026-04-17T08:00:00.000Z',
-      window: '5m',
-      supportedWindows: ['5m', '15m', '1h'],
-      node: {
-        hostname: 'node-a',
-        platform: 'linux',
-        arch: 'x64',
-        uptimeSec: 7200,
-      },
-      current: {
-        cpuUsageRate: 42.3,
-        memoryUsageRate: 63.4,
-        totalMemoryBytes: 1024,
-        usedMemoryBytes: 512,
-        freeMemoryBytes: 512,
-        processRssBytes: 256,
-        processHeapUsedBytes: 128,
-        processHeapTotalBytes: 192,
-        processCpuUsageRate: 12.1,
-      },
-      cpuTrend: [{ time: '2026-04-17T07:55:00.000Z', value: 42.3 }],
-      memoryTrend: [{ time: '2026-04-17T07:55:00.000Z', value: 63.4 }],
-      networkTrend: [
-        { time: '2026-04-17T07:55:00.000Z', rxBytesPerSec: 1024, txBytesPerSec: 512 },
-      ],
-      diskUsage: [
-        {
-          name: 'system',
-          mount: '/',
-          totalBytes: 2048,
-          usedBytes: 1024,
-          freeBytes: 1024,
-          usageRate: 50,
-        },
-      ],
-    };
-
-    getSnapshotMock.mockResolvedValue(snapshot);
-
-    await expect(screenService.getDevice('5m')).resolves.toEqual(snapshot);
-    expect(getSnapshotMock).toHaveBeenCalledWith('5m');
-  });
 });

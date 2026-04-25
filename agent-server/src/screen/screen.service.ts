@@ -15,8 +15,6 @@ import type {
   ScreenTimePoint,
   ScreenTrendsResponse,
 } from '@super-pro/shared-types';
-import type { ScreenWindow } from './screen.dto.ts';
-import { deviceMetricsCollector } from './device.collector.ts';
 
 type DashboardRangeContext = {
   range: ScreenRange;
@@ -663,10 +661,6 @@ export class ScreenService {
       recentSessions,
       recentKnowledgeChanges,
     };
-  }
-
-  async getDevice(window: ScreenWindow) {
-    return deviceMetricsCollector.getSnapshot(window);
   }
 }
 

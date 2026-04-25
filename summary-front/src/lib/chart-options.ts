@@ -11,6 +11,95 @@ type TooltipFormatter = (params: unknown) => string;
 
 const AXIS_LABEL_COLOR = 'rgba(119, 119, 136, 0.92)';
 const SPLIT_LINE_COLOR = 'rgba(140, 146, 172, 0.14)';
+const TOOLTIP_BACKGROUND = 'rgba(18, 20, 34, 0.92)';
+const TOOLTIP_TEXT_COLOR = '#f8fafc';
+
+type ParsedColor = {
+  red: number;
+  green: number;
+  blue: number;
+  alpha: number;
+};
+
+function getResolvedCssColor(value: string) {
+  if (typeof document === 'undefined') {
+    return value;
+  }
+
+  const probe = document.createElement('span');
+  probe.style.color = value;
+  probe.style.position = 'absolute';
+  probe.style.pointerEvents = 'none';
+  probe.style.opacity = '0';
+
+  const mountNode = document.body ?? document.documentElement;
+  mountNode.appendChild(probe);
+
+  const resolved = window.getComputedStyle(probe).color;
+  probe.remove();
+
+  return resolved && resolved !== 'rgba(0, 0, 0, 0)' ? resolved : value;
+}
+
+function parseCanvasColor(value: string): ParsedColor | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  if (typeof navigator !== 'undefined' && /\bjsdom\b/i.test(navigator.userAgent)) {
+    return null;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    return null;
+  }
+
+  context.clearRect(0, 0, 1, 1);
+  context.fillStyle = '#000';
+  context.fillStyle = value;
+  context.fillRect(0, 0, 1, 1);
+
+  const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data;
+  return {
+    red,
+    green,
+    blue,
+    alpha: alpha / 255,
+  };
+}
+
+function stringifyColor({ red, green, blue, alpha }: ParsedColor) {
+  if (alpha >= 1) {
+    return `rgb(${red}, ${green}, ${blue})`;
+  }
+
+  return `rgba(${red}, ${green}, ${blue}, ${Number(alpha.toFixed(3))})`;
+}
+
+export function getThemeColor(variableName: string, fallback: string) {
+  const parsed = parseCanvasColor(getResolvedCssColor(`var(${variableName})`));
+  if (!parsed) {
+    return fallback;
+  }
+
+  return stringifyColor(parsed);
+}
+
+function withAlpha(color: string, alpha: number) {
+  const parsed = parseCanvasColor(color);
+  if (!parsed) {
+    return color;
+  }
+
+  return stringifyColor({
+    ...parsed,
+    alpha: Math.max(0, Math.min(1, alpha)),
+  });
+}
 
 function formatAxisLabel(value: string) {
   const date = new Date(value);
@@ -107,9 +196,9 @@ export function buildLineChartOption(
     tooltip: {
       trigger: 'axis',
       formatter: buildAxisTooltipFormatter(options?.valueFormatter),
-      backgroundColor: 'rgba(18, 20, 34, 0.92)',
+      backgroundColor: TOOLTIP_BACKGROUND,
       borderWidth: 0,
-      textStyle: { color: '#f8fafc' },
+      textStyle: { color: TOOLTIP_TEXT_COLOR },
     },
     grid: { top: 16, left: 8, right: 8, bottom: 12, containLabel: true },
     xAxis: {
@@ -126,10 +215,12 @@ export function buildLineChartOption(
     },
     series: [
       {
+        id: seriesName,
         name: seriesName,
         type: 'line',
         smooth: true,
         showSymbol: false,
+        animationDurationUpdate: 300,
         data: data.map((item) => item.value),
         lineStyle: { width: 3, color },
         itemStyle: { color },
@@ -142,8 +233,8 @@ export function buildLineChartOption(
                 x2: 0,
                 y2: 1,
                 colorStops: [
-                  { offset: 0, color: `${color}99` },
-                  { offset: 1, color: `${color}08` },
+                  { offset: 0, color: withAlpha(color, 0.6) },
+                  { offset: 1, color: withAlpha(color, 0.03) },
                 ],
               },
             }
@@ -162,9 +253,9 @@ export function buildDonutChartOption(
     tooltip: {
       trigger: 'item',
       formatter: buildItemTooltipFormatter(valueFormatter),
-      backgroundColor: 'rgba(18, 20, 34, 0.92)',
+      backgroundColor: TOOLTIP_BACKGROUND,
       borderWidth: 0,
-      textStyle: { color: '#f8fafc' },
+      textStyle: { color: TOOLTIP_TEXT_COLOR },
     },
     color: colors,
     legend: { bottom: 0, textStyle: { color: AXIS_LABEL_COLOR } },
@@ -199,9 +290,9 @@ export function buildBarChartOption(
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       formatter: buildAxisTooltipFormatter(valueFormatter),
-      backgroundColor: 'rgba(18, 20, 34, 0.92)',
+      backgroundColor: TOOLTIP_BACKGROUND,
       borderWidth: 0,
-      textStyle: { color: '#f8fafc' },
+      textStyle: { color: TOOLTIP_TEXT_COLOR },
     },
     grid: {
       top: 16,
@@ -263,9 +354,9 @@ export function buildDiskChartOption(disks: ScreenDiskUsageItem[]): EChartsOptio
 
         return `${disk.name}<br/>Used ${formatBytes(disk.usedBytes)} / ${formatBytes(disk.totalBytes)}`;
       },
-      backgroundColor: 'rgba(18, 20, 34, 0.92)',
+      backgroundColor: TOOLTIP_BACKGROUND,
       borderWidth: 0,
-      textStyle: { color: '#f8fafc' },
+      textStyle: { color: TOOLTIP_TEXT_COLOR },
     },
     grid: { top: 16, left: 84, right: 16, bottom: 16, containLabel: true },
     xAxis: {
@@ -281,10 +372,15 @@ export function buildDiskChartOption(disks: ScreenDiskUsageItem[]): EChartsOptio
     },
     series: [
       {
+        id: 'disk-usage',
         type: 'bar',
+        animationDurationUpdate: 300,
         data: disks.map((item) => Number(item.usageRate.toFixed(1))),
         barMaxWidth: 18,
-        itemStyle: { color: '#5f7cff', borderRadius: 999 },
+        itemStyle: {
+          color: getThemeColor('--chart-1', '#5f7cff'),
+          borderRadius: 999,
+        },
         label: {
           show: true,
           position: 'right',
@@ -301,9 +397,9 @@ export function buildNetworkChartOption(data: ScreenNetworkPoint[]): EChartsOpti
     tooltip: {
       trigger: 'axis',
       formatter: buildAxisTooltipFormatter((value) => `${formatBytes(value)}/s`),
-      backgroundColor: 'rgba(18, 20, 34, 0.92)',
+      backgroundColor: TOOLTIP_BACKGROUND,
       borderWidth: 0,
-      textStyle: { color: '#f8fafc' },
+      textStyle: { color: TOOLTIP_TEXT_COLOR },
     },
     legend: { top: 0, right: 0, textStyle: { color: AXIS_LABEL_COLOR } },
     grid: { top: 36, left: 8, right: 8, bottom: 12, containLabel: true },
@@ -321,22 +417,26 @@ export function buildNetworkChartOption(data: ScreenNetworkPoint[]): EChartsOpti
     },
     series: [
       {
+        id: 'network-downlink',
         name: 'Downlink',
         type: 'line',
         smooth: true,
         showSymbol: false,
+        animationDurationUpdate: 300,
         data: data.map((item) => item.rxBytesPerSec),
-        lineStyle: { width: 3, color: '#5f7cff' },
-        itemStyle: { color: '#5f7cff' },
+        lineStyle: { width: 3, color: getThemeColor('--chart-1', '#5f7cff') },
+        itemStyle: { color: getThemeColor('--chart-1', '#5f7cff') },
       },
       {
+        id: 'network-uplink',
         name: 'Uplink',
         type: 'line',
         smooth: true,
         showSymbol: false,
+        animationDurationUpdate: 300,
         data: data.map((item) => item.txBytesPerSec),
-        lineStyle: { width: 3, color: '#22c55e' },
-        itemStyle: { color: '#22c55e' },
+        lineStyle: { width: 3, color: getThemeColor('--chart-5', '#22c55e') },
+        itemStyle: { color: getThemeColor('--chart-5', '#22c55e') },
       },
     ],
   };

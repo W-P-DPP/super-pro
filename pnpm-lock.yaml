@@ -204,9 +204,6 @@ importers:
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
-      systeminformation:
-        specifier: ^5.27.11
-        version: 5.31.5
       typeorm:
         specifier: ^0.3.28
         version: 0.3.28(mysql2@3.20.0(@types/node@24.12.2))(redis@5.11.0)(ts-node@10.9.2(@types/node@24.12.2)(typescript@5.9.3))
@@ -528,6 +525,9 @@ importers:
       '@super-pro/shared-server':
         specifier: workspace:*
         version: link:../packages/shared-server
+      '@super-pro/shared-types':
+        specifier: workspace:*
+        version: link:../packages/shared-types
       awaitqueue:
         specifier: ^3.3.0
         version: 3.3.0
@@ -570,6 +570,9 @@ importers:
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
+      systeminformation:
+        specifier: ^5.27.11
+        version: 5.31.5
       typeorm:
         specifier: ^0.3.28
         version: 0.3.28(mysql2@3.20.0(@types/node@24.12.2))(redis@5.11.0)(ts-node@10.9.2(@types/node@24.12.2)(typescript@5.9.3))
@@ -1255,6 +1258,12 @@ importers:
       '@fontsource-variable/geist':
         specifier: ^5.2.8
         version: 5.2.8
+      '@fontsource/dm-sans':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/space-mono':
+        specifier: ^5.2.9
+        version: 5.2.9
       '@super-pro/shared-constants':
         specifier: workspace:*
         version: link:../packages/shared-constants
@@ -2087,6 +2096,12 @@ packages:
 
   '@fontsource-variable/geist@5.2.8':
     resolution: {integrity: sha512-cJ6m9e+8MQ5dCYJsLylfZrgBh6KkG4bOLckB35Tr9J/EqdkEM6QllH5PxqP1dhTvFup+HtMRPuz9xOjxXJggxw==}
+
+  '@fontsource/dm-sans@5.2.8':
+    resolution: {integrity: sha512-tlovG42m9ESG28WiHpLq3F5umAlm64rv0RkqTbYowRn70e9OlRr5a3yTJhrhrY+k5lftR/OFJjPzOLQzk8EfCA==}
+
+  '@fontsource/space-mono@5.2.9':
+    resolution: {integrity: sha512-b61faFOHEISQ/pD25G+cfGY9o/WW6lRv6hBQQfpWvEJ4y1V+S4gmth95EVyBE2VL3qDYHeVQ8nBzrplzdXTDDg==}
 
   '@fortawesome/fontawesome-free@6.7.2':
     resolution: {integrity: sha512-JUOtgFW6k9u4Y+xeIaEiLr3+cjoUPiAuLXoyKOJSia6Duzb7pq+A76P9ZdPDoAoxHdHzq6gE9/jKBGXlZT8FbA==}
@@ -8445,6 +8460,10 @@ snapshots:
   '@floating-ui/utils@0.2.11': {}
 
   '@fontsource-variable/geist@5.2.8': {}
+
+  '@fontsource/dm-sans@5.2.8': {}
+
+  '@fontsource/space-mono@5.2.9': {}
 
   '@fortawesome/fontawesome-free@6.7.2': {}
 

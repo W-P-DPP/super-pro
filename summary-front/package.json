@@ -12,11 +12,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/space-mono": "^5.2.9",
     "@super-pro/shared-constants": "workspace:*",
     "@super-pro/shared-types": "workspace:*",
     "@super-pro/shared-ui": "workspace:*",
     "@super-pro/shared-web": "workspace:*",
-    "@fontsource-variable/geist": "^5.2.8",
     "axios": "^1.14.0",
     "echarts": "^6.0.0",
     "lucide-react": "^1.7.0",

@@ -2,7 +2,6 @@ import express, { type Router } from 'express';
 import {
   getScreenActivity,
   getScreenAgent,
-  getScreenDevice,
   getScreenKnowledge,
   getScreenOverview,
   getScreenTrends,
@@ -15,6 +14,5 @@ screenRouter.get('/trends', getScreenTrends);
 screenRouter.get('/agent', getScreenAgent);
 screenRouter.get('/knowledge', getScreenKnowledge);
 screenRouter.get('/activity', getScreenActivity);
-screenRouter.get('/device', getScreenDevice);
 
 export default screenRouter;
