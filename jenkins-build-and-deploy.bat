@@ -59,10 +59,21 @@ call "%NODE_CMD%" "%REPO_DIR%\scripts\workspace-deploy.cjs" all --repo-dir "%REP
 exit /b %ERRORLEVEL%
 
 :load_cleanup_metadata
-for /f "tokens=1,* delims==" %%A in ('"%NODE_CMD%" "%REPO_DIR%\scripts\workspace-deploy.cjs" cleanup-vars --repo-dir "%REPO_DIR%" --pnpm "%PNPM_CMD%"') do (
+set "CLEANUP_METADATA_FILE=%TEMP%\super-pro-cleanup-vars-%RANDOM%-%RANDOM%.tmp"
+
+call "%NODE_CMD%" "%REPO_DIR%\scripts\workspace-deploy.cjs" cleanup-vars --repo-dir "%REPO_DIR%" > "%CLEANUP_METADATA_FILE%"
+if errorlevel 1 (
+  if exist "%CLEANUP_METADATA_FILE%" del /q "%CLEANUP_METADATA_FILE%" >nul 2>nul
+  echo [ERROR] Failed to resolve cleanup metadata from workspace.
+  exit /b 1
+)
+
+for /f "usebackq tokens=1,* delims==" %%A in ("%CLEANUP_METADATA_FILE%") do (
   if /I "%%~A"=="BACKEND_PORTS" set "BACKEND_PORTS=%%~B"
   if /I "%%~A"=="PM2_APPS" set "PM2_APPS=%%~B"
 )
+
+if exist "%CLEANUP_METADATA_FILE%" del /q "%CLEANUP_METADATA_FILE%" >nul 2>nul
 
 if not "%BACKEND_PORTS_OVERRIDE%"=="" set "BACKEND_PORTS=%BACKEND_PORTS_OVERRIDE%"
 if not "%PM2_APPS_OVERRIDE%"=="" set "PM2_APPS=%PM2_APPS_OVERRIDE%"
@@ -80,12 +91,9 @@ if not defined PM2_APPS (
 exit /b 0
 
 :pre_cleanup
-echo [STEP 0/7] Cleanup nginx, pm2 apps, and backend ports
+echo [STEP 0/7] Cleanup pm2 apps and backend ports
 
 call :stop_pm2_apps
-if errorlevel 1 exit /b 1
-
-call :stop_nginx
 if errorlevel 1 exit /b 1
 
 for %%P in (%BACKEND_PORTS%) do (
@@ -104,11 +112,6 @@ if errorlevel 1 (
   echo [WARN] PM2 apps were not deleted cleanly, retrying with stop.
   call "%PM2_CMD%" stop %PM2_APPS% >nul 2>nul
 )
-exit /b 0
-
-:stop_nginx
-echo [INFO] Stopping nginx processes
-taskkill /F /IM nginx.exe >nul 2>nul
 exit /b 0
 
 :kill_port

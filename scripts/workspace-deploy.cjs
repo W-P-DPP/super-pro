@@ -322,19 +322,34 @@ function reloadPm2(repoDir, pm2Cmd, apps) {
 
 function restartNginx(nginxExe, nginxDir, nginxConf) {
   console.log('[STEP 6/6] Restart nginx')
-  spawnSync('taskkill', ['/F', '/IM', 'nginx.exe'], { stdio: 'ignore' })
-  sleep(2000)
-
   runCommand(nginxExe, ['-t', '-p', nginxDir, '-c', nginxConf])
+  const reloadResult = spawnSync(nginxExe, ['-p', nginxDir, '-c', nginxConf, '-s', 'reload'], {
+    cwd: nginxDir,
+    stdio: 'ignore',
+  })
 
-  const child = spawn(nginxExe, ['-p', nginxDir, '-c', nginxConf], {
+  if (reloadResult.status === 0) {
+    console.log('[OK] nginx reloaded successfully.')
+    console.log()
+    return
+  }
+
+  const startResult = spawnSync(nginxExe, ['-p', nginxDir, '-c', nginxConf], {
     cwd: nginxDir,
     detached: true,
     stdio: 'ignore',
   })
-  child.unref()
+  if (startResult.status === 0) {
+    console.log('[OK] nginx started successfully.')
+    console.log()
+    return
+  }
 
-  console.log('[OK] nginx restarted successfully.')
+  spawnSync(nginxExe, ['-p', nginxDir, '-c', nginxConf, '-s', 'stop'], { cwd: nginxDir, stdio: 'ignore' })
+  sleep(1000)
+  runCommand(nginxExe, ['-p', nginxDir, '-c', nginxConf])
+
+  console.log('[OK] nginx restarted successfully after fallback stop/start.')
   console.log()
 }
 
@@ -385,11 +400,10 @@ function main() {
   const repoDir = path.resolve(options['repo-dir'] || process.cwd())
   const pnpmCmd = options.pnpm
 
-  if (!pnpmCmd) {
-    throw new Error('Missing required option: --pnpm')
-  }
-
   if (command === 'frontends') {
+    if (!pnpmCmd) {
+      throw new Error('Missing required option: --pnpm')
+    }
     const deployRoot = path.resolve(options['deploy-root'] || path.join(repoDir, 'dist'))
     runFrontendMode(repoDir, deployRoot, pnpmCmd)
     return
@@ -416,6 +430,10 @@ function main() {
 
   if (command !== 'all') {
     throw new Error(`Unsupported command: ${command}`)
+  }
+
+  if (!pnpmCmd) {
+    throw new Error('Missing required option: --pnpm')
   }
 
   const deployRoot = path.resolve(options['deploy-root'] || path.join(repoDir, 'dist'))
