@@ -22,11 +22,11 @@ export default defineConfig(({ mode }) => {
       allowedHosts: ['localhost', '127.0.0.1'],
       proxy: {
         '/api': {
-          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30010',
+          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:31010',
           changeOrigin: true,
         },
         '/public': {
-          target: env.VITE_PUBLIC_ASSET_PROXY_TARGET || 'http://127.0.0.1:30010',
+          target: env.VITE_PUBLIC_ASSET_PROXY_TARGET || 'http://127.0.0.1:31010',
           changeOrigin: true,
         },
       },

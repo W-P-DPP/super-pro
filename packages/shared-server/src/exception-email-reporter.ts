@@ -1,29 +1,13 @@
-import { createRequire } from 'node:module';
 import type { ExceptionReporter, RuntimeExceptionEvent } from './runtime.ts';
+import {
+  createSmtpMailer,
+  resolveSmtpMailerConfigFromEnv,
+  splitEmailRecipients,
+  type MailTransportFactory,
+} from './smtp-mailer.ts';
 
 export type RuntimeExceptionSeverity = 'P0' | 'P1' | 'P2';
 export const DEFAULT_EMAIL_EXCEPTION_MIN_SEVERITY: RuntimeExceptionSeverity = 'P0';
-
-type MailMessage = {
-  from: string;
-  to: string;
-  subject: string;
-  text: string;
-};
-
-type MailTransport = {
-  sendMail: (message: MailMessage) => Promise<unknown> | unknown;
-};
-
-type MailTransportFactory = (options: {
-  host: string;
-  port: number;
-  secure: boolean;
-  auth: {
-    user: string;
-    pass: string;
-  };
-}) => MailTransport;
 
 export type ExceptionEmailReporterOptions = {
   host: string;
@@ -40,15 +24,6 @@ export type ExceptionEmailReporterOptions = {
 };
 
 type EnvLike = Record<string, string | undefined>;
-
-const require = createRequire(import.meta.url);
-
-function splitRecipients(value: string | undefined) {
-  return (value ?? '')
-    .split(/[;,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 function parseBoolean(value: string | undefined) {
   if (value === undefined) {
@@ -192,26 +167,22 @@ export function getRuntimeExceptionSeverity(type: RuntimeExceptionEvent['type'])
   }
 }
 
-function createNodeMailerTransportFactory(): MailTransportFactory {
-  return (options) => {
-    const nodemailer = require('nodemailer') as {
-      createTransport: MailTransportFactory;
-    };
-
-    return nodemailer.createTransport(options);
-  };
-}
-
 export function createExceptionEmailReporter(options: ExceptionEmailReporterOptions): ExceptionReporter {
-  const transporter = (options.transportFactory ?? createNodeMailerTransportFactory())({
+  const mailerOptions: {
+    transportFactory?: MailTransportFactory;
+  } = {};
+  if (options.transportFactory) {
+    mailerOptions.transportFactory = options.transportFactory;
+  }
+
+  const mailer = createSmtpMailer({
     host: options.host,
     port: options.port,
     secure: options.secure,
-    auth: {
-      user: options.user,
-      pass: options.pass,
-    },
-  });
+    user: options.user,
+    pass: options.pass,
+    from: options.from,
+  }, mailerOptions);
   const minSeverity = options.minSeverity ?? DEFAULT_EMAIL_EXCEPTION_MIN_SEVERITY;
   const eventTypes = options.eventTypes?.length
     ? new Set(options.eventTypes)
@@ -230,8 +201,7 @@ export function createExceptionEmailReporter(options: ExceptionEmailReporterOpti
 
       const subjectPrefix = options.subjectPrefix?.trim() || '[super-pro]';
       const typeLabel = getRuntimeExceptionTypeLabel(event.type);
-      await transporter.sendMail({
-        from: options.from,
+      await mailer.sendMail({
         to: options.to.join(', '),
         subject: `${subjectPrefix} [${severity}] [${event.serviceName}] ${typeLabel}`,
         text: renderEmailBody(event),
@@ -241,28 +211,25 @@ export function createExceptionEmailReporter(options: ExceptionEmailReporterOpti
 }
 
 export function createExceptionEmailReporterFromEnv(env: EnvLike = process.env) {
-  const host = env.MAILER_HOST?.trim();
-  const port = Number(env.MAILER_PORT);
-  const user = env.MAILER_USER?.trim();
-  const pass = env.MAILER_PASS?.trim();
-  const to = splitRecipients(env.EXCEPTION_EMAIL_TO ?? env.MAILER_ALERT_TO);
+  const smtpConfig = resolveSmtpMailerConfigFromEnv(env);
+  const to = splitEmailRecipients(env.EXCEPTION_EMAIL_TO ?? env.MAILER_ALERT_TO);
 
-  if (!host || !Number.isFinite(port) || !user || !pass || to.length === 0) {
+  if (!smtpConfig || to.length === 0) {
     return undefined;
   }
 
-  const secure = parseBoolean(env.MAILER_SECURE) ?? port === 465;
-  const from = env.EXCEPTION_EMAIL_FROM?.trim() || env.MAILER_FROM?.trim() || user;
+  const secure = parseBoolean(env.MAILER_SECURE) ?? smtpConfig.port === 465;
+  const from = env.EXCEPTION_EMAIL_FROM?.trim() || smtpConfig.from;
   const subjectPrefix = env.EXCEPTION_EMAIL_SUBJECT_PREFIX?.trim() || '[super-pro]';
   const minSeverity = parseSeverity(env.EXCEPTION_EMAIL_MIN_SEVERITY) ?? DEFAULT_EMAIL_EXCEPTION_MIN_SEVERITY;
   const eventTypes = parseEventTypes(env.EXCEPTION_EMAIL_EVENT_TYPES);
 
   const options: ExceptionEmailReporterOptions = {
-    host,
-    port,
+    host: smtpConfig.host,
+    port: smtpConfig.port,
     secure,
-    user,
-    pass,
+    user: smtpConfig.user,
+    pass: smtpConfig.pass,
     from,
     to,
     subjectPrefix,

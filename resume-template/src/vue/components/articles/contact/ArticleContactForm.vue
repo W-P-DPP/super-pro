@@ -18,14 +18,13 @@
 </template>
 
 <script setup>
-import {computed, inject, onMounted, ref} from "vue"
-import {useEmails} from "/src/composables/emails.js"
+import {computed, inject, ref} from "vue"
+import {submitContactMessage} from "/src/api/contact.js"
 import {useUtils} from "/src/composables/utils.js"
 import Article from "/src/vue/components/articles/base/Article.vue"
 import ArticleContactFormFields from "/src/vue/components/articles/contact/ArticleContactFormFields.vue"
 import ArticleContactFormThankYou from "/src/vue/components/articles/contact/ArticleContactFormThankYou.vue"
 
-const emails = useEmails()
 const utils = useUtils()
 
 const props = defineProps({
@@ -60,6 +59,9 @@ const shouldDisplayFormFields = computed(() => {
 })
 
 const errorMessage = computed(() => {
+    if(apiResponse.value && !apiResponse.value.success && apiResponse.value.message)
+        return apiResponse.value.message
+
     if(apiResponse.value && !apiResponse.value.success)
         return localizeFromStrings("error_sending_message")
 
@@ -67,13 +69,6 @@ const errorMessage = computed(() => {
         return localizeFromStrings(validationError.value)
 
     return null
-})
-
-onMounted(() => {
-    const publicKey = props.model.getSetting("contact_js_public_key")
-    const serviceId = props.model.getSetting("contact_js_service_id")
-    const templateId = props.model.getSetting("contact_js_template_id")
-    emails.init(publicKey, serviceId, templateId)
 })
 
 const _onInput = (field, value) => {
@@ -119,8 +114,15 @@ const _validate = () => {
 const _submit = async () => {
     setSpinnerEnabled && setSpinnerEnabled(true, localizeFromStrings('sending_message'))
 
-    const success = await emails.sendContact(name.value, email.value, subject.value, message.value)
-    apiResponse.value = {success: success}
+    const response = await submitContactMessage({
+        name: name.value,
+        email: email.value,
+        subject: subject.value,
+        message: message.value,
+        sourceUrl: window.location.href,
+        sourceName: props.model.getSetting("contact_source_name", "resume-template"),
+    }, props.model.getSetting("contact_api_path", "/api/contact/submitMessage"))
+    apiResponse.value = response
 
     scrollToTopOfCurrentSection()
     setSpinnerEnabled && setSpinnerEnabled(false)

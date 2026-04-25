@@ -21,12 +21,12 @@ export default defineConfig(({ mode }) => {
       port: Number.isFinite(devPort) && devPort > 0 ? devPort : 15697,
       proxy: {
         '/agent-api': {
-          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30012',
+          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:31012',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/agent-api/, '/api'),
         },
         '/public': {
-          target: env.VITE_PUBLIC_ASSET_PROXY_TARGET || 'http://127.0.0.1:30010',
+          target: env.VITE_PUBLIC_ASSET_PROXY_TARGET || 'http://127.0.0.1:31010',
           changeOrigin: true,
         },
       },

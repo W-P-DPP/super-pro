@@ -13,6 +13,11 @@ declare namespace NodeJS {
     MAILER_SECURE?: string;
     MAILER_USER?: string;
     MAILER_PASS?: string;
+    MAILER_FROM?: string;
+    MAILER_ALERT_TO?: string;
+    EXCEPTION_EMAIL_TO?: string;
+    CONTACT_FORM_EMAIL_TO?: string;
+    CONTACT_FORM_EMAIL_SUBJECT_PREFIX?: string;
     LOGIN_PASSWORD_PUBLIC_KEY?: string;
     LOGIN_PASSWORD_PRIVATE_KEY?: string;
   }

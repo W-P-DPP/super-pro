@@ -77,7 +77,7 @@ describe('shared-server env helpers', () => {
       host: '127.0.0.1',
       port: 3306,
       username: 'root',
-      password: 'password',
+      password: '123456',
       database: 'wxbot',
       timezone: '+08:00',
       charset: 'utf8mb4',

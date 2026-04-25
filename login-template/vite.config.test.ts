@@ -17,6 +17,6 @@ describe('login-template vite proxy', () => {
 
     expect(proxy).toBeDefined()
     expect(proxy?.['/api']).toBeDefined()
-    expect(proxy?.['/api'].target).toBe('http://127.0.0.1:30010')
+    expect(proxy?.['/api'].target).toBe('http://127.0.0.1:31010')
   })
 })
