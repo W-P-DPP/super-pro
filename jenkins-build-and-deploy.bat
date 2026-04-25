@@ -134,11 +134,21 @@ set "FALLBACK_ONE=%~3"
 set "FALLBACK_TWO=%~4"
 set "FALLBACK_THREE=%~5"
 set "RESOLVED_COMMAND="
+set "FIRST_MATCH="
 
-for /f "delims=" %%I in ('where %TARGET_VAR% 2^>nul') do (
-  set "RESOLVED_COMMAND=%%~fI"
-  goto :resolve_command_found
+for /f "delims=" %%I in ('where %DISPLAY_NAME% 2^>nul') do (
+  if not defined FIRST_MATCH set "FIRST_MATCH=%%~fI"
+  if /I "%%~xI"==".cmd" (
+    set "RESOLVED_COMMAND=%%~fI"
+    goto :resolve_command_found
+  )
+  if /I "%%~xI"==".exe" (
+    set "RESOLVED_COMMAND=%%~fI"
+    goto :resolve_command_found
+  )
 )
+
+if not defined RESOLVED_COMMAND if defined FIRST_MATCH set "RESOLVED_COMMAND=%FIRST_MATCH%"
 
 if not defined RESOLVED_COMMAND if not "%FALLBACK_ONE%"=="" if exist "%FALLBACK_ONE%" set "RESOLVED_COMMAND=%FALLBACK_ONE%"
 if not defined RESOLVED_COMMAND if not "%FALLBACK_TWO%"=="" if exist "%FALLBACK_TWO%" set "RESOLVED_COMMAND=%FALLBACK_TWO%"

@@ -48,6 +48,7 @@ type RawServerConfig = Partial<{
 export type LoadServerConfigOptions = {
   configPath?: string;
   cwd?: string;
+  configFilenames?: string[];
   defaults?: Partial<ServerConfig>;
 };
 
@@ -86,8 +87,26 @@ function normalizeString(value: string | undefined, fallback: string) {
   return typeof value === 'string' ? value : fallback;
 }
 
+export function resolveServerConfigPath(options: LoadServerConfigOptions = {}): string {
+  if (options.configPath) {
+    return options.configPath;
+  }
+
+  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const configFilenames = options.configFilenames?.filter(Boolean) ?? ['config.json'];
+
+  for (const filename of configFilenames) {
+    const candidatePath = path.resolve(cwd, filename);
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  return path.resolve(cwd, configFilenames[0] ?? 'config.json');
+}
+
 export function loadServerConfig(options: LoadServerConfigOptions = {}): ServerConfig {
-  const configPath = options.configPath ?? path.resolve(options.cwd ?? process.cwd(), 'config.json');
+  const configPath = resolveServerConfigPath(options);
   const rawConfig = readJsonConfig(configPath);
   const defaults = {
     ...defaultServerConfig,

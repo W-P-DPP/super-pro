@@ -4,6 +4,7 @@ import initDataBase from './utils/mysql.ts';
 import './eventRegister.ts';
 import { initSiteMenuModule } from './src/siteMenu/siteMenu.repository.ts';
 import {
+  BOOTSTRAP_FAILURE_EXIT_CODE,
   createExceptionEmailReporterFromEnv,
   createServiceRuntime,
   loadProfileEnv,
@@ -71,8 +72,8 @@ async function bootstrap() {
       serviceName: 'general-server',
       timestamp: Date.now(),
     });
-    await runtime.shutdown('bootstrap_error', 1);
-    process.exit(1);
+    await runtime.shutdown('bootstrap_error', BOOTSTRAP_FAILURE_EXIT_CODE);
+    process.exit(BOOTSTRAP_FAILURE_EXIT_CODE);
   }
 }
 

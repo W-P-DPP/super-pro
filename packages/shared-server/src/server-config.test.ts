@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { loadServerConfig } from './server-config.ts';
+import { loadServerConfig, resolveServerConfigPath } from './server-config.ts';
 
 describe('shared-server typed server config', () => {
   it('returns safe defaults when config file is missing', () => {
@@ -105,5 +105,30 @@ describe('shared-server typed server config', () => {
       baseURL: 'https://default.test',
       timeout: 1000,
     });
+  });
+
+  it('falls back to alternate config filenames in the service root', async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'shared-server-config-'));
+    const fallbackConfigPath = path.join(cwd, 'config copy.json');
+
+    await fs.writeFile(
+      fallbackConfigPath,
+      JSON.stringify({
+        Redis: {
+          host: 'fallback.redis.internal',
+        },
+      }),
+      'utf8',
+    );
+
+    expect(resolveServerConfigPath({
+      cwd,
+      configFilenames: ['config.json', 'config copy.json'],
+    })).toBe(fallbackConfigPath);
+
+    expect(loadServerConfig({
+      cwd,
+      configFilenames: ['config.json', 'config copy.json'],
+    }).Redis.host).toBe('fallback.redis.internal');
   });
 });

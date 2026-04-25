@@ -3,6 +3,8 @@ const os = require('node:os')
 const path = require('node:path')
 const { spawn, spawnSync } = require('node:child_process')
 
+const BOOTSTRAP_FAILURE_EXIT_CODE = 78
+
 function parseArgs(argv) {
   const [, , command = 'all', ...rest] = argv
   const options = {}
@@ -166,6 +168,9 @@ function buildPm2Apps(repoDir) {
     watch: pkg.deployConfig.watch ?? false,
     kill_timeout: Number.isInteger(pkg.deployConfig.killTimeoutMs) ? pkg.deployConfig.killTimeoutMs : 20000,
     max_restarts: Number.isInteger(pkg.deployConfig.maxRestarts) ? pkg.deployConfig.maxRestarts : 10,
+    stop_exit_codes: Array.isArray(pkg.deployConfig.stopExitCodes)
+      ? pkg.deployConfig.stopExitCodes
+      : [BOOTSTRAP_FAILURE_EXIT_CODE],
     env: {
       NODE_ENV: 'production',
       ...(pkg.deployConfig.env || {}),
@@ -320,6 +325,16 @@ function reloadPm2(repoDir, pm2Cmd, apps) {
   console.log()
 }
 
+function startDetachedProcess(command, args, options = {}) {
+  const child = spawn(command, args, {
+    cwd: options.cwd,
+    detached: true,
+    stdio: 'ignore',
+  })
+  child.unref()
+  return child.pid
+}
+
 function restartNginx(nginxExe, nginxDir, nginxConf) {
   console.log('[STEP 6/6] Restart nginx')
   runCommand(nginxExe, ['-t', '-p', nginxDir, '-c', nginxConf])
@@ -334,22 +349,10 @@ function restartNginx(nginxExe, nginxDir, nginxConf) {
     return
   }
 
-  const startResult = spawnSync(nginxExe, ['-p', nginxDir, '-c', nginxConf], {
+  const pid = startDetachedProcess(nginxExe, ['-p', nginxDir, '-c', nginxConf], {
     cwd: nginxDir,
-    detached: true,
-    stdio: 'ignore',
   })
-  if (startResult.status === 0) {
-    console.log('[OK] nginx started successfully.')
-    console.log()
-    return
-  }
-
-  spawnSync(nginxExe, ['-p', nginxDir, '-c', nginxConf, '-s', 'stop'], { cwd: nginxDir, stdio: 'ignore' })
-  sleep(1000)
-  runCommand(nginxExe, ['-p', nginxDir, '-c', nginxConf])
-
-  console.log('[OK] nginx restarted successfully after fallback stop/start.')
+  console.log(`[OK] nginx start command issued successfully. pid=${pid ?? 'unknown'}`)
   console.log()
 }
 

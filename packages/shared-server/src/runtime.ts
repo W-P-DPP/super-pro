@@ -4,6 +4,8 @@ import type { Express } from 'express';
 import { createInMemoryMetricsRegistry, type MetricsRegistry } from './metrics.ts';
 import { getRequestContext } from './request-context.ts';
 
+export const BOOTSTRAP_FAILURE_EXIT_CODE = 78;
+
 export type RuntimeLifecycleStatus =
   | 'created'
   | 'starting'
