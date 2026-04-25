@@ -1,10 +1,10 @@
 # Backend Conventions Reference
 
-Use this file as the detailed rule source after `backend-dev-guard` is triggered.
+Use this file after `backend-dev-guard` triggers and the task touches backend structure, shared-server infrastructure, observability, alerting, runtime lifecycle, or test-entry behavior.
 
 ## Module Layout
 
-Business domains should use this shape:
+Business domains should prefer:
 
 ```text
 src/<domain>/
@@ -16,15 +16,14 @@ src/<domain>/
   <domain>.entity.ts
 ```
 
-Small legacy modules may keep the current directory layout, but new or touched logic should still respect the same layer boundaries.
+Legacy modules may keep current layout, but touched logic should still respect the same layer boundaries.
 
 ## Layer Responsibilities
 
 `router`
 
-- Declare routes.
-- Mount route-level middleware.
-- Bind controller functions.
+- Declare routes and route-level middleware.
+- Mount anonymous routes explicitly before auth middleware when needed.
 - Do not contain business logic.
 
 `controller`
@@ -32,8 +31,8 @@ Small legacy modules may keep the current directory layout, but new or touched l
 - Parse HTTP inputs.
 - Validate or normalize DTOs.
 - Call services.
-- Return response envelopes.
-- Map known domain errors to HTTP status and Chinese messages.
+- Return shared response envelopes.
+- Map domain errors to stable Chinese messages.
 
 `service`
 
@@ -44,56 +43,109 @@ Small legacy modules may keep the current directory layout, but new or touched l
 `repository`
 
 - Own persistence access.
-- Hide ORM/SQL details.
+- Hide ORM or SQL details.
 - Return typed entities or DTOs.
-- Do not return raw HTTP semantics.
 
 `dto`
 
 - Define request, response, query, command, and view-model types.
 - Avoid `any` and loose dictionaries.
 
-`entity`
-
-- Define persistent schema or domain entity shapes.
-- Keep database-specific fields and migrations auditable.
-
 ## Shared Server Infrastructure
 
-Use these shared primitives before writing app-local infrastructure:
+Check these first before writing app-local infrastructure:
 
 - HTTP app factory: `createHttpApp`
 - Response envelope: `createResponseMiddleware`
 - Error middleware: `createErrorMiddleware`
-- Request logging: `createRequestLoggerMiddleware`
-- Winston logging: `createWinstonLogger`
-- Typed app config: `loadServerConfig`
+- Request logger: `createRequestLoggerMiddleware`
+- Runtime lifecycle: `createServiceRuntime`
+- Request context: `createRequestContextMiddleware`, `getRequestContext`
+- Exception email reporter: `createExceptionEmailReporterFromEnv`
+- Development exception test router: `createDevExceptionTestRouter`
+- Typed env loading: `loadProfileEnv`
+- App config: `loadServerConfig`
 - Database config: `getDatabaseConfig`
 - Redis wrapper: `SharedRedisService`
 - Axios wrapper: `SharedAxiosService`
 - Async batching: `BatchProcessor`
 - Log sanitization: `sanitizeLogValue`
 
-App-local files such as `utils/Logger.ts`, `utils/Redis.ts`, `utils/Axios.ts`, and `app.ts` should usually be adapters that pass app config into shared primitives.
+App-local files such as `main.ts`, `app.ts`, `utils/Logger.ts`, and `utils/Redis.ts` should usually be thin adapters that wire local config into shared primitives.
+
+## Runtime Lifecycle
+
+Backend services should prefer the shared runtime for:
+
+- process signal handling
+- graceful shutdown
+- shutdown task ordering
+- request drain timeout
+- process-level exception reporting
+- dependency health checks
+- metrics rendering
+
+Rules:
+
+- Load `.env.*` before creating runtime, reporters, or config-dependent adapters.
+- Register shutdown tasks explicitly and keep release order deterministic.
+- Keep readiness dependent on runtime state plus required dependency checks.
+- `/live`, `/ready`, `/metrics` are internal probe endpoints by default, not public product APIs.
+
+## Exception Reporting and Alerting
+
+All exception reporting should flow through `runtime.reportException(...)`.
+
+Canonical event types:
+
+- `request_error`
+- `bootstrap_error`
+- `unhandled_rejection`
+- `uncaught_exception`
+- `shutdown_error`
+
+Severity mapping:
+
+- `P0`: `bootstrap_error`, `uncaught_exception`
+- `P1`: `unhandled_rejection`, `shutdown_error`
+- `P2`: `request_error`
+
+Rules:
+
+- Default email alert threshold is `P0`.
+- Reporter failure must not break the main request or shutdown flow.
+- Email subjects and bodies should be Chinese by default.
+- Keep reporter registration centralized in the service bootstrap path.
+
+## Development Exception Test Entry
+
+When a development-only exception test route is needed:
+
+- reuse `createDevExceptionTestRouter`
+- mount it only when `NODE_ENV=development`
+- keep the path explicit, e.g. `/api/__dev__/exception-email-test`
+- if the service normally applies JWT to all API routes, bypass JWT only for this explicit dev path
+- never mount dev test routes in production
+
+The route may accept both machine codes and Chinese aliases, but should return a stable envelope plus localized display fields.
 
 ## Config
 
-- Config loading order should be: safe defaults -> optional `config.json` -> profile env file -> process env overrides.
+- Config loading order should be: safe defaults -> optional config file -> profile env file -> process env overrides.
 - Config objects should be typed.
-- Missing `config.json` should not break tests.
+- Missing optional config files should not break tests.
 - Secrets should come from protected config or environment variables.
-- Do not read raw `process.env` in random business files. Centralize env parsing.
+- Do not scatter raw `process.env` reads across business code.
 
 ## Logging
 
-Recommended log fields:
+Recommended structured fields:
 
 - timestamp
 - level
 - service
 - env
-- requestId or traceId when available
-- userId when available
+- requestId
 - module
 - operation
 - method
@@ -104,28 +156,16 @@ Recommended log fields:
 Never log:
 
 - password
-- passwordCiphertext
-- passwordHash
+- password hash or ciphertext
 - token
-- accessToken
-- refreshToken
-- authorization
+- authorization header
 - cookie
-- private keys
+- private key
 - full large payloads
 
-Use sanitization and truncation for request bodies, response bodies, audit params, and external client response data.
+Use sanitization and truncation for request bodies, response bodies, audit params, and upstream response data.
 
-## Performance
-
-- Do not add synchronous side effects to request finish handlers when they can be batched.
-- Batch audit or operation logs.
-- Set external HTTP client timeouts.
-- Do not log large payloads.
-- Add pagination to list endpoints before they can grow unbounded.
-- Prefer indexed queries for high-frequency filters.
-
-## API Contract
+## API Contract and Auth
 
 Response body shape:
 
@@ -140,22 +180,10 @@ type ResultVO<T> = {
 
 Rules:
 
-- HTTP status expresses protocol semantics.
-- `code` expresses business result.
 - `msg` should be Chinese by default.
 - Do not leak stack traces, SQL errors, ORM internals, or upstream SDK internals.
-
-## Auth
-
 - New APIs default to JWT protection.
-- Anonymous APIs must be explicitly mounted before auth middleware or clearly separated in a router.
-- Do not hide anonymous endpoint logic in a global whitelist inside auth middleware.
-
-## Database
-
-- Production should not rely on TypeORM `synchronize: true`.
-- Schema changes should be migration-based.
-- Repository changes that affect persistence should include integration tests when feasible.
+- Anonymous endpoints must be explicit in router composition, not hidden in auth middleware internals.
 
 ## Validation Commands
 
@@ -163,10 +191,10 @@ Use the smallest relevant checks first:
 
 ```bash
 pnpm --filter @super-pro/shared-server build
-pnpm --filter @super-pro/shared-server test
+pnpm --filter @super-pro/shared-server exec vitest run <targeted-tests>
 pnpm --filter @super-pro/server build
 pnpm --filter @super-pro/agent-server build
 pnpm --filter @super-pro/reimburse-server build
 ```
 
-Run service-specific unit/integration tests when touching behavior in that service.
+When touching service behavior, also run targeted Jest integration tests in that service.

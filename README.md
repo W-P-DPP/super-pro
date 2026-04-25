@@ -13,6 +13,8 @@ This repository is now managed as a `pnpm` workspace monorepo.
 - Frontend design rules are centralized in the repository-root `design.md`.
 - Frontend work should follow `.codex/skills/frontend-design-guard`.
 - Do not add or maintain per-app `design.md` copies inside frontend packages.
+- Deployment and backend observability conventions are documented in [docs/operations.md](/C:/Users/admin/Desktop/my/super-pro/docs/operations.md).
+- Exception email alerting is documented in [docs/exception-email-alerting.md](/C:/Users/admin/Desktop/my/super-pro/docs/exception-email-alerting.md).
 
 ## Common Commands
 
@@ -44,3 +46,8 @@ pnpm test:unit
 pnpm test:integration
 pnpm test:coverage
 ```
+
+## Operations
+
+- PM2 and nginx deployment flow is described in [docs/operations.md](/C:/Users/admin/Desktop/my/super-pro/docs/operations.md).
+- Backend services now expose internal `/live`, `/ready`, and `/metrics` endpoints for operator checks.

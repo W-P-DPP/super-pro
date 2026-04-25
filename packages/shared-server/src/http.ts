@@ -11,6 +11,12 @@ import express, {
 import morgan from 'morgan';
 import path from 'node:path';
 import { sanitizeLogValue } from './logging.ts';
+import {
+  createRequestContextMiddleware,
+  DEFAULT_REQUEST_ID_HEADER,
+  getRequestContext,
+} from './request-context.ts';
+import type { ServiceRuntime } from './runtime.ts';
 
 declare global {
   namespace Express {
@@ -40,6 +46,10 @@ export type ErrorLoggerLike = {
 export type ErrorMiddlewareOptions = {
   logger?: ErrorLoggerLike;
   fallbackMessage?: string;
+  onError?: (event: {
+    err: unknown;
+    req: Request;
+  }) => void | Promise<void>;
 };
 
 export type CreateHttpAppOptions = {
@@ -54,6 +64,7 @@ export type CreateHttpAppOptions = {
   serveStaticAtRoot?: boolean;
   xmlTextType?: string;
   apiBasePath?: string;
+  observability?: SharedObservabilityHttpOptions;
 };
 
 export type RequestLoggerLike = {
@@ -63,6 +74,16 @@ export type RequestLoggerLike = {
 export type RequestLoggerMiddlewareOptions = {
   logger: RequestLoggerLike;
   format?: string;
+};
+
+export type SharedObservabilityHttpOptions = {
+  runtime: ServiceRuntime;
+  enableLiveEndpoint?: boolean;
+  enableReadyEndpoint?: boolean;
+  enableMetricsEndpoint?: boolean;
+  livePath?: string;
+  readyPath?: string;
+  metricsPath?: string;
 };
 
 export function createResponseMiddleware(
@@ -106,6 +127,11 @@ export function createErrorMiddleware(
   const fallbackMessage = options.fallbackMessage ?? '服务器内部错误';
 
   return function errorMiddleware(err, req, res, next) {
+    void options.onError?.({
+      err,
+      req,
+    });
+
     options.logger?.error('Unhandled request error', {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
@@ -134,8 +160,13 @@ export function createHttpApp(options: CreateHttpAppOptions): Express {
   const app = express();
   const apiBasePath = options.apiBasePath ?? '/api';
   const xmlTextType = options.xmlTextType ?? 'text/xml';
+  const observability = options.observability;
 
   app.use(cors());
+  if (observability?.runtime) {
+    app.use(createRequestContextMiddleware());
+    app.use(createObservabilityMiddleware(observability.runtime));
+  }
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(bodyParser.text({ type: xmlTextType }));
@@ -159,6 +190,10 @@ export function createHttpApp(options: CreateHttpAppOptions): Express {
     app.use(options.responseMiddleware);
   }
 
+  if (observability) {
+    mountObservabilityEndpoints(app, observability);
+  }
+
   if (options.rootHandler) {
     app.get('/', options.rootHandler);
   }
@@ -178,7 +213,21 @@ export function createRequestLoggerMiddleware(
   options: RequestLoggerMiddlewareOptions,
 ): RequestHandler {
   const format = options.format
-    ?? ':method :url :status :res[content-length] - :response-time ms :body';
+    ?? ':request-id :method :url :status :res[content-length] - :response-time ms :body';
+
+  morgan.token('request-id', (req: Request, res: Response) => {
+    const responseRequestId = res.getHeader(DEFAULT_REQUEST_ID_HEADER);
+    if (typeof responseRequestId === 'string' && responseRequestId) {
+      return responseRequestId;
+    }
+
+    const requestIdHeader = req.headers[DEFAULT_REQUEST_ID_HEADER];
+    if (typeof requestIdHeader === 'string' && requestIdHeader) {
+      return requestIdHeader;
+    }
+
+    return getRequestContext()?.requestId ?? '-';
+  });
 
   morgan.token('body', (req: Request) =>
     JSON.stringify(sanitizeLogValue(req.body || {})),
@@ -191,4 +240,72 @@ export function createRequestLoggerMiddleware(
       },
     },
   });
+}
+
+function createObservabilityMiddleware(runtime: ServiceRuntime): RequestHandler {
+  const inFlightRequests = new Map<string, number>();
+
+  return function observabilityMiddleware(req, res, next) {
+    const labels = {
+      service: runtime.getState().serviceName,
+      method: req.method.toUpperCase(),
+      route: req.path,
+    };
+    const inFlightKey = JSON.stringify(labels);
+    const startTime = process.hrtime.bigint();
+
+    const nextInFlightCount = (inFlightRequests.get(inFlightKey) ?? 0) + 1;
+    inFlightRequests.set(inFlightKey, nextInFlightCount);
+    runtime.setMetric('http_in_flight_requests', nextInFlightCount, labels);
+
+    res.on('finish', () => {
+      const durationMs = Number(process.hrtime.bigint() - startTime) / 1_000_000;
+      runtime.incrementMetric('http_requests_total', 1, {
+        ...labels,
+        status: String(res.statusCode),
+      });
+      runtime.observeMetric('http_request_duration_ms', durationMs, labels);
+      const updatedInFlightCount = Math.max(0, (inFlightRequests.get(inFlightKey) ?? 1) - 1);
+      inFlightRequests.set(inFlightKey, updatedInFlightCount);
+      runtime.setMetric('http_in_flight_requests', updatedInFlightCount, labels);
+    });
+
+    next();
+  };
+}
+
+function mountObservabilityEndpoints(app: Express, options: SharedObservabilityHttpOptions) {
+  const livePath = options.livePath ?? '/live';
+  const readyPath = options.readyPath ?? '/ready';
+  const metricsPath = options.metricsPath ?? '/metrics';
+
+  if (options.enableLiveEndpoint ?? true) {
+    app.get(livePath, async (_req, res) => {
+      const snapshot = await options.runtime.getHealthSnapshot();
+      res.status(snapshot.live.ok ? 200 : 503).json({
+        ok: snapshot.live.ok,
+        service: snapshot.serviceName,
+        state: snapshot.state.status,
+      });
+    });
+  }
+
+  if (options.enableReadyEndpoint ?? true) {
+    app.get(readyPath, async (_req, res) => {
+      const snapshot = await options.runtime.getHealthSnapshot();
+      res.status(snapshot.ready.ok ? 200 : 503).json({
+        ok: snapshot.ready.ok,
+        service: snapshot.serviceName,
+        state: snapshot.state.status,
+        checks: snapshot.ready.checks,
+        optional: snapshot.optional.checks,
+      });
+    });
+  }
+
+  if (options.enableMetricsEndpoint ?? true) {
+    app.get(metricsPath, (_req, res) => {
+      res.type('text/plain').send(options.runtime.renderMetrics());
+    });
+  }
 }

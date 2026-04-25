@@ -86,6 +86,10 @@ export class SharedRedisService {
     return this.client;
   }
 
+  isReady() {
+    return this.isConnected;
+  }
+
   async set(key: string, value: string, ttl?: number): Promise<void> {
     if (ttl) {
       await this.client.setEx(key, ttl, value);

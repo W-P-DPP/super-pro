@@ -170,3 +170,20 @@ The system SHALL provide a controlled way for the `file-server` preview workspac
 #### Scenario: Reject preview path escape
 - **WHEN** a client requests preview access for a path that resolves outside the repository root `file` directory
 - **THEN** the system SHALL reject the request with a controlled error response
+
+### Requirement: System SHALL provide a dedicated authenticated file download endpoint
+The system SHALL provide a dedicated `GET /api/file/download` endpoint under the existing file business domain. The endpoint SHALL accept `targetPath` as the target file path, SHALL enforce the same repository root `file` directory boundary as other file operations, and SHALL reject requests that target folders or paths outside that root.
+
+#### Scenario: Download a file inside the file root
+- **WHEN** a client sends a `GET` request to `/api/file/download` with a valid `targetPath` that points to a file inside the repository root `file` directory
+- **THEN** the system SHALL return the file content successfully
+- **THEN** the response SHALL use attachment download semantics for the resolved file name
+
+#### Scenario: Reject downloading a folder
+- **WHEN** a client sends a `GET` request to `/api/file/download` with a `targetPath` that resolves to a folder
+- **THEN** the system SHALL reject the request with a controlled error response
+
+#### Scenario: Reject download path escape
+- **WHEN** a client sends a `GET` request to `/api/file/download` with a `targetPath` that resolves outside the repository root `file` directory
+- **THEN** the system SHALL reject the request with a controlled error response
+

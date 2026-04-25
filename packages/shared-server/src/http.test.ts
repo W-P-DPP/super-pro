@@ -7,6 +7,7 @@ import {
   createRequestLoggerMiddleware,
   createResponseMiddleware,
 } from './http.ts';
+import { createServiceRuntime } from './runtime.ts';
 
 describe('shared-server http helpers', () => {
   it('creates an app with shared response and api middleware pipeline', async () => {
@@ -101,5 +102,86 @@ describe('shared-server http helpers', () => {
     expect(message).toContain('"token":"[REDACTED]"');
     expect(message).not.toContain('secret');
     expect(message).not.toContain('token-value');
+  });
+
+  it('mounts live, ready, and metrics endpoints through shared observability integration', async () => {
+    const runtime = createServiceRuntime({
+      serviceName: 'http-observability-test',
+      logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+    runtime.registerHealthCheck('redis', 'ready', () => ({
+      ok: true,
+    }));
+    runtime.markStarted();
+
+    const app = createHttpApp({
+      responseMiddleware: createResponseMiddleware(),
+      observability: {
+        runtime,
+      },
+      apiRouter: express.Router().get('/ping', (req, res) => {
+        res.sendSuccess({ ok: true });
+      }),
+    });
+
+    const liveResponse = await request(app).get('/live');
+    expect(liveResponse.status).toBe(200);
+    expect(liveResponse.body).toMatchObject({
+      ok: true,
+      service: 'http-observability-test',
+      state: 'ready',
+    });
+
+    const readyResponse = await request(app).get('/ready');
+    expect(readyResponse.status).toBe(200);
+    expect(readyResponse.body.ok).toBe(true);
+    expect(readyResponse.body.checks).toEqual([
+      expect.objectContaining({
+        name: 'redis',
+        ok: true,
+      }),
+    ]);
+
+    const apiResponse = await request(app).get('/api/ping');
+    expect(apiResponse.status).toBe(200);
+    expect(apiResponse.headers['x-request-id']).toBeTruthy();
+
+    const metricsResponse = await request(app).get('/metrics');
+    expect(metricsResponse.status).toBe(200);
+    expect(metricsResponse.text).toContain('http_requests_total');
+    expect(metricsResponse.text).toContain('service_uptime_seconds');
+
+    runtime.beginDraining('test');
+
+    const drainingReadyResponse = await request(app).get('/ready');
+    expect(drainingReadyResponse.status).toBe(503);
+    expect(drainingReadyResponse.body.ok).toBe(false);
+  });
+
+  it('invokes the shared request error hook when request handling fails', async () => {
+    const onError = vi.fn();
+    const app = createHttpApp({
+      responseMiddleware: createResponseMiddleware(),
+      apiRouter: express.Router().get('/boom', () => {
+        throw new Error('request-error');
+      }),
+      errorMiddleware: createErrorMiddleware({
+        onError,
+      }),
+    });
+
+    await request(app).get('/api/boom');
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({
+      err: expect.any(Error),
+      req: expect.objectContaining({
+        method: 'GET',
+      }),
+    });
   });
 });

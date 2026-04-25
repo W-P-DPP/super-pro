@@ -12,7 +12,7 @@
       {
         "id": 2,
         "name": "关于我",
-        "path": "http://www.zwpsite.icu:8082/zwpsummary/",
+        "path": "http://www.zwpsite.icu:8082/resume/",
         "icon": "/public/icons/pin.svg",
         "isTop": false,
         "strict": false,

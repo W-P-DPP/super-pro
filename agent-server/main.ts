@@ -1,41 +1,73 @@
 import { createApp } from './app.ts';
-import RedisService from "./utils/Redis.ts";
-import initDataBase from "./utils/mysql.ts";
-import "./eventRegister.ts";
-import { loadProfileEnv } from '@super-pro/shared-server';
-
-
-async function injectEnv() {
-  const { profile } = loadProfileEnv();
-
-  console.log('ENV:', profile);
-  console.log('PORT:', process.env.PORT);
-}
-
-async function initRedis() {
-   const redis = RedisService.getInstance();
-    await redis.connect();
-}
-
-
-async function initApp() {
-  const app = createApp();
-
-  const PORT = process.env.PORT || 30012;
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-}
+import RedisService from './utils/Redis.ts';
+import initDataBase from './utils/mysql.ts';
+import './eventRegister.ts';
+import {
+  createExceptionEmailReporterFromEnv,
+  createServiceRuntime,
+  loadProfileEnv,
+} from '@super-pro/shared-server';
+import { Logger } from './utils/index.ts';
 
 async function bootstrap() {
+  const { profile } = loadProfileEnv();
+  const logger = Logger.getInstance();
+  const emailReporter = createExceptionEmailReporterFromEnv();
+  const runtime = createServiceRuntime({
+    serviceName: 'agent-server',
+    logger,
+    env: process.env.NODE_ENV,
+    reporters: emailReporter ? [emailReporter] : undefined,
+  });
+
+  runtime.installProcessHandlers();
+
   try {
-    await injectEnv()
-    await initRedis()
-    await initDataBase();
-    await initApp();
-  } catch (err) {
-    console.error('Bootstrap error:', err);
+    const port = Number(process.env.PORT || 30012);
+    logger.info('Bootstrapping service', {
+      serviceName: 'agent-server',
+      profile,
+      port,
+    });
+
+    const redis = RedisService.getInstance();
+    await redis.connect();
+    runtime.registerHealthCheck('redis', 'ready', () => ({
+      ok: redis.isReady(),
+    }));
+    runtime.registerShutdownTask('redis', () => redis.quit(), {
+      order: 300,
+    });
+
+    const dataSource = await initDataBase();
+    runtime.registerHealthCheck('database', 'ready', () => ({
+      ok: dataSource.isInitialized,
+    }));
+    runtime.registerShutdownTask('database', async () => {
+      if (dataSource.isInitialized) {
+        await dataSource.destroy();
+      }
+    }, {
+      order: 400,
+    });
+
+    const app = createApp({
+      runtime,
+    });
+    await runtime.startHttpServer({
+      app,
+      port,
+    });
+  } catch (error) {
+    await runtime.reportException({
+      type: 'bootstrap_error',
+      error,
+      serviceName: 'agent-server',
+      timestamp: Date.now(),
+    });
+    await runtime.shutdown('bootstrap_error', 1);
     process.exit(1);
   }
 }
-bootstrap();
+
+void bootstrap();

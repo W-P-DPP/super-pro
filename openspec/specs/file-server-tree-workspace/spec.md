@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the left tree workspace behavior for `file-server`, including tree-first navigation, core file actions, batch and folder upload entry points, drag-and-drop move interactions, and the relationship between the tree workspace and the right-side preview area.
-
 ## Requirements
-
 ### Requirement: file-server SHALL use the left tree as the primary file workspace
 The `file-server` frontend SHALL present the left-side tree as the primary workspace for browsing and managing the `file` directory, and SHALL keep the tree visibly distinguishable from the secondary content area.
 
@@ -123,3 +121,41 @@ The `file-server` frontend SHALL use the right content area as a preview workspa
 #### Scenario: Primary actions remain in the tree workspace
 - **WHEN** a user creates a folder, uploads a file, deletes a target, or drags a node to another folder
 - **THEN** the system SHALL allow those actions to complete from the tree workspace without requiring the right content area as the main action surface
+
+### Requirement: file-server SHALL allow users to inspect full tree node names when visible text is truncated
+The `file-server` frontend SHALL keep tree nodes in a compact single-line layout, and SHALL provide a direct way for users to view the full file or folder name when the visible node text is truncated by nesting depth or available width.
+
+#### Scenario: Hover a truncated tree node name
+- **WHEN** a file or folder node name is visually truncated in the left tree workspace
+- **THEN** the system SHALL keep the node text truncated in the tree row
+- **THEN** the system SHALL allow the user to inspect the full original name by hovering the node name area
+
+#### Scenario: Deep nesting does not remove access to the full name
+- **WHEN** a file or folder appears in a deeply nested tree branch and the visible label area becomes narrow
+- **THEN** the system SHALL preserve a stable tree row layout
+- **THEN** the system SHALL still provide access to the full original file or folder name without expanding the row height
+
+### Requirement: file-server SHALL protect the current-selection summary card from long filename overflow
+The `file-server` frontend SHALL keep the left sidebar current-selection summary card visually stable when the selected file or folder path is long, and SHALL prevent long labels from breaking the card layout.
+
+#### Scenario: Selected path is longer than the card content width
+- **WHEN** the selected file or folder path exceeds the available width in the current-selection summary card
+- **THEN** the system SHALL truncate the visible label within the card instead of stretching or breaking the card layout
+- **THEN** the action controls in the same card SHALL remain usable and visibly aligned
+
+#### Scenario: User needs the full selected path from the summary card
+- **WHEN** the current-selection summary card shows a truncated path or filename label
+- **THEN** the system SHALL provide a direct way to inspect the full label value on hover
+
+### Requirement: file-server SHALL redirect unauthorized tree workspace requests to the login page
+The `file-server` frontend SHALL treat tree loading and file-management operations as protected requests. When those requests are rejected because authentication or authorization is not accepted, the system SHALL redirect the browser to the configured login page and SHALL preserve the current page URL as a `redirect` parameter.
+
+#### Scenario: Initial tree request returns unauthorized
+- **WHEN** the file tree loading request receives a `401` or `403` response
+- **THEN** the system SHALL navigate the browser to the configured login page
+- **THEN** the login page URL SHALL include the current `file-server` page address as the encoded `redirect` parameter
+
+#### Scenario: File operation request returns unauthorized
+- **WHEN** a protected tree workspace request such as create-folder, upload, delete, or move receives a `401` or `403` response
+- **THEN** the system SHALL navigate the browser to the configured login page
+- **THEN** the login page URL SHALL include the current `file-server` page address as the encoded `redirect` parameter

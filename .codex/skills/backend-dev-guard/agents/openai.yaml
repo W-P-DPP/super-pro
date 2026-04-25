@@ -1,7 +1,7 @@
 interface:
   display_name: "后端开发守卫"
-  short_description: "强调后端分层、shared-server 基础设施、类型化配置、安全日志与测试。"
-  default_prompt: "在本仓库进行后端工作时使用 $backend-dev-guard。先检查现有代码，优先把可复用基础设施收敛到 packages/shared-server，保持 router/controller/service/repository/entity/dto 分层清晰，使用类型化配置，记录日志时做好脱敏，保持 API 契约稳定，并运行有针对性的验证。"
+  short_description: "约束后端分层、shared-server 复用、可观测性、异常告警、优雅退出与测试验证。"
+  default_prompt: "在本仓库进行后端工作时使用 $backend-dev-guard。先检查现有代码和 shared-server，优先复用 createServiceRuntime、HTTP/日志/配置/告警等共享原语，保持 router/controller/service/repository/entity/dto 分层清晰，确保健康检查、指标、异常上报、优雅退出和开发环境测试入口遵守统一约束，并运行有针对性的验证。"
 
 policy:
   allow_implicit_invocation: true

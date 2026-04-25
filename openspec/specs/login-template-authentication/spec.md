@@ -4,7 +4,7 @@
 TBD - created by archiving change connect-login-template-to-user-login-api. Update Purpose after archive.
 ## Requirements
 ### Requirement: Login template SHALL authenticate through the backend login API
-The login template SHALL obtain the backend login public key before login submission, SHALL encrypt the entered password on the client, and SHALL submit the username plus encrypted password ciphertext to `POST /api/user/loginUser` instead of sending the raw password.
+The login template SHALL obtain the backend login public key before login submission, SHALL encrypt the entered password on the client, SHALL submit the username plus encrypted password ciphertext to `POST /api/user/loginUser` instead of sending the raw password, and SHALL resolve both requests against the configured API base URL. When `VITE_API_BASE_URL` is not configured in development, the system SHALL use the current origin relative backend path instead of falling back to the workspace production origin.
 
 #### Scenario: Submit valid credentials
 - **WHEN** a user submits a valid username and password from the login form
@@ -19,6 +19,15 @@ The login template SHALL obtain the backend login public key before login submis
 #### Scenario: Handle disabled user
 - **WHEN** the backend rejects login because the user is disabled
 - **THEN** the system SHALL show the controlled Chinese error message from the backend
+
+#### Scenario: Use local API path by default in development
+- **WHEN** the login template runs in development mode and `VITE_API_BASE_URL` is empty
+- **THEN** the login public key request and login submission request SHALL use the current origin relative `/api` path
+- **THEN** the system MUST NOT fall back to the workspace production origin
+
+#### Scenario: Respect an explicitly configured API base URL
+- **WHEN** `VITE_API_BASE_URL` is configured for the login template
+- **THEN** the login public key request and login submission request SHALL use that configured API base URL
 
 ### Requirement: Login template SHALL persist authentication state according to the remember option
 The login template SHALL persist successful login token data in persistent browser storage after login succeeds, SHALL keep the stored payload limited to authentication token metadata, and SHALL NOT depend on returned user profile data from the login API.
@@ -55,7 +64,7 @@ The login template SHALL keep all new success, error, loading, and disabled stat
 - **THEN** the system SHALL present a success state that confirms login completion without requiring current-user profile feedback from the login response
 
 ### Requirement: Login template SHALL redirect to the URL-provided target after successful login
-After the login template completes a successful login and persists authentication token data, it SHALL inspect the current page URL for a `redirect` query parameter. When that parameter exists and is non-empty, the system SHALL navigate the browser to the provided target address.
+After the login template completes a successful login and persists authentication token data, it SHALL inspect the current page URL for a `redirect` query parameter. When that parameter exists and is non-empty, the system SHALL navigate the browser to the provided target address. When the login template runs in development mode and receives development redirect handoff data from the source frontend, the system SHALL reconstruct the final redirect target against the provided development access base URL before navigating, while preserving the original redirect pathname, query string, and hash fragment.
 
 #### Scenario: Login success with redirect parameter
 - **WHEN** a user lands on the login page with a non-empty `redirect` query parameter and logs in successfully
@@ -65,3 +74,15 @@ After the login template completes a successful login and persists authenticatio
 #### Scenario: Login success without redirect parameter
 - **WHEN** a user logs in successfully and the login page URL does not contain a non-empty `redirect` query parameter
 - **THEN** the system SHALL keep the existing local success feedback behavior
+
+#### Scenario: Development login success remaps redirect target to the provided development base
+- **WHEN** the login template runs in development mode
+- **AND** the login page URL contains both a non-empty `redirect` parameter and development redirect handoff data
+- **THEN** the system SHALL reconstruct the final redirect target against the provided development access base URL
+- **THEN** the reconstructed redirect target SHALL preserve the original redirect pathname, query string, and hash fragment
+
+#### Scenario: Missing development handoff keeps current redirect behavior
+- **WHEN** the login template runs in development mode
+- **AND** the login page URL contains a non-empty `redirect` parameter but no development redirect handoff data
+- **THEN** the system SHALL keep the existing redirect-target behavior
+

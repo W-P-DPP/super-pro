@@ -54,7 +54,7 @@ function resolveOperationLogConfig(): OperationLogRuntimeConfig {
 
 export function createOperationLogMiddleware(options?: {
   config?: OperationLogRuntimeConfig;
-  service?: Pick<OperationLogService, 'record'>;
+  service?: Pick<OperationLogService, 'record' | 'dispose'>;
 }) {
   const runtimeConfig = options?.config ?? resolveOperationLogConfig();
   const operationLogService = options?.service ?? new OperationLogService({
@@ -105,4 +105,19 @@ export function createOperationLogMiddleware(options?: {
   };
 }
 
-export const operationLogMiddleware = createOperationLogMiddleware();
+const operationLogServiceForShutdown = new OperationLogService({
+  repository: new OperationLogRepository(),
+  logger: Logger.getInstance(),
+  batchSize: resolveOperationLogConfig().batchSize,
+  flushIntervalMs: resolveOperationLogConfig().flushIntervalMs,
+  maxRequestParamsLength: resolveOperationLogConfig().maxRequestParamsLength,
+});
+
+export const runtimeOperationLogMiddleware = createOperationLogMiddleware({
+  service: operationLogServiceForShutdown,
+});
+export const operationLogMiddleware = runtimeOperationLogMiddleware;
+
+export async function disposeOperationLogMiddleware() {
+  await operationLogServiceForShutdown.dispose();
+}

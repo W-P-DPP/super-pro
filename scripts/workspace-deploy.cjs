@@ -164,6 +164,7 @@ function buildPm2Apps(repoDir) {
     exec_mode: pkg.deployConfig.execMode || 'fork',
     autorestart: pkg.deployConfig.autorestart ?? true,
     watch: pkg.deployConfig.watch ?? false,
+    kill_timeout: Number.isInteger(pkg.deployConfig.killTimeoutMs) ? pkg.deployConfig.killTimeoutMs : 20000,
     max_restarts: Number.isInteger(pkg.deployConfig.maxRestarts) ? pkg.deployConfig.maxRestarts : 10,
     env: {
       NODE_ENV: 'production',
