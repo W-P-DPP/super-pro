@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const devPort = Number(env.VITE_DEV_PORT)
   const apiProxyPrefix = env.VITE_API_PROXY_API?.trim() || '/api'
   const apiProxyConfig = {
-    target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:31010',
+    target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:30010',
     changeOrigin: true,
     ...(apiProxyPrefix === '/api'
       ? {}
@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         [apiProxyPrefix]: apiProxyConfig,
         '/public': {
-          target: env.VITE_PUBLIC_ASSET_PROXY_TARGET || 'http://127.0.0.1:31010',
+          target: env.VITE_PUBLIC_ASSET_PROXY_TARGET || 'http://127.0.0.1:30010',
           changeOrigin: true,
         },
       },
