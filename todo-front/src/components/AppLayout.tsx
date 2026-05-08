@@ -31,7 +31,7 @@ export function AppLayout() {
           )}
         </Button>
       </header>
-      <main className="mx-auto max-w-2xl px-4 py-6 md:px-6">
+      <main className="mx-auto w-[90%] max-w-none py-6">
         <Outlet />
       </main>
     </div>

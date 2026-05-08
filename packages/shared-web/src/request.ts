@@ -33,7 +33,7 @@ export function shouldRedirectToLoginForRequestError(
   status: number | undefined,
   config?: { requiresAuth?: boolean },
 ) {
-  return Boolean(config?.requiresAuth) && (status === 401 || status === 403);
+  return Boolean(config?.requiresAuth) && status === 401;
 }
 
 export function normalizeAxiosRequestError(

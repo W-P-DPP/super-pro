@@ -5,6 +5,7 @@ export const AUTH_STORAGE_KEY = 'login-template.auth';
 
 const authSessionStore = createAuthSessionStore({
   storageKey: AUTH_STORAGE_KEY,
+  directTokenStorageKey: false,
   enableQueryHandoff: true,
   enableWindowNameHandoff: true,
 });

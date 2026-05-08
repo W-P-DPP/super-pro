@@ -101,9 +101,9 @@ describe('shared-web url helpers', () => {
     ).toBe('http://www.zwpsite.icu:8082/agent/chat?tab=history#panel');
   });
 
-  it('only redirects to login for authenticated 401 and 403 responses', () => {
+  it('only redirects to login for authenticated 401 responses', () => {
     expect(shouldRedirectToLoginForRequestError(401, { requiresAuth: true })).toBe(true);
-    expect(shouldRedirectToLoginForRequestError(403, { requiresAuth: true })).toBe(true);
+    expect(shouldRedirectToLoginForRequestError(403, { requiresAuth: true })).toBe(false);
     expect(shouldRedirectToLoginForRequestError(401, { requiresAuth: false })).toBe(false);
     expect(shouldRedirectToLoginForRequestError(500, { requiresAuth: true })).toBe(false);
   });

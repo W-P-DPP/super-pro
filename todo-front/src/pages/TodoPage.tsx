@@ -1,215 +1,486 @@
-import { useEffect, useState } from 'react'
-import { LoaderCircleIcon, PencilIcon, Trash2Icon, PlusIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+import { useEffect, useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+  CheckCircle2Icon,
+  CircleIcon,
+  ClockIcon,
+  LoaderCircleIcon,
+  PencilIcon,
+  PlusIcon,
+  RotateCcwIcon,
+  SearchIcon,
+  Trash2Icon,
+  XCircleIcon,
+} from 'lucide-react'
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea,
+} from '@super-pro/shared-ui'
+import { TodoStatus } from '@/api/modules/todo'
+import type { TodoItem } from '@/api/modules/todo'
 import { useTodoStore } from '@/stores/todoStore'
 
-export function TodoPage() {
-  const { todos, loading, error, fetchTodos, createTodo, updateTodo, toggleTodo, deleteTodo } =
-    useTodoStore()
+const ALL_STATUS = 'all'
+type StatusFilterValue = typeof ALL_STATUS | `${TodoStatus}`
 
-  const [newTitle, setNewTitle] = useState('')
-  const [newDescription, setNewDescription] = useState('')
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState<{ id: number; title: string; description: string }>({
-    id: 0,
-    title: '',
-    description: '',
-  })
+const STATUS_CONFIG: Record<number, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CircleIcon }> = {
+  [TodoStatus.PENDING_REVIEW]: { label: '待审核', variant: 'outline', icon: ClockIcon },
+  [TodoStatus.REVIEW_FAILED]: { label: '审核失败', variant: 'destructive', icon: XCircleIcon },
+  [TodoStatus.TODO]: { label: '待办', variant: 'default', icon: CircleIcon },
+  [TodoStatus.COMPLETED]: { label: '已完成', variant: 'secondary', icon: CheckCircle2Icon },
+  [TodoStatus.CANCELLED]: { label: '已取消', variant: 'destructive', icon: XCircleIcon },
+}
+
+const STATUS_OPTIONS: Array<{ value: StatusFilterValue; label: string }> = [
+  { value: ALL_STATUS, label: '全部状态' },
+  { value: String(TodoStatus.PENDING_REVIEW) as `${TodoStatus}`, label: '待审核' },
+  { value: String(TodoStatus.TODO) as `${TodoStatus}`, label: '待办' },
+  { value: String(TodoStatus.COMPLETED) as `${TodoStatus}`, label: '已完成' },
+  { value: String(TodoStatus.CANCELLED) as `${TodoStatus}`, label: '已取消' },
+  { value: String(TodoStatus.REVIEW_FAILED) as `${TodoStatus}`, label: '审核失败' },
+] as const
+
+interface TodoFormState {
+  id: number | null
+  title: string
+  description: string
+}
+
+const EMPTY_FORM: TodoFormState = {
+  id: null,
+  title: '',
+  description: '',
+}
+
+type DrawerMode = 'create' | 'edit'
+
+function toStatus(value: StatusFilterValue): TodoStatus | undefined {
+  return value === ALL_STATUS ? undefined : Number(value) as TodoStatus
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
+function matchesKeyword(todo: TodoItem, keyword: string) {
+  if (!keyword) return true
+
+  const normalizedKeyword = keyword.toLowerCase()
+  return [todo.title, todo.description]
+    .filter(Boolean)
+    .some((value) => value.toLowerCase().includes(normalizedKeyword))
+}
+
+function StatusBadge({ status }: { status: number }) {
+  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG[TodoStatus.PENDING_REVIEW]
+  const Icon = config.icon
+  return (
+    <Badge variant={config.variant}>
+      <Icon className="size-3" />
+      {config.label}
+    </Badge>
+  )
+}
+
+function ActionButtons({ todo, onEdit, onApprove, onReject, onComplete, onCancel, onRollback, onDelete }: {
+  todo: TodoItem
+  onEdit: (todo: TodoItem) => void
+  onApprove: (id: number) => Promise<void>
+  onReject: (id: number) => Promise<void>
+  onComplete: (id: number) => Promise<void>
+  onCancel: (id: number) => Promise<void>
+  onRollback: (id: number) => Promise<void>
+  onDelete: (id: number) => Promise<void>
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-1.5">
+      {todo.status === TodoStatus.PENDING_REVIEW ? (
+        <>
+          <Button type="button" variant="outline" size="xs" onClick={() => void onApprove(todo.id)}>
+            审核通过
+          </Button>
+          <Button type="button" variant="destructive" size="xs" onClick={() => void onReject(todo.id)}>
+            <XCircleIcon className="size-3.5" />
+            审核失败
+          </Button>
+        </>
+      ) : null}
+      {todo.status === TodoStatus.REVIEW_FAILED ? (
+        <Button type="button" variant="outline" size="xs" onClick={() => void onApprove(todo.id)}>
+          审核通过
+        </Button>
+      ) : null}
+      {todo.status === TodoStatus.TODO ? (
+        <Button type="button" variant="outline" size="xs" onClick={() => void onComplete(todo.id)}>
+          完成
+        </Button>
+      ) : null}
+      {todo.status === TodoStatus.COMPLETED ? (
+        <>
+          <Button type="button" variant="outline" size="xs" onClick={() => void onRollback(todo.id)}>
+            回退
+          </Button>
+          <Button type="button" variant="destructive" size="xs" onClick={() => void onCancel(todo.id)}>
+            <XCircleIcon className="size-3.5" />
+            取消任务
+          </Button>
+        </>
+      ) : null}
+      <Button type="button" variant="outline" size="xs" onClick={() => onEdit(todo)}>
+        <PencilIcon className="size-3.5" />
+        编辑
+      </Button>
+      <Button type="button" variant="destructive" size="xs" onClick={() => void onDelete(todo.id)}>
+        <Trash2Icon className="size-3.5" />
+        删除
+      </Button>
+    </div>
+  )
+}
+
+export function TodoPage() {
+  const {
+    todos, loading, error,
+    clearError,
+    fetchTodos, createTodo, updateTodo,
+    approveTodo, rejectTodo, completeTodo, cancelTodo, rollbackTodo, deleteTodo,
+  } = useTodoStore()
+
+  const [statusInput, setStatusInput] = useState<StatusFilterValue>(ALL_STATUS)
+  const [keywordInput, setKeywordInput] = useState('')
+  const [appliedStatus, setAppliedStatus] = useState<StatusFilterValue>(ALL_STATUS)
+  const [appliedKeyword, setAppliedKeyword] = useState('')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>('create')
+  const [todoForm, setTodoForm] = useState(EMPTY_FORM)
 
   useEffect(() => {
-    fetchTodos()
+    void fetchTodos()
   }, [fetchTodos])
 
-  const handleCreate = async () => {
-    const title = newTitle.trim()
-    if (!title) return
-    await createTodo({ title, description: newDescription.trim() })
-    setNewTitle('')
-    setNewDescription('')
+  useEffect(() => {
+    if (!error) return
+    toast.error(error)
+    clearError()
+  }, [clearError, error])
+
+  const filteredTodos = todos.filter((todo) => matchesKeyword(todo, appliedKeyword))
+
+  const refreshTodos = async (statusValue = appliedStatus) => {
+    await fetchTodos(toStatus(statusValue))
   }
 
-  const handleEdit = (todo: (typeof todos)[number]) => {
-    setEditTarget({ id: todo.id, title: todo.title, description: todo.description })
-    setEditDialogOpen(true)
+  const handleSearch = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault()
+    setAppliedKeyword(keywordInput.trim())
+    setAppliedStatus(statusInput)
+    await fetchTodos(toStatus(statusInput))
   }
 
-  const handleEditSave = async () => {
-    if (!editTarget.title.trim()) return
-    await updateTodo(editTarget.id, {
-      title: editTarget.title.trim(),
-      description: editTarget.description.trim(),
+  const handleReset = async () => {
+    setKeywordInput('')
+    setStatusInput(ALL_STATUS)
+    setAppliedKeyword('')
+    setAppliedStatus(ALL_STATUS)
+    await fetchTodos()
+  }
+
+  const handleCreateClick = () => {
+    setDrawerMode('create')
+    setTodoForm(EMPTY_FORM)
+    setDrawerOpen(true)
+  }
+
+  const handleEdit = (todo: TodoItem) => {
+    setDrawerMode('edit')
+    setTodoForm({
+      id: todo.id,
+      title: todo.title,
+      description: todo.description ?? '',
     })
-    setEditDialogOpen(false)
+    setDrawerOpen(true)
+  }
+
+  const handleDrawerSubmit = async () => {
+    const title = todoForm.title.trim()
+    const description = todoForm.description.trim()
+    if (!title) return
+
+    if (drawerMode === 'create') {
+      const created = await createTodo({ title, description })
+      if (!created) return
+      await refreshTodos()
+      toast.success('待办已创建')
+    } else {
+      if (todoForm.id === null) return
+      const updated = await updateTodo(todoForm.id, { title, description })
+      if (!updated) return
+      await refreshTodos()
+      toast.success('待办已更新')
+    }
+
+    setDrawerOpen(false)
+    setTodoForm(EMPTY_FORM)
+  }
+
+  const handleApprove = async (id: number) => {
+    const updated = await approveTodo(id)
+    if (!updated) return
+    await refreshTodos()
+    toast.success('审核通过')
+  }
+
+  const handleReject = async (id: number) => {
+    const updated = await rejectTodo(id)
+    if (!updated) return
+    await refreshTodos()
+    toast.warning('已标记为审核失败')
+  }
+
+  const handleComplete = async (id: number) => {
+    const updated = await completeTodo(id)
+    if (!updated) return
+    await refreshTodos()
+    toast.success('已标记完成')
+  }
+
+  const handleCancel = async (id: number) => {
+    const updated = await cancelTodo(id)
+    if (!updated) return
+    await refreshTodos()
+    toast.warning('任务已取消')
+  }
+
+  const handleRollback = async (id: number) => {
+    const updated = await rollbackTodo(id)
+    if (!updated) return
+    await refreshTodos()
+    toast.success('已回退到待办')
   }
 
   const handleDelete = async (id: number) => {
-    await deleteTodo(id)
-  }
-
-  const handleToggle = async (id: number) => {
-    await toggleTodo(id)
-  }
-
-  if (loading && todos.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">加载中...</span>
-      </div>
-    )
+    const success = await deleteTodo(id)
+    if (!success) return
+    await refreshTodos()
+    toast.success('已删除')
   }
 
   return (
     <div className="space-y-6">
-      {/* 新增表单 */}
-      <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-        <Input
-          placeholder="输入待办标题..."
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && newTitle.trim()) {
-              e.preventDefault()
-              handleCreate()
-            }
-          }}
-        />
-        <Textarea
-          placeholder="描述（可选）"
-          rows={2}
-          value={newDescription}
-          onChange={(e) => setNewDescription(e.target.value)}
-        />
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            size="sm"
-            disabled={!newTitle.trim()}
-            onClick={handleCreate}
-          >
-            <PlusIcon className="size-4" />
-            新增
-          </Button>
-        </div>
-      </div>
-
-      {/* 错误提示 */}
-      {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      {/* Todo 列表 */}
-      {todos.length === 0 && !loading ? (
-        <div className="py-16 text-center text-sm text-muted-foreground">
-          暂无待办事项，点击上方新增开始使用
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {todos.map((todo) => (
-            <div
-              key={todo.id}
-              className="group flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-accent/30"
-            >
-              <div className="pt-0.5">
-                <Checkbox
-                  checked={todo.completed === 1}
-                  onCheckedChange={() => handleToggle(todo.id)}
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div
-                  className={`text-sm font-medium ${
-                    todo.completed ? 'text-muted-foreground line-through' : 'text-foreground'
-                  }`}
-                >
-                  {todo.title}
-                </div>
-                {todo.description && (
-                  <div
-                    className={`mt-1 text-xs ${
-                      todo.completed ? 'text-muted-foreground/60 line-through' : 'text-muted-foreground'
-                    }`}
-                  >
-                    {todo.description}
-                  </div>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 max-[640px]:opacity-100">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => handleEdit(todo)}
-                >
-                  <PencilIcon className="size-3.5" />
-                  <span className="sr-only">编辑</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => handleDelete(todo.id)}
-                >
-                  <Trash2Icon className="size-3.5 text-destructive" />
-                  <span className="sr-only">删除</span>
-                </Button>
-              </div>
+      <Card size="sm">
+        <CardContent className="space-y-4">
+          <form className="grid gap-3 lg:grid-cols-[220px_220px_auto]" onSubmit={handleSearch}>
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+              <Label htmlFor="todo-keyword" className="shrink-0 text-sm text-foreground">
+                关键词
+              </Label>
+              <Input
+                id="todo-keyword"
+                placeholder="搜索标题或描述"
+                className="w-full sm:w-[220px]"
+                value={keywordInput}
+                onChange={(e) => setKeywordInput(e.target.value)}
+              />
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* 编辑弹窗 */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>编辑待办</DialogTitle>
-            <DialogDescription>修改待办的标题和描述</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <Input
-              placeholder="标题"
-              value={editTarget.title}
-              onChange={(e) =>
-                setEditTarget((prev) => ({ ...prev, title: e.target.value }))
-              }
-            />
-            <Textarea
-              placeholder="描述（可选）"
-              rows={3}
-              value={editTarget.description}
-              onChange={(e) =>
-                setEditTarget((prev) => ({ ...prev, description: e.target.value }))
-              }
-            />
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+              <Label htmlFor="todo-status" className="shrink-0 text-sm text-foreground">
+                状态
+              </Label>
+              <Select value={statusInput} onValueChange={(value) => setStatusInput(value as StatusFilterValue)}>
+                <SelectTrigger id="todo-status" className="w-full sm:w-[160px]">
+                  <SelectValue placeholder="全部状态" />
+                </SelectTrigger>
+                <SelectContent position="popper" sideOffset={6}>
+                  {STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col justify-end gap-2 sm:flex-row lg:justify-end">
+              <Button type="submit" variant="outline" size="sm" disabled={loading}>
+                <SearchIcon className="size-4" />
+                搜索
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void handleReset()}>
+                <RotateCcwIcon className="size-4" />
+                重置
+              </Button>
+              <Button type="button" size="sm" onClick={handleCreateClick}>
+                <PlusIcon className="size-4" />
+                新增
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+      <Card size="sm">
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-foreground">结果列表</h3>
+              <p className="text-sm text-muted-foreground">
+                当前共 {filteredTodos.length} 条
+                {appliedKeyword ? `，关键词“${appliedKeyword}”` : ''}
+              </p>
+            </div>
+            {loading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircleIcon className="size-4 animate-spin" />
+                正在加载
+              </div>
+            ) : null}
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+          {loading && todos.length === 0 ? (
+            <div className="flex items-center justify-center py-20">
+              <LoaderCircleIcon className="size-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">加载中...</span>
+            </div>
+          ) : filteredTodos.length === 0 ? (
+            <Empty className="min-h-[220px]">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CircleIcon className="size-4" />
+                </EmptyMedia>
+                <EmptyTitle>暂无匹配结果</EmptyTitle>
+                <EmptyDescription>调整关键词或状态后重试，也可以直接新增一条待办。</EmptyDescription>
+              </EmptyHeader>
+              <Button type="button" size="sm" onClick={handleCreateClick}>
+                <PlusIcon className="size-4" />
+                新增待办
+              </Button>
+            </Empty>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-56">标题</TableHead>
+                  <TableHead className="min-w-28">状态</TableHead>
+                  <TableHead className="min-w-36">创建时间</TableHead>
+                  <TableHead className="min-w-28 text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTodos.map((todo) => (
+                  <TableRow key={todo.id}>
+                    <TableCell className="align-top">
+                      <div className="space-y-1">
+                        <div className="font-medium text-foreground">{todo.title}</div>
+                        <p className="max-w-md whitespace-normal text-sm leading-6 text-muted-foreground">
+                          {todo.description || '暂无描述'}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <StatusBadge status={todo.status} />
+                    </TableCell>
+                    <TableCell className="align-top text-muted-foreground">
+                      {formatDateTime(todo.createTime)}
+                    </TableCell>
+                    <TableCell className="align-top text-right">
+                      <ActionButtons
+                        todo={todo}
+                        onEdit={handleEdit}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                        onComplete={handleComplete}
+                        onCancel={handleCancel}
+                        onRollback={handleRollback}
+                        onDelete={handleDelete}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Drawer open={drawerOpen} direction="right" onOpenChange={setDrawerOpen}>
+        <DrawerContent className="w-full sm:max-w-lg">
+          <DrawerHeader>
+            <DrawerTitle>{drawerMode === 'create' ? '新增待办' : '编辑待办'}</DrawerTitle>
+            <DrawerDescription>
+              {drawerMode === 'create'
+                ? '填写标题和描述后保存，新的待办会出现在当前列表中。'
+                : '修改待办内容后保存，列表会按当前筛选条件重新刷新。'}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="space-y-4 px-4 pb-2">
+            <div className="space-y-2">
+              <Label htmlFor="todo-title">标题</Label>
+              <Input
+                id="todo-title"
+                placeholder="请输入待办标题"
+                value={todoForm.title}
+                onChange={(e) => setTodoForm((prev) => ({ ...prev, title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="todo-description">描述</Label>
+              <Textarea
+                id="todo-description"
+                placeholder="补充待办描述（可选）"
+                rows={4}
+                value={todoForm.description}
+                onChange={(e) => setTodoForm((prev) => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DrawerFooter className="sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setDrawerOpen(false)}>
               取消
             </Button>
-            <Button
-              type="button"
-              disabled={!editTarget.title.trim()}
-              onClick={handleEditSave}
-            >
+            <Button type="button" disabled={!todoForm.title.trim()} onClick={() => void handleDrawerSubmit()}>
               保存
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </div>
   )
 }

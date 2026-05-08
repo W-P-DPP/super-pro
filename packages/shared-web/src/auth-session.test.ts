@@ -52,6 +52,29 @@ describe('shared-web auth session helpers', () => {
     expect(store.hasReusableAuthToken()).toBe(true);
   });
 
+  it('can disable direct token reuse for isolated apps', () => {
+    const localStorage = createMemoryStorage();
+    localStorage.setItem('token', 'direct-token');
+    localStorage.setItem(
+      'login-template.auth',
+      JSON.stringify({
+        token: 'session-token',
+        tokenType: 'Bearer',
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    vi.stubGlobal('window', { localStorage });
+
+    const store = createAuthSessionStore({
+      storageKey: 'login-template.auth',
+      directTokenStorageKey: false,
+    });
+
+    expect(store.getReusableAuthToken()).toBe('session-token');
+    store.clearReusableAuthSession();
+    expect(localStorage.getItem('token')).toBe('direct-token');
+  });
+
   it('reads a reusable session from storage and clears it on request', () => {
     const localStorage = createMemoryStorage();
     localStorage.setItem(

@@ -2,11 +2,18 @@ import type { StoredAuthSession } from '@super-pro/shared-types';
 
 type AuthSessionOptions = {
   storageKey: string;
-  directTokenStorageKey?: string;
+  directTokenStorageKey?: string | false;
   handoffWindowNameKey?: string;
   handoffQueryKey?: string;
   enableQueryHandoff?: boolean;
   enableWindowNameHandoff?: boolean;
+};
+
+type NormalizedAuthSessionOptions = Omit<
+  Required<AuthSessionOptions>,
+  'directTokenStorageKey'
+> & {
+  directTokenStorageKey: string | false;
 };
 
 function isExpiredAuthSession(session: StoredAuthSession) {
@@ -39,7 +46,7 @@ export function isStoredAuthSession(value: unknown): value is StoredAuthSession 
   );
 }
 
-function consumeWindowNameAuthSession(options: Required<AuthSessionOptions>) {
+function consumeWindowNameAuthSession(options: NormalizedAuthSessionOptions) {
   if (typeof window === 'undefined' || !options.enableWindowNameHandoff) {
     return null;
   }
@@ -66,7 +73,7 @@ function consumeWindowNameAuthSession(options: Required<AuthSessionOptions>) {
   }
 }
 
-function consumeQueryAuthSession(options: Required<AuthSessionOptions>) {
+function consumeQueryAuthSession(options: NormalizedAuthSessionOptions) {
   if (typeof window === 'undefined' || !options.enableQueryHandoff) {
     return null;
   }
@@ -98,7 +105,7 @@ function consumeQueryAuthSession(options: Required<AuthSessionOptions>) {
 }
 
 export function createAuthSessionStore(options: AuthSessionOptions) {
-  const normalizedOptions: Required<AuthSessionOptions> = {
+  const normalizedOptions: NormalizedAuthSessionOptions = {
     directTokenStorageKey: 'token',
     enableQueryHandoff: false,
     enableWindowNameHandoff: false,
@@ -146,9 +153,11 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
       return null;
     }
 
-    const directToken = storage.getItem(normalizedOptions.directTokenStorageKey)?.trim();
-    if (directToken) {
-      return directToken;
+    if (normalizedOptions.directTokenStorageKey) {
+      const directToken = storage.getItem(normalizedOptions.directTokenStorageKey)?.trim();
+      if (directToken) {
+        return directToken;
+      }
     }
 
     return readReusableAuthSession()?.token ?? null;
@@ -165,7 +174,9 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
     }
 
     storage.removeItem(normalizedOptions.storageKey);
-    storage.removeItem(normalizedOptions.directTokenStorageKey);
+    if (normalizedOptions.directTokenStorageKey) {
+      storage.removeItem(normalizedOptions.directTokenStorageKey);
+    }
   }
 
   return {

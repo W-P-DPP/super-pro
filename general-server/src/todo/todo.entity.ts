@@ -5,7 +5,7 @@ export class TodoEntity extends BaseEntity {
   id!: number
   title!: string
   description!: string
-  completed!: number
+  status!: number
 }
 
 export const TodoEntitySchema = new EntitySchema<TodoEntity>({
@@ -33,12 +33,12 @@ export const TodoEntitySchema = new EntitySchema<TodoEntity>({
       nullable: true,
       comment: '描述',
     },
-    completed: {
-      name: 'completed',
-      type: Boolean,
+    status: {
+      name: 'status',
+      type: Number,
       nullable: false,
-      default: false,
-      comment: '是否完成，0 未完成，1 已完成',
+      default: 0,
+      comment: '状态：0待审核 1待办 2已完成 3已取消 4审核失败',
     },
     ...BaseSchemaColumns,
   },

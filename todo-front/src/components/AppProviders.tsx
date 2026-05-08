@@ -7,7 +7,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <TooltipProvider>{children}</TooltipProvider>
-      <Toaster />
+      <Toaster richColors />
     </ThemeProvider>
   )
 }

@@ -16,11 +16,14 @@ export interface UpdateTodoEntityInput {
 }
 
 export interface TodoRepositoryPort {
+  findAll(): Promise<TodoEntity[]>
+  findByStatus(status: number): Promise<TodoEntity[]>
   findByCreateBy(createBy: string): Promise<TodoEntity[]>
+  findByCreateByAndStatus(createBy: string, status: number): Promise<TodoEntity[]>
   findById(id: number): Promise<TodoEntity | null>
   create(input: CreateTodoEntityInput): Promise<TodoEntity | null>
   update(id: number, input: UpdateTodoEntityInput): Promise<TodoEntity | null>
-  toggle(id: number, updateBy: string): Promise<TodoEntity | null>
+  updateStatus(id: number, status: number, updateBy: string): Promise<TodoEntity | null>
   delete(id: number): Promise<TodoEntity | null>
 }
 
@@ -39,21 +42,59 @@ export class TodoRepository implements TodoRepositoryPort {
     return dataSource.getRepository(TodoEntity);
   }
 
+  async findAll(): Promise<TodoEntity[]> {
+    const repository = await this.getRepository();
+    return repository
+      .createQueryBuilder('todo')
+      .addSelect('todo.create_time')
+      .addSelect('todo.update_time')
+      .orderBy('todo.create_time', 'DESC')
+      .getMany();
+  }
+
+  async findByStatus(status: number): Promise<TodoEntity[]> {
+    const repository = await this.getRepository();
+    return repository
+      .createQueryBuilder('todo')
+      .addSelect('todo.create_time')
+      .addSelect('todo.update_time')
+      .where('todo.status = :status', { status })
+      .orderBy('todo.create_time', 'DESC')
+      .getMany();
+  }
+
   async findByCreateBy(createBy: string): Promise<TodoEntity[]> {
     const repository = await this.getRepository();
-    return repository.find({
-      where: { createBy },
-      order: {
-        createTime: 'DESC',
-      } as never,
-    });
+    return repository
+      .createQueryBuilder('todo')
+      .addSelect('todo.create_time')
+      .addSelect('todo.update_time')
+      .where('todo.create_by = :createBy', { createBy })
+      .orderBy('todo.create_time', 'DESC')
+      .getMany();
+  }
+
+  async findByCreateByAndStatus(createBy: string, status: number): Promise<TodoEntity[]> {
+    const repository = await this.getRepository();
+    return repository
+      .createQueryBuilder('todo')
+      .addSelect('todo.create_time')
+      .addSelect('todo.update_time')
+      .where('todo.create_by = :createBy', { createBy })
+      .andWhere('todo.status = :status', { status })
+      .orderBy('todo.create_time', 'DESC')
+      .getMany();
   }
 
   async findById(id: number): Promise<TodoEntity | null> {
     const repository = await this.getRepository();
-    return repository.findOne({
-      where: { id },
-    });
+    return repository
+      .createQueryBuilder('todo')
+      .addSelect('todo.create_by')
+      .addSelect('todo.create_time')
+      .addSelect('todo.update_time')
+      .where('todo.id = :id', { id })
+      .getOne();
   }
 
   async create(input: CreateTodoEntityInput): Promise<TodoEntity | null> {
@@ -61,17 +102,17 @@ export class TodoRepository implements TodoRepositoryPort {
     const entity = repository.create({
       title: input.title,
       description: input.description ?? '',
-      completed: false,
+      status: 0,
       createBy: input.createBy,
       updateBy: input.updateBy,
     });
     const saved = await repository.save(entity);
-    return repository.findOne({ where: { id: saved.id } });
+    return this.findById(saved.id);
   }
 
   async update(id: number, input: UpdateTodoEntityInput): Promise<TodoEntity | null> {
     const repository = await this.getRepository();
-    const current = await repository.findOne({ where: { id } });
+    const current = await this.findById(id);
     if (!current) {
       return null;
     }
@@ -85,25 +126,25 @@ export class TodoRepository implements TodoRepositoryPort {
     current.updateBy = input.updateBy;
 
     await repository.save(current);
-    return repository.findOne({ where: { id } });
+    return this.findById(id);
   }
 
-  async toggle(id: number, updateBy: string): Promise<TodoEntity | null> {
+  async updateStatus(id: number, status: number, updateBy: string): Promise<TodoEntity | null> {
     const repository = await this.getRepository();
-    const current = await repository.findOne({ where: { id } });
+    const current = await this.findById(id);
     if (!current) {
       return null;
     }
 
-    current.completed = !current.completed;
+    current.status = status;
     current.updateBy = updateBy;
     await repository.save(current);
-    return repository.findOne({ where: { id } });
+    return this.findById(id);
   }
 
   async delete(id: number): Promise<TodoEntity | null> {
     const repository = await this.getRepository();
-    const current = await repository.findOne({ where: { id } });
+    const current = await this.findById(id);
     if (!current) {
       return null;
     }

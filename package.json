@@ -20,6 +20,8 @@
     "dev:frontend": "pnpm --filter @super-pro/frontend dev",
     "dev:login-template": "pnpm --filter @super-pro/login-template dev",
     "dev:server": "pnpm --filter @super-pro/server dev",
+    "dev:todo-front": "pnpm --filter @super-pro/todo-front dev",
+    "build:todo-front": "pnpm --filter @super-pro/todo-front build",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "start:agent-server": "pnpm --filter @super-pro/agent-server start",
