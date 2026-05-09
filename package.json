@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "dev:admin-front": "pnpm --filter @super-pro/admin-front dev",
     "dev:shared": "turbo run dev --filter=@super-pro/shared-* --parallel",
     "dev:agent-front": "pnpm --filter @super-pro/agent-front dev",
     "dev:summary-front": "pnpm --filter @super-pro/summary-front dev",
@@ -12,6 +13,7 @@
     "dev:reimburse-front": "pnpm --filter @super-pro/reimburse-front dev",
     "dev:reimburse-server": "pnpm --filter @super-pro/reimburse-server dev",
     "build:agent-server": "pnpm --filter @super-pro/agent-server build",
+    "build:admin-front": "pnpm --filter @super-pro/admin-front build",
     "build:summary-front": "pnpm --filter @super-pro/summary-front build",
     "build:resume-template": "pnpm --filter @super-pro/resume-template build",
     "build:reimburse-front": "pnpm --filter @super-pro/reimburse-front build",

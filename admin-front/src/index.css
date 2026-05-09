@@ -1,0 +1,58 @@
+@import "@fontsource-variable/geist";
+@import "./theme.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-image:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--muted) 72%, transparent) 0, transparent 28rem),
+    linear-gradient(180deg, color-mix(in oklab, var(--background) 96%, var(--muted) 4%) 0%, var(--background) 100%);
+}
+
+a,
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--font-mono);
+}

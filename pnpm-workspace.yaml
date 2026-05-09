@@ -1,5 +1,6 @@
 packages:
   - packages/*
+  - admin-front
   - agent-front
   - frontend-template
   - login-template
