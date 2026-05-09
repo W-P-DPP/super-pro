@@ -1,13 +1,13 @@
-# login-template
+# login
 
 一个纳入 monorepo 管理的独立登录前端模板，基于 Vite、React 和 Tailwind CSS v4。
 
 ## 常用命令
 
 ```bash
-pnpm --filter @super-pro/login-template dev
-pnpm --filter @super-pro/login-template build
-pnpm --filter @super-pro/login-template lint
+pnpm --filter @super-pro/login dev
+pnpm --filter @super-pro/login build
+pnpm --filter @super-pro/login lint
 ```
 
 ## 后端联调

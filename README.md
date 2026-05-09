@@ -4,8 +4,8 @@ This repository is now managed as a `pnpm` workspace monorepo.
 
 ## Projects
 
-- `frontend-template`: Vite + React frontend
-- `login-template`: standalone login frontend template
+- `front-public`: Vite + React frontend
+- `login`: standalone login frontend template
 - `general-server`: Node.js backend service
 
 ## Repository Conventions
@@ -27,8 +27,8 @@ pnpm dev
 Run a single app:
 
 ```bash
-pnpm dev:frontend
-pnpm dev:login-template
+pnpm dev:front-public
+pnpm dev:login
 pnpm dev:server
 ```
 

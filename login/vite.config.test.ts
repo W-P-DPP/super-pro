@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import viteConfig from './vite.config'
 
-describe('login-template vite proxy', () => {
+describe('login vite proxy', () => {
   it('proxies /api requests to the local backend in development', async () => {
     const config =
       typeof viteConfig === 'function'
