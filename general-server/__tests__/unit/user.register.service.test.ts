@@ -19,7 +19,12 @@ function cloneUser(user: UserEntity): UserEntity {
 function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
   return {
     async getUserList() {
-      return records.map(cloneUser);
+      return {
+        items: records.map(cloneUser),
+        total: records.length,
+        page: 1,
+        pageSize: records.length || 10,
+      };
     },
     async getUserById(id: number) {
       const target = records.find((record) => record.id === id);
@@ -75,7 +80,7 @@ describe('UserService registerUser', () => {
     }),
   ];
 
-  it('creates guest user with username as nickname', async () => {
+  it('creates employee user with username as nickname', async () => {
     const service = new UserService(createRepositoryMock(records));
 
     const result = await service.registerUser({
@@ -88,7 +93,7 @@ describe('UserService registerUser', () => {
         id: 100,
         username: 'new-user',
         nickname: 'new-user',
-        role: UserRoleEnum.Guest,
+        role: UserRoleEnum.Employee,
         status: 1,
       }),
     );

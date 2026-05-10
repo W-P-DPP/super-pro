@@ -18,6 +18,7 @@ import type {
   LoginUserResponseDto,
   RegisterUserRequestDto,
   UpdateUserRequestDto,
+  UserListQueryDto,
   UserListDto,
   UserResponseDto,
   UserValidationErrorContextDto,
@@ -33,6 +34,9 @@ const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_KEY_LENGTH = 64;
 const LOGIN_TOKEN_EXPIRES_IN = 7200;
 const LOGIN_PASSWORD_KEY_FIELD = 'passwordCiphertext';
+const DEFAULT_USER_LIST_PAGE = 1;
+const DEFAULT_USER_LIST_PAGE_SIZE = 10;
+const MAX_USER_LIST_PAGE_SIZE = 100;
 
 type LoginEncryptionKeyPair = {
   publicKey: string
@@ -264,6 +268,15 @@ function normalizeOptionalStatus(value: unknown): number | undefined {
     return undefined;
   }
 
+  if (typeof value === 'string') {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return undefined;
+    }
+
+    return normalizeStatus(Number(trimmedValue));
+  }
+
   return normalizeStatus(value);
 }
 
@@ -298,7 +311,84 @@ function normalizeOptionalRole(value: unknown): UserRoleEnum | undefined {
     return undefined;
   }
 
+  if (typeof value === 'string' && !value.trim()) {
+    return undefined;
+  }
+
   return normalizeRole(value);
+}
+
+function normalizeOptionalKeyword(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new UserBusinessError(
+      '搜索关键字必须是字符串',
+      {
+        nodePath: 'user',
+        field: 'keyword',
+        reason: '搜索关键字必须是字符串',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const trimmedValue = value.trim();
+  return trimmedValue ? trimmedValue : undefined;
+}
+
+function normalizePaginationInteger(
+  value: unknown,
+  field: 'page' | 'pageSize',
+  defaultValue: number,
+  options?: {
+    min?: number
+    max?: number
+  },
+): number {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  const parsedValue =
+    typeof value === 'string' ? Number(value.trim()) : typeof value === 'number' ? value : Number.NaN;
+
+  if (!Number.isInteger(parsedValue)) {
+    throw new UserBusinessError(
+      `${field === 'page' ? '页码' : '分页大小'}不合法`,
+      {
+        nodePath: 'user',
+        field,
+        reason: `${field === 'page' ? '页码' : '分页大小'}必须为正整数`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const minValue = options?.min ?? 1;
+  const maxValue = options?.max;
+
+  if (parsedValue < minValue || (maxValue !== undefined && parsedValue > maxValue)) {
+    throw new UserBusinessError(
+      `${field === 'page' ? '页码' : '分页大小'}不合法`,
+      {
+        nodePath: 'user',
+        field,
+        reason:
+          field === 'page'
+            ? '页码必须大于等于 1'
+            : `分页大小必须在 ${minValue} 到 ${maxValue ?? Number.MAX_SAFE_INTEGER} 之间`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return parsedValue;
 }
 
 function normalizeDateTime(value: unknown): string | undefined {
@@ -470,6 +560,28 @@ function validateRegisterInput(input: Record<string, unknown>): RegisterUserRequ
   };
 }
 
+function validateUserListQuery(input: Record<string, unknown>): UserListQueryDto {
+  const keyword = normalizeOptionalKeyword(input.keyword);
+  const role = normalizeOptionalRole(input.role);
+  const status = normalizeOptionalStatus(input.status);
+
+  return {
+    ...(keyword ? { keyword } : {}),
+    ...(role ? { role } : {}),
+    ...(status !== undefined ? { status } : {}),
+    page: normalizePaginationInteger(input.page, 'page', DEFAULT_USER_LIST_PAGE),
+    pageSize: normalizePaginationInteger(
+      input.pageSize,
+      'pageSize',
+      DEFAULT_USER_LIST_PAGE_SIZE,
+      {
+        min: 1,
+        max: MAX_USER_LIST_PAGE_SIZE,
+      },
+    ),
+  };
+}
+
 export function hashPassword(password: string): string {
   const salt = randomBytes(PASSWORD_SALT_BYTES).toString('hex');
   const derivedKey = scryptSync(password, salt, PASSWORD_KEY_LENGTH).toString('hex');
@@ -501,10 +613,17 @@ export class UserService {
     };
   }
 
-  async getUserList(): Promise<UserListDto> {
+  async getUserList(input: UserListQueryDto | Record<string, unknown> = {}): Promise<UserListDto> {
+    const query = validateUserListQuery(input as Record<string, unknown>);
+
     try {
-      const entities = await this.repository.getUserList();
-      return entities.map(toResponseDto);
+      const result = await this.repository.getUserList(query);
+      return {
+        items: result.items.map(toResponseDto),
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+      };
     } catch {
       throw new UserBusinessError(
         '读取用户列表失败',

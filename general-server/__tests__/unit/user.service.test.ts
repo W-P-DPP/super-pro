@@ -22,8 +22,29 @@ function cloneUser(user: UserEntity): UserEntity {
 
 function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
   return {
-    async getUserList() {
-      return records.map(cloneUser);
+    async getUserList(query) {
+      const keyword = typeof query.keyword === 'string' ? query.keyword.toLowerCase() : '';
+      const filteredRecords = records.filter((record) => {
+        const matchesKeyword =
+          !keyword ||
+          `${record.username} ${record.nickname} ${record.phone}`.toLowerCase().includes(keyword);
+        const matchesRole = !query.role || record.role === query.role;
+        const matchesStatus = query.status === undefined || record.status === query.status;
+
+        return matchesKeyword && matchesRole && matchesStatus;
+      });
+      const total = filteredRecords.length;
+      const totalPages = Math.max(1, Math.ceil(total / (query.pageSize ?? 10)));
+      const page = Math.min(query.page ?? 1, totalPages);
+      const pageSize = query.pageSize ?? 10;
+      const startIndex = (page - 1) * pageSize;
+
+      return {
+        items: filteredRecords.slice(startIndex, startIndex + pageSize).map(cloneUser),
+        total,
+        page,
+        pageSize,
+      };
     },
     async getUserById(id: number) {
       const target = records.find((record) => record.id === id);
@@ -130,7 +151,7 @@ describe('UserService', () => {
     );
   });
 
-  it('未传角色时应默认创建为 guest', async () => {
+  it('未传角色时应默认创建为 employee', async () => {
     const service = new UserService(createRepositoryMock(records));
 
     const result = await service.createUser({
@@ -144,7 +165,7 @@ describe('UserService', () => {
     expect(result).toEqual(
       expect.objectContaining({
         username: 'zhaoliu',
-        role: UserRoleEnum.Guest,
+        role: UserRoleEnum.Employee,
       }),
     );
   });
@@ -223,6 +244,31 @@ describe('UserService', () => {
         role: UserRoleEnum.Guest,
       }),
     );
+  });
+
+  it('查询用户列表时应支持筛选和分页', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    const result = await service.getUserList({
+      keyword: '张',
+      role: UserRoleEnum.Admin,
+      status: '1',
+      page: '1',
+      pageSize: '1',
+    });
+
+    expect(result).toEqual({
+      items: [
+        expect.objectContaining({
+          id: 1,
+          username: 'zhangsan',
+          role: UserRoleEnum.Admin,
+        }),
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 1,
+    });
   });
 
   it('登录成功时应返回带角色的脱敏用户信息', async () => {

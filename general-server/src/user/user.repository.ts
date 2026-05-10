@@ -1,7 +1,7 @@
 import type { EntityManager, Repository } from 'typeorm';
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
 import { UserEntity } from './user.entity.ts';
-import type { UserRoleEnum } from './user.dto.ts';
+import type { UserListQueryDto, UserRoleEnum } from './user.dto.ts';
 
 export interface CreateUserEntityInput {
   username: string
@@ -24,8 +24,15 @@ export interface UpdateUserEntityInput {
   remark?: string
 }
 
+export interface UserListRepositoryResult {
+  items: UserEntity[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface UserRepositoryPort {
-  getUserList(): Promise<UserEntity[]>
+  getUserList(query: UserListQueryDto): Promise<UserListRepositoryResult>
   getUserById(id: number): Promise<UserEntity | null>
   getUserByUsername(username: string): Promise<UserEntity | null>
   getUserAuthByUsername(username: string): Promise<UserEntity | null>
@@ -54,13 +61,52 @@ export class UserRepository implements UserRepositoryPort {
     return manager.getRepository(UserEntity);
   }
 
-  async getUserList(): Promise<UserEntity[]> {
+  async getUserList(query: UserListQueryDto): Promise<UserListRepositoryResult> {
     const repository = await this.getRepository();
-    return repository.find({
-      order: {
-        id: 'ASC',
-      },
-    });
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const queryBuilder = repository.createQueryBuilder('user');
+
+    if (query.keyword) {
+      queryBuilder.andWhere(
+        '(user.username LIKE :keyword OR user.nickname LIKE :keyword OR user.phone LIKE :keyword)',
+        {
+          keyword: `%${query.keyword}%`,
+        },
+      );
+    }
+
+    if (query.role) {
+      queryBuilder.andWhere('user.role = :role', {
+        role: query.role,
+      });
+    }
+
+    if (query.status !== undefined) {
+      queryBuilder.andWhere('user.status = :status', {
+        status: query.status,
+      });
+    }
+
+    const total = await queryBuilder.getCount();
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const items =
+      total === 0
+        ? []
+        : await queryBuilder
+            .clone()
+            .orderBy('user.id', 'ASC')
+            .skip((currentPage - 1) * pageSize)
+            .take(pageSize)
+            .getMany();
+
+    return {
+      items,
+      total,
+      page: currentPage,
+      pageSize,
+    };
   }
 
   async getUserById(id: number): Promise<UserEntity | null> {

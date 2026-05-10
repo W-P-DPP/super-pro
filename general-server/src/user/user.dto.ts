@@ -20,7 +20,20 @@ export interface UserResponseDto {
   remark?: string
 }
 
-export type UserListDto = UserResponseDto[]
+export interface UserListQueryDto {
+  keyword?: string
+  role?: UserRoleEnum
+  status?: number
+  page?: number
+  pageSize?: number
+}
+
+export interface UserListDto {
+  items: UserResponseDto[]
+  total: number
+  page: number
+  pageSize: number
+}
 
 export interface UserValidationErrorContextDto {
   nodePath: string

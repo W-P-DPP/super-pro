@@ -776,21 +776,52 @@ describe('siteMenu 文件上传导入接口', () => {
 });
 
 describe('user CRUD role integration', () => {
-  it('GET /api/user/getUser returns role field', async () => {
+  it('GET /api/user/getUser returns paginated data with role field', async () => {
     const res = await request(app).get('/api/user/getUser');
 
     expect(res.status).toBe(200);
     expect(res.body.code).toBe(200);
     expect(res.body.data).toEqual(
-      expect.arrayContaining([
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            id: 1,
+            username: 'zhangsan',
+            role: UserRoleEnum.Admin,
+          }),
+        ]),
+        total: expect.any(Number),
+        page: 1,
+        pageSize: 10,
+      }),
+    );
+    expect(res.body.data.items[0]).not.toHaveProperty('passwordHash');
+  });
+
+  it('GET /api/user/getUser supports keyword, status and pageSize filters', async () => {
+    const res = await request(app).get('/api/user/getUser').query({
+      keyword: 'zhang',
+      role: UserRoleEnum.Admin,
+      status: 1,
+      page: 1,
+      pageSize: 1,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toEqual({
+      items: [
         expect.objectContaining({
           id: 1,
           username: 'zhangsan',
           role: UserRoleEnum.Admin,
+          status: 1,
         }),
-      ]),
-    );
-    expect(res.body.data[0]).not.toHaveProperty('passwordHash');
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 1,
+    });
   });
 
   it('GET /api/user/getUser/:id returns role field', async () => {
@@ -828,7 +859,7 @@ describe('user CRUD role integration', () => {
     );
   });
 
-  it('POST /api/user/createUser defaults role to guest', async () => {
+  it('POST /api/user/createUser defaults role to employee', async () => {
     const res = await request(app).post('/api/user/createUser').send({
       username: 'zhaoliu',
       nickname: 'zhaoliu',
@@ -841,7 +872,7 @@ describe('user CRUD role integration', () => {
     expect(res.body.data).toEqual(
       expect.objectContaining({
         username: 'zhaoliu',
-        role: UserRoleEnum.Guest,
+        role: UserRoleEnum.Employee,
       }),
     );
   });
@@ -884,7 +915,7 @@ describe('user CRUD role integration', () => {
     expect(res.body.code).toBe(200);
 
     const listRes = await request(app).get('/api/user/getUser');
-    const ids = (listRes.body.data as Array<{ id: number }>).map((item) => item.id);
+    const ids = (listRes.body.data.items as Array<{ id: number }>).map((item) => item.id);
     expect(ids).not.toContain(1);
   });
 
@@ -1052,7 +1083,7 @@ describe('JWT route mounting', () => {
       data: expect.objectContaining({
         username: 'register-user',
         nickname: 'register-user',
-        role: UserRoleEnum.Guest,
+        role: UserRoleEnum.Employee,
       }),
     });
 

@@ -21,7 +21,12 @@ function createRepositoryMock(): UserRepositoryPort {
 
   return {
     async getUserList() {
-      return [user]
+      return {
+        items: [user],
+        total: 1,
+        page: 1,
+        pageSize: 10,
+      }
     },
     async getUserById(id: number) {
       return id === user.id ? user : null
