@@ -36,6 +36,7 @@ export interface UserRepositoryPort {
   getUserList(query: UserListQueryDto): Promise<UserListRepositoryResult>
   getUserById(id: number): Promise<UserEntity | null>
   getUserByUsername(username: string): Promise<UserEntity | null>
+  getUserByPhone(phone: string): Promise<UserEntity | null>
   getUserAuthByUsername(username: string): Promise<UserEntity | null>
   createUser(input: CreateUserEntityInput): Promise<UserEntity | null>
   updateUser(id: number, input: UpdateUserEntityInput): Promise<UserEntity | null>
@@ -121,6 +122,13 @@ export class UserRepository implements UserRepositoryPort {
     const repository = await this.getRepository();
     return repository.findOne({
       where: { username },
+    });
+  }
+
+  async getUserByPhone(phone: string): Promise<UserEntity | null> {
+    const repository = await this.getRepository();
+    return repository.findOne({
+      where: { phone },
     });
   }
 

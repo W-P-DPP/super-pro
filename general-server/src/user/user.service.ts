@@ -697,6 +697,23 @@ export class UserService {
       );
     }
 
+    if (payload.phone) {
+      const existedByPhone = await this.repository.getUserByPhone(payload.phone);
+
+      if (existedByPhone) {
+        throw new UserBusinessError(
+          '手机号已存在',
+          {
+            nodePath: 'user',
+            field: 'phone',
+            reason: '手机号不能重复',
+            value: payload.phone,
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+    }
+
     const created = await this.repository.createUser({
       username: payload.username,
       nickname: payload.nickname,
@@ -754,6 +771,22 @@ export class UserService {
             field: 'username',
             reason: '用户名不能重复',
             value: payload.username,
+          },
+          HttpStatus.CONFLICT,
+        );
+      }
+    }
+
+    if (payload.phone && payload.phone !== current.phone) {
+      const existedByPhone = await this.repository.getUserByPhone(payload.phone);
+      if (existedByPhone && existedByPhone.id !== targetId) {
+        throw new UserBusinessError(
+          '手机号已存在',
+          {
+            nodePath: 'user',
+            field: 'phone',
+            reason: '手机号不能重复',
+            value: payload.phone,
           },
           HttpStatus.CONFLICT,
         );

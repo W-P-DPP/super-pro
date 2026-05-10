@@ -55,6 +55,10 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
       const target = records.find((record) => record.username === username);
       return target ? cloneUser(target) : null;
     },
+    async getUserByPhone(phone: string) {
+      const target = records.find((record) => record.phone === phone);
+      return target ? cloneUser(target) : null;
+    },
     async getUserAuthByUsername(username: string) {
       const target = records.find((record) => record.username === username);
       return target ? cloneUser(target) : null;
@@ -318,6 +322,40 @@ describe('UserService', () => {
       message: '用户已停用，无法登录',
     });
   });
+  it('rejects duplicate phone on create', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    await expect(
+      service.createUser({
+        username: 'wangwu',
+        nickname: '重复手机号用户',
+        email: 'dup-phone@example.com',
+        phone: '13800000001',
+        status: 1,
+      }),
+    ).rejects.toMatchObject<Partial<UserBusinessError>>({
+      message: '手机号已存在',
+      context: expect.objectContaining({
+        field: 'phone',
+      }),
+    });
+  });
+
+  it('rejects duplicate phone on update', async () => {
+    const service = new UserService(createRepositoryMock(records));
+
+    await expect(
+      service.updateUser(1, {
+        phone: '13800000002',
+      }),
+    ).rejects.toMatchObject<Partial<UserBusinessError>>({
+      message: '手机号已存在',
+      context: expect.objectContaining({
+        field: 'phone',
+      }),
+    });
+  });
+
   it('falls back to an ephemeral key pair when production keys are placeholders', async () => {
     process.env.NODE_ENV = 'production';
     process.env.LOGIN_PASSWORD_PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\\nreplace_with_public_key\\n-----END PUBLIC KEY-----';
