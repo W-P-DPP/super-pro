@@ -2,8 +2,8 @@ packages:
   - packages/*
   - admin-front
   - agent-front
-  - frontend-template
-  - login-template
+  - front-public
+  - login
   - general-server
   - file-server
   - agent-server
