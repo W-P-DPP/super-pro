@@ -25,6 +25,8 @@ export type ExceptionEmailReporterOptions = {
 
 type EnvLike = Record<string, string | undefined>;
 
+const EMAIL_REPORTER_ENABLED_ENV = 'EXCEPTION_EMAIL_ENABLED';
+
 function parseBoolean(value: string | undefined) {
   if (value === undefined) {
     return undefined;
@@ -40,6 +42,10 @@ function parseBoolean(value: string | undefined) {
   }
 
   return undefined;
+}
+
+function isDevelopmentEnv(value: string | undefined) {
+  return value?.trim().toLowerCase() === 'development';
 }
 
 function formatError(error: unknown) {
@@ -211,6 +217,16 @@ export function createExceptionEmailReporter(options: ExceptionEmailReporterOpti
 }
 
 export function createExceptionEmailReporterFromEnv(env: EnvLike = process.env) {
+  const isEnabled = parseBoolean(env[EMAIL_REPORTER_ENABLED_ENV]);
+
+  if (isEnabled === false) {
+    return undefined;
+  }
+
+  if (isDevelopmentEnv(env.NODE_ENV) && isEnabled !== true) {
+    return undefined;
+  }
+
   const smtpConfig = resolveSmtpMailerConfigFromEnv(env);
   const to = splitEmailRecipients(env.EXCEPTION_EMAIL_TO ?? env.MAILER_ALERT_TO);
 
