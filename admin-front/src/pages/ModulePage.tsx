@@ -32,8 +32,6 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  NativeSelect,
-  NativeSelectOption,
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -41,6 +39,11 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Spinner,
   Switch,
   Table,
@@ -84,6 +87,29 @@ const USER_STATUS_LABELS: Record<number, string> = {
 
 type LoadState = 'idle' | 'loading' | 'success' | 'error'
 
+type UserFilters = {
+  keyword: string
+  role: string
+  status: string
+}
+
+type UserFormState = {
+  username: string
+  nickname: string
+  phone: string
+  role: UserRoleEnum
+  status: number
+}
+
+type EditableUserFormState = Omit<UserFormState, 'username'> & {
+  password: string
+}
+
+type SelectOption = {
+  value: string
+  label: string
+}
+
 function buildPaginationItems(currentPage: number, totalPages: number) {
   if (totalPages <= 5) {
     return Array.from({ length: totalPages }, (_, index) => index + 1)
@@ -97,15 +123,15 @@ function buildPaginationItems(currentPage: number, totalPages: number) {
     return [1, 'start-ellipsis', totalPages - 3, totalPages - 2, totalPages - 1, totalPages] as const
   }
 
-  return [
-    1,
-    'start-ellipsis',
-    currentPage - 1,
-    currentPage,
-    currentPage + 1,
-    'end-ellipsis',
-    totalPages,
-  ] as const
+  return [1, 'start-ellipsis', currentPage - 1, currentPage, currentPage + 1, 'end-ellipsis', totalPages] as const
+}
+
+function formatUserRole(role: UserRoleEnum) {
+  return USER_ROLE_LABELS[role] ?? role
+}
+
+function formatUserStatus(status: number) {
+  return USER_STATUS_LABELS[status] ?? `状态 ${status}`
 }
 
 function MetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
@@ -122,26 +148,33 @@ function MetricCard({ label, value, hint }: { label: string; value: string; hint
   )
 }
 
-function formatUserRole(role: UserRoleEnum) {
-  return USER_ROLE_LABELS[role] ?? role
-}
-
-function formatUserStatus(status: number) {
-  return USER_STATUS_LABELS[status] ?? `状态 ${status}`
-}
-
-type UserFilters = {
-  keyword: string
-  role: string
-  status: string
-}
-
-type UserFormState = {
-  username: string
-  nickname: string
-  phone: string
-  role: UserRoleEnum
-  status: number
+function ModuleSelect({
+  value,
+  onValueChange,
+  options,
+  placeholder,
+  className = 'h-9 w-full bg-background',
+}: {
+  value: string
+  onValueChange: (value: string) => void
+  options: SelectOption[]
+  placeholder?: string
+  className?: string
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className={className}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent position="popper">
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
 }
 
 function UsersModuleContent({ module }: { module: AdminModule }) {
@@ -156,6 +189,13 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
   const [pageSize, setPageSize] = useState(DEFAULT_USERS_PAGE_SIZE)
   const [reloadKey, setReloadKey] = useState(0)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+  const [editingUserId, setEditingUserId] = useState<number | null>(null)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [deletingUser, setDeletingUser] = useState<UserResponseDto | null>(null)
+  const [isDeletingUser, setIsDeletingUser] = useState(false)
+  const [togglingUserId, setTogglingUserId] = useState<number | null>(null)
+  const [resettingUserId, setResettingUserId] = useState<number | null>(null)
   const [createDraft, setCreateDraft] = useState<UserFormState>({
     username: '',
     nickname: '',
@@ -163,19 +203,14 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
     role: UserRoleEnum.Employee,
     status: 1,
   })
-  const [isCreatingUser, setIsCreatingUser] = useState(false)
-  const [editingUserId, setEditingUserId] = useState<number | null>(null)
-  const [editingDraft, setEditingDraft] = useState<Omit<UserFormState, 'username'>>({
+  const [editingDraft, setEditingDraft] = useState<EditableUserFormState>({
     nickname: '',
     phone: '',
     role: UserRoleEnum.Employee,
     status: 1,
+    password: '',
   })
-  const [isSavingEdit, setIsSavingEdit] = useState(false)
-  const [deletingUser, setDeletingUser] = useState<UserResponseDto | null>(null)
-  const [isDeletingUser, setIsDeletingUser] = useState(false)
-  const [togglingUserId, setTogglingUserId] = useState<number | null>(null)
-  const [appliedFilters, setAppliedFilters] = useState({
+  const [appliedFilters, setAppliedFilters] = useState<UserFilters>({
     keyword: '',
     role: 'all',
     status: 'all',
@@ -206,11 +241,10 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
 
       setLoadState('success')
     } catch (error) {
-      const message = error instanceof Error ? error.message : '加载用户列表失败，请稍后重试。'
-      setErrorMessage(message)
       setUserRows([])
       setTotalUsers(0)
       setLoadState('error')
+      setErrorMessage(error instanceof Error ? error.message : '加载用户列表失败，请稍后重试。')
     }
   }
 
@@ -221,8 +255,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
   const totalPages = Math.max(1, Math.ceil(totalUsers / pageSize))
   const paginationItems = useMemo(() => buildPaginationItems(currentPage, totalPages), [currentPage, totalPages])
   const isEditDialogOpen = editingUserId !== null
-  const canCreateUser =
-    createDraft.username.trim().length > 0 && createDraft.nickname.trim().length > 0
+  const canCreateUser = createDraft.username.trim().length > 0 && createDraft.nickname.trim().length > 0
   const canSaveEditingUser = editingDraft.nickname.trim().length > 0
 
   function handleCloseCreateDialog() {
@@ -243,6 +276,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
       phone: user.phone,
       role: user.role,
       status: user.status,
+      password: '',
     })
   }
 
@@ -253,6 +287,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
       phone: '',
       role: UserRoleEnum.Employee,
       status: 1,
+      password: '',
     })
   }
 
@@ -296,6 +331,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
         phone: editingDraft.phone.trim(),
         role: editingDraft.role,
         status: editingDraft.status,
+        ...(editingDraft.password.trim() ? { password: editingDraft.password.trim() } : {}),
       } satisfies UpdateUserRequestDto)
 
       toast.success('用户信息已更新')
@@ -305,6 +341,26 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
       toast.error(error instanceof Error ? error.message : '更新用户失败，请稍后重试。')
     } finally {
       setIsSavingEdit(false)
+    }
+  }
+
+  async function handleResetPassword(user: UserResponseDto) {
+    if (resettingUserId !== null) {
+      return
+    }
+
+    setResettingUserId(user.id)
+
+    try {
+      await updateUserRequest(user.id, {
+        password: '123456',
+      } satisfies UpdateUserRequestDto)
+      toast.success('密码已重置为 123456')
+      setReloadKey((currentValue) => currentValue + 1)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '重置密码失败，请稍后重试。')
+    } finally {
+      setResettingUserId(null)
     }
   }
 
@@ -365,37 +421,31 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
               className="h-9 pl-9"
             />
           </div>
-          <NativeSelect
+          <ModuleSelect
             value={roleFilter}
-            onChange={(event) => setRoleFilter(event.target.value)}
-            className="w-full"
-          >
-            <NativeSelectOption value="all">全部角色</NativeSelectOption>
-            {USER_ROLE_OPTIONS.map((role) => (
-              <NativeSelectOption key={role} value={role}>
-                {formatUserRole(role)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          <NativeSelect
+            onValueChange={setRoleFilter}
+            options={[
+              { value: 'all', label: '全部角色' },
+              ...USER_ROLE_OPTIONS.map((role) => ({
+                value: role,
+                label: formatUserRole(role),
+              })),
+            ]}
+          />
+          <ModuleSelect
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="w-full"
-          >
-            <NativeSelectOption value="all">全部状态</NativeSelectOption>
-            <NativeSelectOption value="1">正常</NativeSelectOption>
-            <NativeSelectOption value="0">冻结</NativeSelectOption>
-          </NativeSelect>
+            onValueChange={setStatusFilter}
+            options={[
+              { value: 'all', label: '全部状态' },
+              { value: '1', label: '正常' },
+              { value: '0', label: '冻结' },
+            ]}
+          />
           <Button
             type="button"
             className="h-9"
             onClick={() => {
-              const nextFilters = {
-                keyword,
-                role: roleFilter,
-                status: statusFilter,
-              }
-
+              const nextFilters = { keyword, role: roleFilter, status: statusFilter }
               setCurrentPage(1)
               setAppliedFilters(nextFilters)
               setReloadKey((currentValue) => currentValue + 1)
@@ -409,12 +459,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
             variant="outline"
             className="h-9"
             onClick={() => {
-              const nextFilters = {
-                keyword: '',
-                role: 'all',
-                status: 'all',
-              }
-
+              const nextFilters = { keyword: '', role: 'all', status: 'all' }
               setKeyword('')
               setRoleFilter('all')
               setStatusFilter('all')
@@ -441,7 +486,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
                 {module.table.columns.map((column) => (
                   <TableHead key={column}>{column}</TableHead>
                 ))}
-                <TableHead className="w-[10rem]">操作</TableHead>
+                <TableHead className="w-[14rem]">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -475,7 +520,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
                       <div className="flex min-w-[7rem] items-center gap-2">
                         <Switch
                           checked={row.status === 1}
-                          disabled={togglingUserId === row.id}
+                          disabled={togglingUserId === row.id || resettingUserId === row.id}
                           onCheckedChange={(checked) => void handleStatusSwitchChange(row, checked)}
                           aria-label={`${row.nickname.trim() || row.username}状态开关`}
                         />
@@ -483,21 +528,32 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          disabled={togglingUserId === row.id}
+                          disabled={togglingUserId === row.id || resettingUserId === row.id}
                           onClick={() => handleEditUser(row)}
                         >
                           修改
                         </Button>
+                        {row.status === 1 ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={togglingUserId === row.id || resettingUserId === row.id}
+                            onClick={() => void handleResetPassword(row)}
+                          >
+                            {resettingUserId === row.id ? '重置中...' : '重置密码'}
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          disabled={togglingUserId === row.id}
+                          disabled={togglingUserId === row.id || resettingUserId === row.id}
                           className="text-destructive hover:text-destructive"
                           onClick={() => setDeletingUser(row)}
                         >
@@ -525,21 +581,19 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span>每页</span>
-                  <NativeSelect
+                  <ModuleSelect
                     value={String(pageSize)}
-                    onChange={(event) => {
-                      setPageSize(Number(event.target.value))
+                    onValueChange={(value) => {
+                      setPageSize(Number(value))
                       setCurrentPage(1)
                       setReloadKey((currentValue) => currentValue + 1)
                     }}
-                    className="w-24"
-                  >
-                    {USER_PAGE_SIZE_OPTIONS.map((option) => (
-                      <NativeSelectOption key={option} value={String(option)}>
-                        {option} 条
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                    options={USER_PAGE_SIZE_OPTIONS.map((option) => ({
+                      value: String(option),
+                      label: `${option} 条`,
+                    }))}
+                    className="h-9 w-24 bg-background"
+                  />
                 </div>
               </div>
               <Pagination className="mx-0 w-auto justify-start md:justify-end">
@@ -610,9 +664,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
               <div className="text-sm font-medium">账号</div>
               <Input
                 value={createDraft.username}
-                onChange={(event) =>
-                  setCreateDraft((currentDraft) => ({ ...currentDraft, username: event.target.value }))
-                }
+                onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, username: event.target.value }))}
                 placeholder="请输入账号"
               />
             </div>
@@ -620,9 +672,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
               <div className="text-sm font-medium">用户姓名</div>
               <Input
                 value={createDraft.nickname}
-                onChange={(event) =>
-                  setCreateDraft((currentDraft) => ({ ...currentDraft, nickname: event.target.value }))
-                }
+                onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, nickname: event.target.value }))}
                 placeholder="请输入用户姓名"
               />
             </div>
@@ -630,48 +680,42 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
               <div className="text-sm font-medium">手机号</div>
               <Input
                 value={createDraft.phone}
-                onChange={(event) =>
-                  setCreateDraft((currentDraft) => ({ ...currentDraft, phone: event.target.value }))
-                }
+                onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, phone: event.target.value }))}
                 placeholder="请输入手机号"
               />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-2">
                 <div className="text-sm font-medium">角色</div>
-                <NativeSelect
+                <ModuleSelect
                   value={createDraft.role}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     setCreateDraft((currentDraft) => ({
                       ...currentDraft,
-                      role: event.target.value as UserRoleEnum,
+                      role: value as UserRoleEnum,
                     }))
                   }
-                >
-                  {USER_ROLE_OPTIONS.map((role) => (
-                    <NativeSelectOption key={role} value={role}>
-                      {formatUserRole(role)}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  options={USER_ROLE_OPTIONS.map((role) => ({
+                    value: role,
+                    label: formatUserRole(role),
+                  }))}
+                />
               </div>
               <div className="grid gap-2">
                 <div className="text-sm font-medium">状态</div>
-                <NativeSelect
+                <ModuleSelect
                   value={String(createDraft.status)}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     setCreateDraft((currentDraft) => ({
                       ...currentDraft,
-                      status: Number(event.target.value),
+                      status: Number(value),
                     }))
                   }
-                >
-                  {[1, 0].map((status) => (
-                    <NativeSelectOption key={status} value={String(status)}>
-                      {formatUserStatus(status)}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  options={[1, 0].map((status) => ({
+                    value: String(status),
+                    label: formatUserStatus(status),
+                  }))}
+                />
               </div>
             </div>
           </div>
@@ -690,16 +734,14 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>修改用户</DialogTitle>
-            <DialogDescription>调整用户姓名、手机号、角色和状态。</DialogDescription>
+            <DialogDescription>调整用户姓名、手机号、角色、状态和密码。</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-2">
               <div className="text-sm font-medium">用户姓名</div>
               <Input
                 value={editingDraft.nickname}
-                onChange={(event) =>
-                  setEditingDraft((currentDraft) => ({ ...currentDraft, nickname: event.target.value }))
-                }
+                onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, nickname: event.target.value }))}
                 placeholder="请输入用户姓名"
               />
             </div>
@@ -707,60 +749,60 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
               <div className="text-sm font-medium">手机号</div>
               <Input
                 value={editingDraft.phone}
-                onChange={(event) =>
-                  setEditingDraft((currentDraft) => ({ ...currentDraft, phone: event.target.value }))
-                }
+                onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, phone: event.target.value }))}
                 placeholder="请输入手机号"
               />
             </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <div className="text-sm font-medium">角色</div>
-                  <NativeSelect
-                    value={editingDraft.role}
-                    onChange={(event) =>
-                      setEditingDraft((currentDraft) => ({
-                        ...currentDraft,
-                        role: event.target.value as UserRoleEnum,
-                      }))
-                    }
-                  >
-                    {USER_ROLE_OPTIONS.map((role) => (
-                      <NativeSelectOption key={role} value={role}>
-                        {formatUserRole(role)}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                </div>
-                <div className="grid gap-2">
-                  <div className="text-sm font-medium">状态</div>
-                  <NativeSelect
-                    value={String(editingDraft.status)}
-                    onChange={(event) =>
-                      setEditingDraft((currentDraft) => ({
-                        ...currentDraft,
-                        status: Number(event.target.value),
-                      }))
-                    }
-                  >
-                    {[1, 0].map((status) => (
-                      <NativeSelectOption key={status} value={String(status)}>
-                        {formatUserStatus(status)}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                </div>
+            <div className="grid gap-2">
+              <div className="text-sm font-medium">密码</div>
+              <Input
+                type="password"
+                value={editingDraft.password}
+                onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, password: event.target.value }))}
+                placeholder="不修改密码可留空"
+                minLength={6}
+              />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <div className="text-sm font-medium">角色</div>
+                <ModuleSelect
+                  value={editingDraft.role}
+                  onValueChange={(value) =>
+                    setEditingDraft((currentDraft) => ({
+                      ...currentDraft,
+                      role: value as UserRoleEnum,
+                    }))
+                  }
+                  options={USER_ROLE_OPTIONS.map((role) => ({
+                    value: role,
+                    label: formatUserRole(role),
+                  }))}
+                />
               </div>
+              <div className="grid gap-2">
+                <div className="text-sm font-medium">状态</div>
+                <ModuleSelect
+                  value={String(editingDraft.status)}
+                  onValueChange={(value) =>
+                    setEditingDraft((currentDraft) => ({
+                      ...currentDraft,
+                      status: Number(value),
+                    }))
+                  }
+                  options={[1, 0].map((status) => ({
+                    value: String(status),
+                    label: formatUserStatus(status),
+                  }))}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleCloseEditDialog}>
               取消
             </Button>
-            <Button
-              type="button"
-              onClick={() => void handleSaveEditingUser()}
-              disabled={!canSaveEditingUser || isSavingEdit}
-            >
+            <Button type="button" onClick={() => void handleSaveEditingUser()} disabled={!canSaveEditingUser || isSavingEdit}>
               {isSavingEdit ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
@@ -772,9 +814,7 @@ function UsersModuleContent({ module }: { module: AdminModule }) {
           <AlertDialogHeader>
             <AlertDialogTitle>删除用户</AlertDialogTitle>
             <AlertDialogDescription>
-              {deletingUser
-                ? `确认删除用户“${deletingUser.nickname.trim() || deletingUser.username}”吗？删除后当前列表将立即更新。`
-                : ''}
+              {deletingUser ? `确认删除用户“${deletingUser.nickname.trim() || deletingUser.username}”吗？删除后当前列表将立即更新。` : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -821,9 +861,7 @@ export function ModulePage() {
               </div>
               <div className="min-w-0 space-y-2">
                 <CardTitle className="text-2xl font-semibold tracking-tight">{module.title}</CardTitle>
-                <CardDescription className="max-w-3xl text-sm leading-6">
-                  {module.description}
-                </CardDescription>
+                <CardDescription className="max-w-3xl text-sm leading-6">{module.description}</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -837,9 +875,7 @@ export function ModulePage() {
                 {module.secondaryAction}
               </Button>
             </div>
-            <div className="text-sm text-muted-foreground">
-              当前页面为静态后台壳层，可直接替换为真实业务内容。
-            </div>
+            <div className="text-sm text-muted-foreground">当前页面为静态后台壳层，可直接替换为真实业务内容。</div>
           </CardContent>
         </Card>
 
@@ -850,10 +886,7 @@ export function ModulePage() {
           </CardHeader>
           <CardContent className="grid gap-3 pt-4">
             {module.highlights.map((item) => (
-              <div
-                key={item.title}
-                className="rounded-xl border border-border/70 bg-muted/35 p-3"
-              >
+              <div key={item.title} className="rounded-xl border border-border/70 bg-muted/35 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="font-medium">{item.title}</div>
                   <Badge variant="outline" className="rounded-full">
@@ -946,9 +979,7 @@ export function ModulePage() {
                   </div>
                   <div className="mt-4">
                     <div className="font-medium">{item.title}</div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      {item.description}
-                    </p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.description}</p>
                   </div>
                 </a>
               )
@@ -962,9 +993,7 @@ export function ModulePage() {
               <LayoutGridIcon className="size-4" />
               下一步建议
             </CardTitle>
-            <CardDescription>
-              如果要把当前占位页继续推进成真实后台模块，优先处理下面三项。
-            </CardDescription>
+            <CardDescription>如果要把当前占位页继续推进成真实后台模块，优先处理下面三项。</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
             {[

@@ -65,6 +65,7 @@ export interface UpdateUserRequestDto {
   status?: number
   role?: UserRoleEnum
   remark?: string
+  password?: string
 }
 
 export interface LoginUserRequestDto {

@@ -22,6 +22,7 @@ export interface UpdateUserEntityInput {
   status?: number
   role?: UserRoleEnum
   remark?: string
+  passwordHash?: string
 }
 
 export interface UserListRepositoryResult {
@@ -183,6 +184,9 @@ export class UserRepository implements UserRepositoryPort {
     }
     if (input.remark !== undefined) {
       current.remark = input.remark;
+    }
+    if (input.passwordHash !== undefined) {
+      current.passwordHash = input.passwordHash;
     }
 
     current.updateBy = 'system';

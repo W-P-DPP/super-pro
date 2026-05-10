@@ -59,6 +59,7 @@ export interface UpdateUserRequestDto {
   status?: number
   role?: UserRoleEnum
   remark?: string
+  password?: string
 }
 
 type ApiResponse<T> = ApiEnvelope<T> & {

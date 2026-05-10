@@ -11,6 +11,7 @@ import {
   hashPassword,
   UserBusinessError,
   UserService,
+  verifyPassword,
 } from '../../src/user/user.service.ts';
 
 const TEST_PASSWORD = '123456';
@@ -338,5 +339,26 @@ describe('UserService', () => {
         expiresIn: 7200,
       }),
     );
+  });
+
+  it('updateUser hashes password changes before persisting', async () => {
+    let updatedInput: UpdateUserEntityInput | null = null;
+    const repository = createRepositoryMock(records);
+    const originalUpdateUser = repository.updateUser;
+
+    repository.updateUser = async (id, input) => {
+      updatedInput = input;
+      return originalUpdateUser.call(repository, id, input);
+    };
+
+    const service = new UserService(repository);
+    const result = await service.updateUser(1, {
+      password: '654321',
+    });
+
+    expect(updatedInput?.passwordHash).toEqual(expect.any(String));
+    expect(updatedInput?.passwordHash).not.toBe('654321');
+    expect(verifyPassword('654321', updatedInput!.passwordHash!)).toBe(true);
+    expect(result).not.toHaveProperty('passwordHash');
   });
 });

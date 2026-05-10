@@ -407,6 +407,25 @@ function normalizeDateTime(value: unknown): string | undefined {
   return undefined;
 }
 
+function ensurePassword(value: unknown, field: string, label: string): string {
+  const password = ensureString(value, field, label);
+
+  if (password.length < 6) {
+    throw new UserBusinessError(
+      `${label}至少需要 6 位`,
+      {
+        nodePath: 'user',
+        field,
+        reason: `${label}长度至少需要 6 位`,
+        value: password.length,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return password;
+}
+
 function toResponseDto(entity: UserEntity): UserResponseDto {
   const createTime = normalizeDateTime(entity.createTime);
   const updateTime = normalizeDateTime(entity.updateTime);
@@ -509,6 +528,10 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateUserRequestD
         HttpStatus.BAD_REQUEST,
       );
     }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'password') && input.password !== undefined) {
+    payload.password = ensurePassword(input.password, 'password', '用户密码');
   }
 
   if (Object.keys(payload).length === 0) {
@@ -737,7 +760,10 @@ export class UserService {
       }
     }
 
-    const updated = await this.repository.updateUser(targetId, payload);
+    const updated = await this.repository.updateUser(targetId, {
+      ...payload,
+      ...(payload.password ? { passwordHash: hashPassword(payload.password) } : {}),
+    });
     if (!updated) {
       throw new UserBusinessError(
         '更新用户失败',
