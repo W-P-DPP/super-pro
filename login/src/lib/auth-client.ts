@@ -2,7 +2,9 @@ import forge from 'node-forge'
 import type { ApiEnvelope } from '@super-pro/shared-types'
 import { resolveAuthApiBaseUrl } from '@/lib/auth-api-config'
 
-export type UserRole = 'admin' | 'guest'
+const USER_ROLES = ['admin', 'employee', 'approver', 'guest'] as const
+
+export type UserRole = (typeof USER_ROLES)[number]
 
 export type AuthenticatedUser = {
   id: number
@@ -73,7 +75,8 @@ function isAuthenticatedUser(value: unknown): value is AuthenticatedUser {
     typeof candidate.email === 'string' &&
     typeof candidate.phone === 'string' &&
     typeof candidate.status === 'number' &&
-    (candidate.role === 'admin' || candidate.role === 'guest')
+    typeof candidate.role === 'string' &&
+    USER_ROLES.includes(candidate.role as UserRole)
   )
 }
 

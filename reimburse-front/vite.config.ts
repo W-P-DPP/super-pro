@@ -3,12 +3,24 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
+function normalizeBasePath(value: string | undefined, fallback: string) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return fallback;
+  }
+
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeadingSlash.endsWith('/') ? withLeadingSlash : `${withLeadingSlash}/`;
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '');
   const devPort = Number(env.VITE_DEV_PORT);
+  const basePath = normalizeBasePath(env.VITE_APP_BASE_PATH, '/reimburse/');
 
   return {
-    base: '/reimburse',
+    base: basePath,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

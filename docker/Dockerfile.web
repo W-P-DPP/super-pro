@@ -5,6 +5,8 @@ FROM node:22-alpine AS builder
 ENV PNPM_HOME=/pnpm
 ENV PATH=${PNPM_HOME}:${PATH}
 
+ARG FRONTEND_BUILD_MODE=production
+
 RUN corepack enable
 
 WORKDIR /workspace
@@ -20,12 +22,18 @@ COPY file-server ./file-server
 COPY resume-template ./resume-template
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @super-pro/front-public build
-RUN pnpm --filter @super-pro/login build
-RUN pnpm --filter @super-pro/agent-front build
-RUN pnpm --filter @super-pro/reimburse-front build
-RUN pnpm --filter @super-pro/summary-front build
-RUN pnpm --filter @super-pro/file-server build
+RUN pnpm --filter @super-pro/front-public exec tsc -b
+RUN pnpm --filter @super-pro/front-public exec vite build --mode=${FRONTEND_BUILD_MODE}
+RUN pnpm --filter @super-pro/login exec tsc -b
+RUN pnpm --filter @super-pro/login exec vite build --mode=${FRONTEND_BUILD_MODE}
+RUN pnpm --filter @super-pro/agent-front exec tsc -b
+RUN pnpm --filter @super-pro/agent-front exec vite build --mode=${FRONTEND_BUILD_MODE}
+RUN pnpm --filter @super-pro/reimburse-front exec tsc -b
+RUN pnpm --filter @super-pro/reimburse-front exec vite build --mode=${FRONTEND_BUILD_MODE}
+RUN pnpm --filter @super-pro/summary-front exec tsc -b
+RUN pnpm --filter @super-pro/summary-front exec vite build --mode=${FRONTEND_BUILD_MODE}
+RUN pnpm --filter @super-pro/file-server exec tsc -b
+RUN pnpm --filter @super-pro/file-server exec vite build --mode=${FRONTEND_BUILD_MODE}
 RUN pnpm --filter @super-pro/resume-template build
 
 FROM nginx:1.27-alpine
