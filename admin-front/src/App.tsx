@@ -1,6 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout'
-import { ModulePage } from './pages/ModulePage'
+import { DashboardPage } from './pages/admin/DashboardPage'
+import { PermissionsPage } from './pages/admin/PermissionsPage'
+import { ReportsPage } from './pages/admin/ReportsPage'
+import { RolesPage } from './pages/admin/RolesPage'
+import { SettingsPage } from './pages/admin/SettingsPage'
+import { UsersPage } from './pages/admin/UsersPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
 function App() {
@@ -8,7 +13,12 @@ function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path=":moduleSlug" element={<ModulePage />} />
+        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="users" element={<UsersPage />} />
+        <Route path="roles" element={<RolesPage />} />
+        <Route path="permissions" element={<PermissionsPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="404" element={<NotFoundPage />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Route>
