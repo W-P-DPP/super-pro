@@ -91,6 +91,10 @@ export type TreeNodeListProps = {
   composingPath: string | null
   folderName: string
   submitting: boolean
+  canCreateFolder: boolean
+  canUploadFiles: boolean
+  canDelete: boolean
+  canMove: boolean
   dragState: DragState
   onSelect: (pathName: string) => void
   onToggleExpand: (pathName: string) => void
@@ -116,6 +120,10 @@ export function TreeNodeList({
   composingPath,
   folderName,
   submitting,
+  canCreateFolder,
+  canUploadFiles,
+  canDelete,
+  canMove,
   dragState,
   onSelect,
   onToggleExpand,
@@ -150,7 +158,7 @@ export function TreeNodeList({
         return (
           <div key={node.relativePath} className="space-y-1">
             <div
-              draggable={!isRoot && !submitting}
+              draggable={!isRoot && !submitting && canMove}
               onDragStart={() => onDragStart(node)}
               onDragEnd={onDragEnd}
               onDragOver={(event) => onDragOver(node, event)}
@@ -163,8 +171,8 @@ export function TreeNodeList({
                     ? 'border-primary/30 bg-primary/10 shadow-[var(--shadow-soft)]'
                     : 'border-transparent hover:border-border/80 hover:bg-background/70',
                 isDragging ? 'opacity-60' : '',
-                !isRoot && !submitting ? 'cursor-grab active:cursor-grabbing' : '',
-                dragState.sourcePath && isFolder && isValidDropTarget(node)
+                !isRoot && !submitting && canMove ? 'cursor-grab active:cursor-grabbing' : '',
+                dragState.sourcePath && isFolder && canMove && isValidDropTarget(node)
                   ? 'ring-1 ring-primary/20'
                   : '',
               ].join(' ')}
@@ -232,30 +240,36 @@ export function TreeNodeList({
                 >
                   {isFolder ? (
                     <>
-                      <ActionButton
-                        label="新建子文件夹"
-                        disabled={submitting}
-                        onClick={() => onStartCreateFolder(node.relativePath)}
-                      >
-                        <FolderPlus className="size-4" />
-                      </ActionButton>
-                      <ActionButton
-                        label="上传文件到当前目录"
-                        disabled={submitting}
-                        onClick={() => onUploadFiles(node.relativePath)}
-                      >
-                        <Upload className="size-4" />
-                      </ActionButton>
-                      <ActionButton
-                        label="上传文件夹"
-                        disabled={submitting}
-                        onClick={() => onUploadFolder(node.relativePath)}
-                      >
-                        <FolderOpen className="size-4" />
-                      </ActionButton>
+                      {canCreateFolder ? (
+                        <ActionButton
+                          label="新建子文件夹"
+                          disabled={submitting}
+                          onClick={() => onStartCreateFolder(node.relativePath)}
+                        >
+                          <FolderPlus className="size-4" />
+                        </ActionButton>
+                      ) : null}
+                      {canUploadFiles ? (
+                        <>
+                          <ActionButton
+                            label="上传文件到当前目录"
+                            disabled={submitting}
+                            onClick={() => onUploadFiles(node.relativePath)}
+                          >
+                            <Upload className="size-4" />
+                          </ActionButton>
+                          <ActionButton
+                            label="上传文件夹"
+                            disabled={submitting}
+                            onClick={() => onUploadFolder(node.relativePath)}
+                          >
+                            <FolderOpen className="size-4" />
+                          </ActionButton>
+                        </>
+                      ) : null}
                     </>
                   ) : null}
-                  {!isRoot ? (
+                  {!isRoot && canDelete ? (
                     <ActionButton
                       label="移动到 rubbish"
                       danger
@@ -328,6 +342,10 @@ export function TreeNodeList({
                 composingPath={composingPath}
                 folderName={folderName}
                 submitting={submitting}
+                canCreateFolder={canCreateFolder}
+                canUploadFiles={canUploadFiles}
+                canDelete={canDelete}
+                canMove={canMove}
                 dragState={dragState}
                 onSelect={onSelect}
                 onToggleExpand={onToggleExpand}

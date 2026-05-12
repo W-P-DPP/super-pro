@@ -49,5 +49,5 @@ export function redirectToLoginPage(target?: string) {
 }
 
 export function shouldRedirectToLogin(status: number) {
-  return status === 401 || status === 403
+  return status === 401
 }

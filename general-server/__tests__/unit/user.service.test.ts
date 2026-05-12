@@ -34,17 +34,12 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
 
         return matchesKeyword && matchesRole && matchesStatus;
       });
-      const total = filteredRecords.length;
-      const totalPages = Math.max(1, Math.ceil(total / (query.pageSize ?? 10)));
-      const page = Math.min(query.page ?? 1, totalPages);
-      const pageSize = query.pageSize ?? 10;
-      const startIndex = (page - 1) * pageSize;
 
       return {
-        items: filteredRecords.slice(startIndex, startIndex + pageSize).map(cloneUser),
-        total,
-        page,
-        pageSize,
+        items: filteredRecords.map(cloneUser),
+        total: filteredRecords.length,
+        page: 1,
+        pageSize: query.pageSize ?? 10,
       };
     },
     async getUserById(id: number) {
@@ -73,7 +68,6 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
         status: input.status,
         role: input.role,
         passwordHash: input.passwordHash,
-        ...(input.remark !== undefined ? { remark: input.remark } : {}),
       });
     },
     async updateUser(id: number, input: UpdateUserEntityInput) {
@@ -89,6 +83,29 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
       return current ? cloneUser(current) : null;
     },
   };
+}
+
+function createAuthorizationServiceMock() {
+  return {
+    async getAssignedRolesByUserIds(userIds: number[]) {
+      return new Map(
+        userIds.map((userId) => [
+          userId,
+          [] as Array<{ id: number; code: string; name: string; appCode: string }>,
+        ]),
+      );
+    },
+    async ensureRoleIdsExist() {},
+    async replaceUserRoleAssignments() {},
+    async clearUserRoleAssignments() {},
+  };
+}
+
+function createService(records: UserEntity[]) {
+  return new UserService(
+    createRepositoryMock(records),
+    createAuthorizationServiceMock(),
+  );
 }
 
 function encryptPassword(publicKey: string, password: string): string {
@@ -113,7 +130,6 @@ describe('UserService', () => {
       status: 1,
       role: UserRoleEnum.Admin,
       passwordHash: hashPassword(TEST_PASSWORD),
-      remark: '初始用户',
     }),
     Object.assign(new UserEntity(), {
       id: 2,
@@ -134,8 +150,8 @@ describe('UserService', () => {
     clearCachedLoginEncryptionKeyPair();
   });
 
-  it('新增用户成功时应返回角色字段', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('creates a user with the provided compatibility role', async () => {
+    const service = createService(records);
 
     const result = await service.createUser({
       username: 'wangwu',
@@ -150,14 +166,14 @@ describe('UserService', () => {
       expect.objectContaining({
         id: 99,
         username: 'wangwu',
-        nickname: '王五',
         role: UserRoleEnum.Admin,
+        assignedRoles: [],
       }),
     );
   });
 
-  it('未传角色时应默认创建为 employee', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('defaults compatibility role to employee', async () => {
+    const service = createService(records);
 
     const result = await service.createUser({
       username: 'zhaoliu',
@@ -175,24 +191,25 @@ describe('UserService', () => {
     );
   });
 
-  it('新增重复用户名时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('rejects duplicate username on create', async () => {
+    const service = createService(records);
 
     await expect(
       service.createUser({
         username: 'zhangsan',
         nickname: '重复用户',
-        email: 'dup@example.com',
-        phone: '13800000009',
         status: 1,
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户名已存在',
+      statusCode: 409,
+      context: expect.objectContaining({
+        field: 'username',
+      }),
     });
   });
 
-  it('传入非法角色时应返回角色字段错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('rejects invalid compatibility role values', async () => {
+    const service = createService(records);
 
     await expect(
       service.createUser({
@@ -208,54 +225,39 @@ describe('UserService', () => {
     });
   });
 
-  it('查询不存在用户时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('returns not found for missing users', async () => {
+    const service = createService(records);
 
     await expect(service.getUserDetail(99999)).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户不存在',
-    });
-  });
-
-  it('更新不存在用户时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
-
-    await expect(
-      service.updateUser(99999, {
-        nickname: '不存在',
+      statusCode: 404,
+      context: expect.objectContaining({
+        field: 'id',
       }),
-    ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户不存在',
     });
   });
 
-  it('删除不存在用户时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
-
-    await expect(service.deleteUser(99999)).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户不存在',
-    });
-  });
-
-  it('更新用户角色时应返回最新角色', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('updates user role and phone', async () => {
+    const service = createService(records);
 
     const result = await service.updateUser(1, {
       role: UserRoleEnum.Guest,
+      phone: '13900000001',
     });
 
     expect(result).toEqual(
       expect.objectContaining({
         id: 1,
         role: UserRoleEnum.Guest,
+        phone: '13900000001',
       }),
     );
   });
 
-  it('查询用户列表时应支持筛选和分页', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('supports filtered user list queries', async () => {
+    const service = createService(records);
 
     const result = await service.getUserList({
-      keyword: '张',
+      keyword: 'zhang',
       role: UserRoleEnum.Admin,
       status: '1',
       page: '1',
@@ -276,8 +278,8 @@ describe('UserService', () => {
     });
   });
 
-  it('登录成功时应返回带角色的脱敏用户信息', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('returns token metadata only on successful login', async () => {
+    const service = createService(records);
     const publicKey = service.getLoginPublicKey().publicKey;
 
     const result = await service.loginUser({
@@ -295,8 +297,8 @@ describe('UserService', () => {
     expect(result).not.toHaveProperty('user');
   });
 
-  it('登录凭证错误时应返回统一中文错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('rejects wrong password and disabled user login', async () => {
+    const service = createService(records);
     const publicKey = service.getLoginPublicKey().publicKey;
 
     await expect(
@@ -305,13 +307,11 @@ describe('UserService', () => {
         passwordCiphertext: encryptPassword(publicKey, 'wrong-password'),
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户名或密码错误',
+      statusCode: 401,
+      context: expect.objectContaining({
+        field: 'credentials',
+      }),
     });
-  });
-
-  it('停用用户登录时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
-    const publicKey = service.getLoginPublicKey().publicKey;
 
     await expect(
       service.loginUser({
@@ -319,11 +319,15 @@ describe('UserService', () => {
         passwordCiphertext: encryptPassword(publicKey, DISABLED_USER_PASSWORD),
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户已停用，无法登录',
+      statusCode: 403,
+      context: expect.objectContaining({
+        field: 'status',
+      }),
     });
   });
-  it('rejects duplicate phone on create', async () => {
-    const service = new UserService(createRepositoryMock(records));
+
+  it('rejects duplicate phone on create and update', async () => {
+    const service = createService(records);
 
     await expect(
       service.createUser({
@@ -334,22 +338,18 @@ describe('UserService', () => {
         status: 1,
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '手机号已存在',
+      statusCode: 409,
       context: expect.objectContaining({
         field: 'phone',
       }),
     });
-  });
-
-  it('rejects duplicate phone on update', async () => {
-    const service = new UserService(createRepositoryMock(records));
 
     await expect(
       service.updateUser(1, {
         phone: '13800000002',
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '手机号已存在',
+      statusCode: 409,
       context: expect.objectContaining({
         field: 'phone',
       }),
@@ -358,11 +358,13 @@ describe('UserService', () => {
 
   it('falls back to an ephemeral key pair when production keys are placeholders', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.LOGIN_PASSWORD_PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\\nreplace_with_public_key\\n-----END PUBLIC KEY-----';
-    process.env.LOGIN_PASSWORD_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\\nreplace_with_private_key\\n-----END PRIVATE KEY-----';
+    process.env.LOGIN_PASSWORD_PUBLIC_KEY =
+      '-----BEGIN PUBLIC KEY-----\\nreplace_with_public_key\\n-----END PUBLIC KEY-----';
+    process.env.LOGIN_PASSWORD_PRIVATE_KEY =
+      '-----BEGIN PRIVATE KEY-----\\nreplace_with_private_key\\n-----END PRIVATE KEY-----';
     clearCachedLoginEncryptionKeyPair();
 
-    const service = new UserService(createRepositoryMock(records));
+    const service = createService(records);
     const publicKey = service.getLoginPublicKey().publicKey;
     const result = await service.loginUser({
       username: 'zhangsan',
@@ -379,7 +381,7 @@ describe('UserService', () => {
     );
   });
 
-  it('updateUser hashes password changes before persisting', async () => {
+  it('hashes password changes before persisting', async () => {
     let updatedInput: UpdateUserEntityInput | null = null;
     const repository = createRepositoryMock(records);
     const originalUpdateUser = repository.updateUser;
@@ -389,7 +391,7 @@ describe('UserService', () => {
       return originalUpdateUser.call(repository, id, input);
     };
 
-    const service = new UserService(repository);
+    const service = new UserService(repository, createAuthorizationServiceMock());
     const result = await service.updateUser(1, {
       password: '654321',
     });

@@ -12,3 +12,4 @@ export * from './runtime.ts';
 export * from './exception-email-reporter.ts';
 export * from './smtp-mailer.ts';
 export * from './dev-exception-test.ts';
+export * from './authorization.ts';

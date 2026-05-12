@@ -13,6 +13,12 @@ export interface UserResponseDto {
   phone: string
   status: number
   role: UserRoleEnum
+  assignedRoles?: Array<{
+    id: number
+    code: string
+    name: string
+    appCode: string
+  }>
   createBy?: string
   createTime?: string
   updateBy?: string
@@ -53,6 +59,7 @@ export interface CreateUserRequestDto {
   phone?: string
   status?: number
   role?: UserRoleEnum
+  assignedRoleIds?: number[]
   remark?: string
   password?: string
 }
@@ -64,6 +71,7 @@ export interface UpdateUserRequestDto {
   phone?: string
   status?: number
   role?: UserRoleEnum
+  assignedRoleIds?: number[]
   remark?: string
   password?: string
 }

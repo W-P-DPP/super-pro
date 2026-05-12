@@ -10,4 +10,5 @@ export type StoredAuthSession = {
   expiresAt?: number;
 };
 
+export * from './auth.ts';
 export * from './screen.ts';

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@super-pro/shared-constants": "workspace:*",
+    "@super-pro/shared-types": "workspace:*",
     "axios": "^1.13.2",
     "body-parser": "^2.2.1",
     "cors": "^2.8.5",

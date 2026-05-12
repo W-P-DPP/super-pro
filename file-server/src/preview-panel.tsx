@@ -126,7 +126,7 @@ export function PreviewPanel({
 
         {previewState.status === 'folder' ? (
           <div className="flex h-full min-h-[260px] items-center justify-center rounded-lg border border-dashed border-border bg-card/60 p-8 text-sm text-muted-foreground">
-            当前选中的是文件夹。你可以继续在左侧完成新建、上传、删除或拖动移动。
+            当前选中的是文件夹。你可以继续在左侧完成新建、上传、删除或拖拽移动。
           </div>
         ) : null}
 

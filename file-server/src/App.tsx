@@ -1,3 +1,8 @@
+import {
+  FILE_SERVER_APP_CODE,
+  FILE_SERVER_PERMISSION_CODES,
+  type AppAuthorizationSnapshot,
+} from '@super-pro/shared-types'
 import { MoonStar, RefreshCw, Search, SunMedium } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import type { ChangeEvent, DragEvent } from 'react'
@@ -39,6 +44,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, ''
 const CHUNK_UPLOAD_THRESHOLD = 8 * 1024 * 1024
 const CHUNK_UPLOAD_SIZE = 2 * 1024 * 1024
 const PREVIEW_TOKEN_COOKIE_NAME = 'file_preview_token'
+const DEFAULT_TREE_PERMISSION_DENIED_MESSAGE = '当前账号没有文件树查看权限'
+const DEFAULT_PREVIEW_PERMISSION_DENIED_MESSAGE = '当前账号没有文件预览权限'
+const DEFAULT_DOWNLOAD_PERMISSION_DENIED_MESSAGE = '当前账号没有文件下载权限'
+const DEFAULT_UPLOAD_PERMISSION_DENIED_MESSAGE = '当前账号没有上传文件权限'
+const DEFAULT_DELETE_PERMISSION_DENIED_MESSAGE = '当前账号没有删除文件权限'
+const DEFAULT_MOVE_PERMISSION_DENIED_MESSAGE = '当前账号没有移动文件权限'
+const DEFAULT_FOLDER_PERMISSION_DENIED_MESSAGE = '当前账号没有创建文件夹权限'
 
 function getClientRelativePath(file: File, mode: UploadMode): string {
   if (mode === 'folder') {
@@ -70,6 +82,10 @@ function buildDownloadUrl(relativePath: string): string {
   return `${API_BASE_URL}/file/download?targetPath=${encodeURIComponent(relativePath)}`
 }
 
+function buildAuthorizationSnapshotUrl(): string {
+  return `${API_BASE_URL}/authorization/snapshot?appCode=${encodeURIComponent(FILE_SERVER_APP_CODE)}`
+}
+
 function setPreviewAuthCookie(token?: string | null) {
   if (typeof document === 'undefined') {
     return
@@ -92,6 +108,20 @@ function createUploadId(): string {
   }
 
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+async function readErrorMessage(response: Response, fallbackMessage: string): Promise<string> {
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    return fallbackMessage
+  }
+
+  try {
+    const payload = (await response.json()) as ApiResponse<unknown>
+    return payload.msg || fallbackMessage
+  } catch {
+    return fallbackMessage
+  }
 }
 
 async function requestJson<T>(pathName: string, init?: RequestInit): Promise<ApiResponse<T>> {
@@ -119,6 +149,22 @@ async function requestJson<T>(pathName: string, init?: RequestInit): Promise<Api
   return payload
 }
 
+async function requestAuthorizationSnapshot(): Promise<AppAuthorizationSnapshot> {
+  const headers = getAuthHeaders()
+  const response = await fetch(buildAuthorizationSnapshotUrl(), { headers })
+  if (shouldRedirectToLogin(response.status)) {
+    redirectToLoginPage()
+    throw new Error('登录状态已失效，请重新登录')
+  }
+
+  const payload = (await response.json()) as ApiResponse<AppAuthorizationSnapshot>
+  if (!response.ok || payload.code !== 200) {
+    throw new Error(payload.msg || '加载权限快照失败')
+  }
+
+  return payload.data
+}
+
 async function requestPreview(relativePath: string, signal?: AbortSignal): Promise<Response> {
   const response = await fetch(buildPreviewUrl(relativePath), { headers: getAuthHeaders(), signal })
 
@@ -128,13 +174,7 @@ async function requestPreview(relativePath: string, signal?: AbortSignal): Promi
   }
 
   if (!response.ok) {
-    const contentType = response.headers.get('content-type') ?? ''
-    if (contentType.includes('application/json')) {
-      const payload = (await response.json()) as ApiResponse<unknown>
-      throw new Error(payload.msg || '读取预览失败')
-    }
-
-    throw new Error('读取预览失败')
+    throw new Error(await readErrorMessage(response, '读取预览失败'))
   }
 
   return response
@@ -148,17 +188,11 @@ async function requestDownloadAccess(relativePath: string, signal?: AbortSignal)
 
   if (shouldRedirectToLogin(response.status)) {
     redirectToLoginPage()
-    throw new Error('鐧诲綍鐘舵€佸凡澶辨晥锛岃閲嶆柊鐧诲綍')
+    throw new Error('登录状态已失效，请重新登录')
   }
 
   if (!response.ok) {
-    const contentType = response.headers.get('content-type') ?? ''
-    if (contentType.includes('application/json')) {
-      const payload = (await response.json()) as ApiResponse<unknown>
-      throw new Error(payload.msg || '璇诲彇涓嬭浇鏂囦欢澶辫触')
-    }
-
-    throw new Error('璇诲彇涓嬭浇鏂囦欢澶辫触')
+    throw new Error(await readErrorMessage(response, '下载文件失败'))
   }
 
   await response.body?.cancel()
@@ -215,17 +249,40 @@ export default function App() {
   const [feedback, setFeedback] = useState<FeedbackState>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [dragState, setDragState] = useState<DragState>({ sourcePath: null, sourceType: null, dropTargetPath: null })
+  const [dragState, setDragState] = useState<DragState>({
+    sourcePath: null,
+    sourceType: null,
+    dropTargetPath: null,
+  })
   const [previewState, setPreviewState] = useState<PreviewState>({ status: 'idle' })
+  const [authorizationSnapshot, setAuthorizationSnapshot] = useState<AppAuthorizationSnapshot | null>(null)
 
   const deferredSearchKeyword = useDeferredValue(searchKeyword.trim())
   const rootNode = useMemo<FileNode>(() => ({ name: 'file', relativePath: '/', type: 'folder', children: tree }), [tree])
-  const selectedNode = useMemo(() => (selectedPath === '/' ? rootNode : findNode(tree, selectedPath) ?? rootNode), [rootNode, selectedPath, tree])
+  const selectedNode = useMemo(
+    () => (selectedPath === '/' ? rootNode : findNode(tree, selectedPath) ?? rootNode),
+    [rootNode, selectedPath, tree],
+  )
   const activeFolderPath = selectedNode.type === 'folder' ? selectedNode.relativePath : getParentPath(selectedNode.relativePath)
   const treeStats = useMemo(() => countTreeNodes(tree), [tree])
   const visibleTree = useMemo(() => filterTree(tree, deferredSearchKeyword), [deferredSearchKeyword, tree])
-  const visibleExpandedPaths = useMemo(() => (deferredSearchKeyword ? Array.from(getFolderPathSet(visibleTree)) : expandedPaths), [deferredSearchKeyword, expandedPaths, visibleTree])
+  const visibleExpandedPaths = useMemo(
+    () => (deferredSearchKeyword ? Array.from(getFolderPathSet(visibleTree)) : expandedPaths),
+    [deferredSearchKeyword, expandedPaths, visibleTree],
+  )
   const visibleNodeCount = useMemo(() => countVisibleNodes(visibleTree), [visibleTree])
+  const permissionCodes = useMemo(
+    () => new Set(authorizationSnapshot?.principal.permissionCodes ?? []),
+    [authorizationSnapshot],
+  )
+
+  const canReadTree = permissionCodes.has(FILE_SERVER_PERMISSION_CODES.treeRead)
+  const canPreview = permissionCodes.has(FILE_SERVER_PERMISSION_CODES.previewRead)
+  const canDownload = permissionCodes.has(FILE_SERVER_PERMISSION_CODES.downloadRead)
+  const canCreateFolder = canReadTree && permissionCodes.has(FILE_SERVER_PERMISSION_CODES.folderCreate)
+  const canUploadFiles = canReadTree && permissionCodes.has(FILE_SERVER_PERMISSION_CODES.fileUpload)
+  const canDelete = canReadTree && permissionCodes.has(FILE_SERVER_PERMISSION_CODES.fileDelete)
+  const canMove = canReadTree && permissionCodes.has(FILE_SERVER_PERMISSION_CODES.fileMove)
 
   function clearPreviewObjectUrl() {
     if (previewObjectUrlRef.current) {
@@ -243,6 +300,11 @@ export default function App() {
   }
 
   async function refreshTree(nextSelectedPath?: string) {
+    if (!canReadTree) {
+      setFeedback({ type: 'error', text: DEFAULT_TREE_PERMISSION_DENIED_MESSAGE })
+      return
+    }
+
     setLoading(true)
     try {
       applyTree((await requestJson<FileNode[]>('/file/tree')).data, nextSelectedPath)
@@ -256,19 +318,33 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
 
-    async function loadInitialTree() {
+    async function bootstrap() {
       setLoading(true)
       try {
-        const response = await requestJson<FileNode[]>('/file/tree')
+        const snapshot = await requestAuthorizationSnapshot()
+        if (cancelled) {
+          return
+        }
+
+        setAuthorizationSnapshot(snapshot)
+        if (!snapshot.principal.permissionCodes.includes(FILE_SERVER_PERMISSION_CODES.treeRead)) {
+          setTree([])
+          setSelectedPath('/')
+          setExpandedPaths(['/'])
+          setFeedback({ type: 'error', text: DEFAULT_TREE_PERMISSION_DENIED_MESSAGE })
+          return
+        }
+
+        const treeResponse = await requestJson<FileNode[]>('/file/tree')
         if (!cancelled) {
-          const nextTree = sortNodes(response.data)
+          const nextTree = sortNodes(treeResponse.data)
           setTree(nextTree)
           setSelectedPath('/')
           setExpandedPaths(['/'])
         }
       } catch (error) {
         if (!cancelled) {
-          setFeedback({ type: 'error', text: error instanceof Error ? error.message : '读取文件树失败' })
+          setFeedback({ type: 'error', text: error instanceof Error ? error.message : '初始化文件工作台失败' })
         }
       } finally {
         if (!cancelled) {
@@ -277,7 +353,7 @@ export default function App() {
       }
     }
 
-    void loadInitialTree()
+    void bootstrap()
 
     return () => {
       cancelled = true
@@ -301,15 +377,29 @@ export default function App() {
     const controller = new AbortController()
     clearPreviewObjectUrl()
     setPreviewAuthCookie(null)
+
     if (selectedNode.type === 'folder') {
       setPreviewState({ status: 'folder', node: selectedNode })
+      return () => controller.abort()
+    }
+
+    if (!canPreview) {
+      setPreviewState({
+        status: 'error',
+        node: selectedNode,
+        message: DEFAULT_PREVIEW_PERMISSION_DENIED_MESSAGE,
+      })
       return () => controller.abort()
     }
 
     const kind = getPreviewKind(selectedNode)
     const tooLargeMessage = getPreviewTooLargeMessage(selectedNode, kind)
     if (kind === 'unsupported' || tooLargeMessage) {
-      setPreviewState({ status: 'unsupported', node: selectedNode, message: tooLargeMessage ?? '当前文件暂不支持在线预览。' })
+      setPreviewState({
+        status: 'unsupported',
+        node: selectedNode,
+        message: tooLargeMessage ?? '当前文件暂不支持在线预览。',
+      })
       return () => controller.abort()
     }
 
@@ -368,7 +458,12 @@ export default function App() {
         if (kind === 'docx') {
           const mammoth = await import('mammoth')
           const result = await mammoth.convertToHtml({ arrayBuffer: await response.arrayBuffer() })
-          setPreviewState({ status: 'ready', node: selectedNode, kind, html: result.value || '<p>当前文档没有可预览内容。</p>' })
+          setPreviewState({
+            status: 'ready',
+            node: selectedNode,
+            kind,
+            html: result.value || '<p>当前文档没有可预览内容。</p>',
+          })
           return
         }
         if (kind === 'spreadsheet') {
@@ -391,13 +486,17 @@ export default function App() {
         setPreviewState({ status: 'ready', node: selectedNode, kind, objectUrl })
       } catch (error) {
         if (!controller.signal.aborted) {
-          setPreviewState({ status: 'error', node: selectedNode, message: error instanceof Error ? error.message : '读取预览失败' })
+          setPreviewState({
+            status: 'error',
+            node: selectedNode,
+            message: error instanceof Error ? error.message : '读取预览失败',
+          })
         }
       }
     })()
 
     return () => controller.abort()
-  }, [selectedNode])
+  }, [canPreview, selectedNode])
 
   function handleSelect(pathName: string) {
     setSelectedPath(pathName)
@@ -417,6 +516,11 @@ export default function App() {
   }
 
   function handleStartCreateFolder(pathName: string) {
+    if (!canCreateFolder) {
+      setFeedback({ type: 'error', text: DEFAULT_FOLDER_PERMISSION_DENIED_MESSAGE })
+      return
+    }
+
     setSelectedPath(pathName)
     setComposingPath(pathName)
     setFolderName('')
@@ -424,6 +528,11 @@ export default function App() {
   }
 
   async function handleCreateFolder() {
+    if (!canCreateFolder) {
+      setFeedback({ type: 'error', text: DEFAULT_FOLDER_PERMISSION_DENIED_MESSAGE })
+      return
+    }
+
     if (!folderName.trim()) {
       setFeedback({ type: 'error', text: '请先输入文件夹名称' })
       return
@@ -431,7 +540,13 @@ export default function App() {
 
     setSubmitting(true)
     try {
-      const response = await requestJson<FileNode>('/file/folder', { method: 'POST', body: JSON.stringify({ parentPath: composingPath ?? activeFolderPath, folderName: folderName.trim() }) })
+      const response = await requestJson<FileNode>('/file/folder', {
+        method: 'POST',
+        body: JSON.stringify({
+          parentPath: composingPath ?? activeFolderPath,
+          folderName: folderName.trim(),
+        }),
+      })
       setFeedback({ type: 'success', text: response.msg })
       setComposingPath(null)
       setFolderName('')
@@ -444,6 +559,11 @@ export default function App() {
   }
 
   function handleStartUpload(pathName: string, mode: UploadMode) {
+    if (!canUploadFiles) {
+      setFeedback({ type: 'error', text: DEFAULT_UPLOAD_PERMISSION_DENIED_MESSAGE })
+      return
+    }
+
     setSelectedPath(pathName)
     setPendingUpload({ targetPath: pathName, mode })
     setExpandedPaths((current) => (current.includes(pathName) ? current : [...current, pathName]))
@@ -456,6 +576,11 @@ export default function App() {
   }
 
   async function uploadFilesToPath(pathName: string, files: File[], mode: UploadMode) {
+    if (!canUploadFiles) {
+      setFeedback({ type: 'error', text: DEFAULT_UPLOAD_PERMISSION_DENIED_MESSAGE })
+      return
+    }
+
     const useBatchChunkUpload = files.length > 1 && files.some((file) => file.size > CHUNK_UPLOAD_THRESHOLD)
     setSubmitting(true)
 
@@ -501,12 +626,19 @@ export default function App() {
       formData.append('uploadId', uploadId)
       formData.append('chunkIndex', String(chunkIndex))
       formData.append('totalChunks', String(totalChunks))
-      formData.append('chunk', file.slice(chunkIndex * CHUNK_UPLOAD_SIZE, Math.min((chunkIndex + 1) * CHUNK_UPLOAD_SIZE, file.size)), file.name)
+      formData.append(
+        'chunk',
+        file.slice(chunkIndex * CHUNK_UPLOAD_SIZE, Math.min((chunkIndex + 1) * CHUNK_UPLOAD_SIZE, file.size)),
+        file.name,
+      )
       const progress = await requestJson<ChunkUploadProgressResponse>('/file/upload/chunk', { method: 'POST', body: formData })
       setFeedback({ type: 'info', text: `正在上传 ${file.name}，分片 ${progress.data.receivedChunks}/${progress.data.totalChunks}` })
     }
 
-    return requestJson<UploadResponse>('/file/upload/chunk/complete', { method: 'POST', body: JSON.stringify({ targetPath: pathName, relativePath, uploadId, totalChunks }) })
+    return requestJson<UploadResponse>('/file/upload/chunk/complete', {
+      method: 'POST',
+      body: JSON.stringify({ targetPath: pathName, relativePath, uploadId, totalChunks }),
+    })
   }
 
   async function uploadFileBatchInChunks(pathName: string, files: File[], mode: UploadMode) {
@@ -524,14 +656,21 @@ export default function App() {
         formData.append('uploadId', uploadId)
         formData.append('chunkIndex', String(chunkIndex))
         formData.append('totalChunks', String(totalChunks))
-        formData.append('chunk', file.slice(chunkIndex * CHUNK_UPLOAD_SIZE, Math.min((chunkIndex + 1) * CHUNK_UPLOAD_SIZE, file.size)), file.name)
+        formData.append(
+          'chunk',
+          file.slice(chunkIndex * CHUNK_UPLOAD_SIZE, Math.min((chunkIndex + 1) * CHUNK_UPLOAD_SIZE, file.size)),
+          file.name,
+        )
         const progress = await requestJson<ChunkUploadProgressResponse>('/file/upload/chunk', { method: 'POST', body: formData })
         setFeedback({ type: 'info', text: `正在上传 ${file.name}，分片 ${progress.data.receivedChunks}/${progress.data.totalChunks}，文件 ${fileIndex + 1}/${files.length}` })
       }
       items.push({ relativePath, uploadId, totalChunks })
     }
 
-    return requestJson<UploadResponse>('/file/upload/chunk/complete-batch', { method: 'POST', body: JSON.stringify({ targetPath: pathName, items }) })
+    return requestJson<UploadResponse>('/file/upload/chunk/complete-batch', {
+      method: 'POST',
+      body: JSON.stringify({ targetPath: pathName, items }),
+    })
   }
 
   async function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -546,6 +685,11 @@ export default function App() {
   }
 
   async function handleDeleteTarget(targetPath: string) {
+    if (!canDelete) {
+      setFeedback({ type: 'error', text: DEFAULT_DELETE_PERMISSION_DENIED_MESSAGE })
+      return
+    }
+
     if (!window.confirm(`确认将 ${targetPath} 移入 rubbish 吗？`)) {
       return
     }
@@ -565,6 +709,11 @@ export default function App() {
   }
 
   async function handleDownloadTarget(node: FileNode) {
+    if (!canDownload) {
+      setFeedback({ type: 'error', text: DEFAULT_DOWNLOAD_PERMISSION_DENIED_MESSAGE })
+      return
+    }
+
     const controller = new AbortController()
 
     try {
@@ -577,7 +726,7 @@ export default function App() {
     } catch (error) {
       setFeedback({
         type: 'error',
-        text: error instanceof Error ? error.message : '涓嬭浇鏂囦欢澶辫触',
+        text: error instanceof Error ? error.message : '下载文件失败',
       })
     } finally {
       controller.abort()
@@ -589,6 +738,10 @@ export default function App() {
   }
 
   function isValidDropTarget(node: FileNode) {
+    if (!canMove) {
+      return false
+    }
+
     if (!dragState.sourcePath || !dragState.sourceType || node.type !== 'folder' || node.relativePath === dragState.sourcePath) {
       return false
     }
@@ -597,6 +750,11 @@ export default function App() {
   }
 
   function handleDragStart(node: FileNode) {
+    if (!canMove) {
+      setFeedback({ type: 'error', text: DEFAULT_MOVE_PERMISSION_DENIED_MESSAGE })
+      return
+    }
+
     if (!submitting && node.relativePath !== '/') {
       setDragState({ sourcePath: node.relativePath, sourceType: node.type, dropTargetPath: null })
     }
@@ -620,7 +778,10 @@ export default function App() {
     resetDragState()
     setSubmitting(true)
     try {
-      const response = await requestJson<FileNode>('/file/move', { method: 'POST', body: JSON.stringify({ sourcePath, destinationPath: node.relativePath }) })
+      const response = await requestJson<FileNode>('/file/move', {
+        method: 'POST',
+        body: JSON.stringify({ sourcePath, destinationPath: node.relativePath }),
+      })
       setFeedback({ type: 'success', text: response.msg })
       await refreshTree(nextSelectedPath)
     } catch (error) {
@@ -646,7 +807,7 @@ export default function App() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <button type="button" aria-label="刷新文件树" title="刷新文件树" onClick={() => void refreshTree(selectedPath)} className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-foreground">
-                      <RefreshCw className={['size-4', loading ? 'animate-spin' : ''].join(' ')} />
+                    <RefreshCw className={['size-4', loading ? 'animate-spin' : ''].join(' ')} />
                   </button>
                   <button type="button" aria-label={resolvedTheme === 'dark' ? '切换浅色模式' : '切换深色模式'} title={resolvedTheme === 'dark' ? '切换浅色模式' : '切换深色模式'} onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-foreground">
                     {resolvedTheme === 'dark' ? <SunMedium className="size-4" /> : <MoonStar className="size-4" />}
@@ -674,6 +835,10 @@ export default function App() {
                 composingPath={composingPath}
                 folderName={folderName}
                 submitting={submitting}
+                canCreateFolder={canCreateFolder}
+                canUploadFiles={canUploadFiles}
+                canDelete={canDelete}
+                canMove={canMove}
                 dragState={dragState}
                 onSelect={handleSelect}
                 onToggleExpand={handleToggleExpand}
@@ -693,7 +858,7 @@ export default function App() {
 
               {loading ? <div className="px-3 py-6 text-sm text-muted-foreground">正在读取文件树...</div> : null}
               {!loading && deferredSearchKeyword && visibleTree.length === 0 ? <div className="px-3 py-6 text-sm text-muted-foreground">没有匹配的文件或文件夹。</div> : null}
-              {!loading && !deferredSearchKeyword && tree.length === 0 ? <div className="px-3 py-6 text-sm text-muted-foreground">当前 `file` 目录为空，可在根节点上直接新建文件夹或上传文件。</div> : null}
+              {!loading && !deferredSearchKeyword && tree.length === 0 && canReadTree ? <div className="px-3 py-6 text-sm text-muted-foreground">当前 `file` 目录为空，可在根节点上直接新建文件夹或上传文件。</div> : null}
             </div>
           </aside>
 
@@ -701,7 +866,7 @@ export default function App() {
             selectedNode={selectedNode}
             previewState={previewState}
             onDownload={
-              selectedNode.type === 'file'
+              selectedNode.type === 'file' && canDownload
                 ? () => void handleDownloadTarget(selectedNode)
                 : undefined
             }

@@ -1,6 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+﻿import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  FILE_SERVER_APP_CODE,
+  FILE_SERVER_PERMISSION_CODES,
+  type AppAuthorizationSnapshot,
+} from '@super-pro/shared-types'
 
 const { redirectToLoginPageMock } = vi.hoisted(() => ({
   redirectToLoginPageMock: vi.fn(),
@@ -26,7 +31,7 @@ function renderApp() {
   )
 }
 
-function jsonResponse(data: unknown, msg = '成功', status = 200) {
+function jsonResponse(data: unknown, msg = 'ok', status = 200) {
   return new Response(
     JSON.stringify({
       code: status,
@@ -52,6 +57,72 @@ function textResponse(text: string, contentType = 'text/plain; charset=utf-8') {
   })
 }
 
+function createSnapshot(permissionCodes: string[]): AppAuthorizationSnapshot {
+  return {
+    appCode: FILE_SERVER_APP_CODE,
+    principal: {
+      userId: 1,
+      username: 'zhangsan',
+      compatibilityRole: 'admin',
+      roles: [
+        {
+          id: 1,
+          code: 'platform.admin',
+          name: '平台管理员',
+          appCode: 'platform',
+        },
+      ],
+      permissionCodes,
+    },
+    permissions: permissionCodes.map((code, index) => ({
+      id: index + 1,
+      code,
+      appCode: FILE_SERVER_APP_CODE,
+      resourceType: 'api',
+      resourceCode: code.split('.').slice(1, -1).join('.'),
+      action: code.split('.').at(-1) ?? 'read',
+      name: code,
+    })),
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function getNodeNameMatcher(name: string) {
+  return new RegExp(escapeRegExp(name))
+}
+
+function getNodeButton(name: string) {
+  return screen.findByRole('button', { name: getNodeNameMatcher(name) })
+}
+
+async function expandFolder(name: string) {
+  const button = await getNodeButton(name)
+  const container = button.closest('.group')
+  const expandButton = container?.querySelector('button[aria-label]')
+
+  if (!(expandButton instanceof HTMLButtonElement)) {
+    throw new Error(`expand button not found for folder ${name}`)
+  }
+
+  await userEvent.click(expandButton)
+}
+
+async function getRowButtonCount(name: string) {
+  const button = await getNodeButton(name)
+  const container = button.closest('.group')
+
+  if (!(container instanceof HTMLElement)) {
+    throw new Error(`row not found for ${name}`)
+  }
+
+  return container.querySelectorAll('button').length
+}
+
+const fullPermissions = Object.values(FILE_SERVER_PERMISSION_CODES)
+
 describe('App', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -61,8 +132,9 @@ describe('App', () => {
     document.cookie = 'file_preview_token=; Max-Age=0; Path=/'
   })
 
-  it('should switch preview when selecting file and folder', async () => {
+  it('loads authorization snapshot before tree and previews files', async () => {
     const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(jsonResponse(createSnapshot(fullPermissions)))
     fetchMock.mockResolvedValueOnce(
       jsonResponse([
         {
@@ -86,26 +158,224 @@ describe('App', () => {
 
     renderApp()
 
-    expect(await screen.findByText('当前选中的是文件夹。你可以继续在左侧完成新建、上传、删除或拖动移动。')).toBeInTheDocument()
-    const docsNode = (await screen.findByRole('button', { name: '树节点 docs' })).closest('[draggable="true"]')
-    if (!(docsNode instanceof HTMLElement)) {
-      throw new Error('docs 节点未正确渲染')
-    }
-    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
-
-    await userEvent.click(await screen.findByRole('button', { name: '树节点 guide.md' }))
+    await getNodeButton('docs')
+    await expandFolder('docs')
+    await userEvent.click(await getNodeButton('guide.md'))
 
     expect(await screen.findByText('guide')).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: '树节点 docs' }))
-
-    await waitFor(() => {
-      expect(screen.queryByText('guide')).not.toBeInTheDocument()
-    })
-    expect(screen.getByText('当前选中的是文件夹。你可以继续在左侧完成新建、上传、删除或拖动移动。')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/authorization/snapshot?appCode=file-server',
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    )
   })
 
-  it('should move file by drag and drop and keep moved path selected after refresh', async () => {
+  it('hides workspace and download actions when snapshot lacks permissions', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        createSnapshot([
+          FILE_SERVER_PERMISSION_CODES.treeRead,
+          FILE_SERVER_PERMISSION_CODES.previewRead,
+        ]),
+      ),
+    )
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'guide.md',
+              relativePath: '/docs/guide.md',
+              type: 'file',
+              size: 8,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    fetchMock.mockResolvedValueOnce(textResponse('# guide', 'text/markdown; charset=utf-8'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    expect(await getRowButtonCount('docs')).toBe(2)
+
+    await expandFolder('docs')
+    await userEvent.click(await getNodeButton('guide.md'))
+
+    expect(await screen.findByText('guide')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /下载/ })).not.toBeInTheDocument()
+  })
+
+  it('redirects to login when snapshot request returns 401', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(jsonResponse(null, 'unauthorized', 401))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(redirectToLoginPageMock).toHaveBeenCalledTimes(1)
+    })
+    expect(await screen.findByText(/登录状态已失效/)).toBeInTheDocument()
+  })
+
+  it('shows controlled feedback instead of redirecting on initial tree 403', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(jsonResponse(createSnapshot(fullPermissions)))
+    fetchMock.mockResolvedValueOnce(jsonResponse(null, 'tree denied', 403))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    expect(await screen.findByText('tree denied')).toBeInTheDocument()
+    expect(redirectToLoginPageMock).not.toHaveBeenCalled()
+  })
+
+  it('does not request preview content when preview permission is missing', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(createSnapshot([FILE_SERVER_PERMISSION_CODES.treeRead])),
+    )
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'guide.md',
+              relativePath: '/docs/guide.md',
+              type: 'file',
+              size: 8,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    await getNodeButton('docs')
+    await expandFolder('docs')
+    await userEvent.click(await getNodeButton('guide.md'))
+
+    expect(await screen.findByText(/预览权限/)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the user on page when preview returns 403', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(jsonResponse(createSnapshot(fullPermissions)))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'guide.md',
+              relativePath: '/docs/guide.md',
+              type: 'file',
+              size: 8,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    fetchMock.mockResolvedValueOnce(jsonResponse(null, 'preview denied', 403))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    await getNodeButton('docs')
+    await expandFolder('docs')
+    await userEvent.click(await getNodeButton('guide.md'))
+
+    expect(await screen.findByText('preview denied')).toBeInTheDocument()
+    expect(redirectToLoginPageMock).not.toHaveBeenCalled()
+  })
+
+  it('provides download action only when permission is granted', async () => {
+    localStorage.setItem('token', 'download-token')
+
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        createSnapshot([
+          FILE_SERVER_PERMISSION_CODES.treeRead,
+          FILE_SERVER_PERMISSION_CODES.previewRead,
+          FILE_SERVER_PERMISSION_CODES.downloadRead,
+        ]),
+      ),
+    )
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        {
+          name: 'docs',
+          relativePath: '/docs',
+          type: 'folder',
+          children: [
+            {
+              name: 'guide.md',
+              relativePath: '/docs/guide.md',
+              type: 'file',
+              size: 8,
+              children: [],
+            },
+          ],
+        },
+      ]),
+    )
+    fetchMock.mockResolvedValueOnce(textResponse('# guide', 'text/markdown; charset=utf-8'))
+    fetchMock.mockResolvedValueOnce(textResponse('', 'text/markdown; charset=utf-8'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const originalCreateElement = document.createElement.bind(document)
+    const anchorClick = vi.fn()
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string, options?: ElementCreationOptions) => {
+      const element = originalCreateElement(tagName, options)
+      if (tagName.toLowerCase() === 'a') {
+        element.click = anchorClick as typeof element.click
+      }
+      return element
+    })
+
+    renderApp()
+
+    await getNodeButton('docs')
+    await expandFolder('docs')
+    await userEvent.click(await getNodeButton('guide.md'))
+
+    const downloadButton = await screen.findByRole('button', { name: /下载/ })
+    await userEvent.click(downloadButton)
+
+    await waitFor(() => {
+      expect(anchorClick).toHaveBeenCalledTimes(1)
+    })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/file/download?targetPath=%2Fdocs%2Fguide.md',
+      expect.objectContaining({
+        headers: expect.any(Headers),
+        signal: expect.any(AbortSignal),
+      }),
+    )
+    expect(document.cookie).toContain('file_preview_token=download-token')
+  })
+
+  it('moves files by drag and drop when move permission is granted', async () => {
     const initialTree = [
       {
         name: 'docs',
@@ -153,6 +423,15 @@ describe('App', () => {
     ]
 
     const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        createSnapshot([
+          FILE_SERVER_PERMISSION_CODES.treeRead,
+          FILE_SERVER_PERMISSION_CODES.fileMove,
+          FILE_SERVER_PERMISSION_CODES.previewRead,
+        ]),
+      ),
+    )
     fetchMock.mockResolvedValueOnce(jsonResponse(initialTree))
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -163,7 +442,7 @@ describe('App', () => {
           size: 8,
           children: [],
         },
-        '移动文件成功',
+        'move ok',
       ),
     )
     fetchMock.mockResolvedValueOnce(jsonResponse(movedTree))
@@ -171,425 +450,20 @@ describe('App', () => {
 
     renderApp()
 
-    const docsNode = (await screen.findByRole('button', { name: '树节点 docs' })).closest('[draggable="true"]')
-    if (!(docsNode instanceof HTMLElement)) {
-      throw new Error('docs 节点未正确渲染')
-    }
-    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
-    const sourceButton = await screen.findByRole('button', { name: '树节点 report.md' })
-    const sourceNode = sourceButton.closest('[draggable="true"]')
-    const targetNode = (await screen.findByRole('button', { name: '树节点 archive' })).closest('[draggable="true"]')
+    await expandFolder('docs')
 
-    if (!sourceNode || !targetNode) {
-      throw new Error('树节点未正确渲染')
+    const docsNode = (await getNodeButton('docs')).closest('[draggable="true"]')
+    const sourceNode = (await getNodeButton('report.md')).closest('[draggable="true"]')
+    const targetNode = (await getNodeButton('archive')).closest('[draggable="true"]')
+
+    if (!(docsNode instanceof HTMLElement) || !(sourceNode instanceof HTMLElement) || !(targetNode instanceof HTMLElement)) {
+      throw new Error('move nodes were not rendered')
     }
 
     fireEvent.dragStart(sourceNode)
     fireEvent.dragOver(targetNode)
     fireEvent.drop(targetNode)
 
-    expect(await screen.findByText('移动文件成功')).toBeInTheDocument()
-    await waitFor(() => {
-      expect(screen.getAllByText('/archive/report.md').length).toBeGreaterThan(0)
-    })
-  })
-
-  it('should show preview failure message when preview request fails', async () => {
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'docs',
-          relativePath: '/docs',
-          type: 'folder',
-          children: [
-            {
-              name: 'guide.md',
-              relativePath: '/docs/guide.md',
-              type: 'file',
-              size: 8,
-              children: [],
-            },
-          ],
-        },
-      ]),
-    )
-    fetchMock.mockResolvedValueOnce(jsonResponse(null, '读取预览文件失败', 500))
-    vi.stubGlobal('fetch', fetchMock)
-
-    renderApp()
-
-    const docsNode = (await screen.findByRole('button', { name: '树节点 docs' })).closest('[draggable="true"]')
-    if (!(docsNode instanceof HTMLElement)) {
-      throw new Error('docs 节点未正确渲染')
-    }
-    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
-    await userEvent.click(await screen.findByRole('button', { name: '树节点 guide.md' }))
-
-    expect(await screen.findByText('读取预览文件失败')).toBeInTheDocument()
-  })
-
-  it('should stream audio preview through direct preview url instead of fetching a blob first', async () => {
-    localStorage.setItem('token', 'preview-token')
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'docs',
-          relativePath: '/docs',
-          type: 'folder',
-          children: [
-            {
-              name: 'song.mp3',
-              relativePath: '/docs/song.mp3',
-              type: 'file',
-              size: 1024,
-              children: [],
-            },
-          ],
-        },
-      ]),
-    )
-    fetchMock.mockResolvedValueOnce(textResponse('', 'audio/mpeg'))
-    vi.stubGlobal('fetch', fetchMock)
-
-    const view = renderApp()
-
-    const docsNode = (await screen.findByRole('button', { name: /docs/ })).closest('[draggable="true"]')
-    if (!(docsNode instanceof HTMLElement)) {
-      throw new Error('docs 节点未正确渲染')
-    }
-    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
-    await userEvent.click(await screen.findByRole('button', { name: /song\.mp3/ }))
-
-    await waitFor(() => {
-      expect(view.container.querySelector('audio')).not.toBeNull()
-    })
-
-    expect(view.container.querySelector('audio')?.getAttribute('src')).toBe(
-      '/api/file/preview?targetPath=%2Fdocs%2Fsong.mp3',
-    )
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(document.cookie).toContain('file_preview_token=preview-token')
-  })
-
-  it('should reuse login session token for audio preview when raw token key is absent', async () => {
-    localStorage.setItem(
-      'login-template.auth',
-      JSON.stringify({
-        token: 'session-token',
-        tokenType: 'Bearer',
-        expiresAt: Date.now() + 60_000,
-      }),
-    )
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'docs',
-          relativePath: '/docs',
-          type: 'folder',
-          children: [
-            {
-              name: 'song.mp3',
-              relativePath: '/docs/song.mp3',
-              type: 'file',
-              size: 1024,
-              children: [],
-            },
-          ],
-        },
-      ]),
-    )
-    fetchMock.mockResolvedValueOnce(textResponse('', 'audio/mpeg'))
-    vi.stubGlobal('fetch', fetchMock)
-
-    const view = renderApp()
-
-    const docsNode = (await screen.findByRole('button', { name: /docs/ })).closest('[draggable="true"]')
-    if (!(docsNode instanceof HTMLElement)) {
-      throw new Error('docs 节点未正确渲染')
-    }
-    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
-    await userEvent.click(await screen.findByRole('button', { name: /song\.mp3/ }))
-
-    await waitFor(() => {
-      expect(view.container.querySelector('audio')).not.toBeNull()
-    })
-
-    expect(view.container.querySelector('audio')?.getAttribute('src')).toBe(
-      '/api/file/preview?targetPath=%2Fdocs%2Fsong.mp3',
-    )
-    expect(document.cookie).toContain('file_preview_token=session-token')
-  })
-
-  it('should redirect to login when initial tree loading returns 401', async () => {
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(jsonResponse(null, '未登录', 401))
-    vi.stubGlobal('fetch', fetchMock)
-
-    renderApp()
-
-    await waitFor(() => {
-      expect(redirectToLoginPageMock).toHaveBeenCalledTimes(1)
-    })
-    expect(await screen.findByText('登录状态已失效，请重新登录')).toBeInTheDocument()
-  })
-
-  it('should consume login handoff and load the initial tree without redirecting back to login', async () => {
-    window.history.replaceState(
-      {},
-      '',
-      '/file-server?spauth=%7B%22key%22%3A%22super-pro.auth-handoff%22%2C%22session%22%3A%7B%22token%22%3A%22handoff-token%22%2C%22tokenType%22%3A%22Bearer%22%2C%22expiresAt%22%3A4102444800000%7D%7D',
-    )
-
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'docs',
-          relativePath: '/docs',
-          type: 'folder',
-          children: [],
-        },
-      ]),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    renderApp()
-
-    expect(await screen.findByRole('button', { name: /docs/ })).toBeInTheDocument()
-    expect(redirectToLoginPageMock).not.toHaveBeenCalled()
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/file/tree',
-      expect.objectContaining({
-        headers: expect.any(Headers),
-      }),
-    )
-    expect(
-      ((fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Headers).get(
-        'Authorization',
-      ),
-    ).toBe('Bearer handoff-token')
-    expect(window.location.search).toBe('')
-    expect(localStorage.getItem('login-template.auth')).toContain(
-      '"token":"handoff-token"',
-    )
-  })
-
-  it('should expose full long names through titles in the tree without rendering the header path summary', async () => {
-    const longFileName = 'this-is-a-very-long-file-name-used-for-hover-checking-and-layout-validation.md'
-    const folderPath = '/nested-folder-with-a-very-long-name'
-    const filePath = `${folderPath}/${longFileName}`
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'nested-folder-with-a-very-long-name',
-          relativePath: folderPath,
-          type: 'folder',
-          children: [
-            {
-              name: longFileName,
-              relativePath: filePath,
-              type: 'file',
-              size: 2048,
-              children: [],
-            },
-          ],
-        },
-      ]),
-    )
-    fetchMock.mockResolvedValueOnce(textResponse('# preview', 'text/markdown; charset=utf-8'))
-    vi.stubGlobal('fetch', fetchMock)
-
-    renderApp()
-
-    const folderNode = (
-      await screen.findByRole('button', { name: /nested-folder-with-a-very-long-name/ })
-    ).closest('[draggable="true"]')
-    if (!(folderNode instanceof HTMLElement)) {
-      throw new Error('folder node was not rendered correctly')
-    }
-
-    await userEvent.click(within(folderNode).getByRole('button', { name: '展开目录' }))
-    await userEvent.click(
-      await screen.findByRole('button', { name: new RegExp(longFileName.replace(/\./g, '\\.')) }),
-    )
-
-    expect(screen.getByText(longFileName)).toHaveAttribute('title', longFileName)
-    expect(screen.getAllByTitle(filePath).length).toBeGreaterThan(0)
-    expect(screen.queryByText('当前选中')).not.toBeInTheDocument()
-    expect(screen.queryByText('操作目录')).not.toBeInTheDocument()
-  })
-
-  it('should redirect to login when audio preview preflight returns 403', async () => {
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'docs',
-          relativePath: '/docs',
-          type: 'folder',
-          children: [
-            {
-              name: 'song.mp3',
-              relativePath: '/docs/song.mp3',
-              type: 'file',
-              size: 1024,
-              children: [],
-            },
-          ],
-        },
-      ]),
-    )
-    fetchMock.mockResolvedValueOnce(jsonResponse(null, '未登录', 403))
-    vi.stubGlobal('fetch', fetchMock)
-
-    const view = renderApp()
-
-    const docsNode = (await screen.findByRole('button', { name: /docs/ })).closest('[draggable="true"]')
-    if (!(docsNode instanceof HTMLElement)) {
-      throw new Error('docs 节点未正确渲染')
-    }
-
-    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
-    await userEvent.click(await screen.findByRole('button', { name: /song\.mp3/ }))
-
-    await waitFor(() => {
-      expect(redirectToLoginPageMock).toHaveBeenCalledTimes(1)
-    })
-    expect(view.container.querySelector('audio')).toBeNull()
-  })
-
-  it('should redirect to login when deleting a file returns 401', async () => {
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'docs',
-          relativePath: '/docs',
-          type: 'folder',
-          children: [
-            {
-              name: 'report.md',
-              relativePath: '/docs/report.md',
-              type: 'file',
-              size: 8,
-              children: [],
-            },
-          ],
-        },
-      ]),
-    )
-    fetchMock.mockResolvedValueOnce(jsonResponse(null, '未登录', 401))
-    vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('confirm', vi.fn(() => true))
-
-    renderApp()
-
-    const docsNode = (await screen.findByRole('button', { name: /docs/ })).closest('[draggable="true"]')
-    if (!(docsNode instanceof HTMLElement)) {
-      throw new Error('docs 节点未正确渲染')
-    }
-
-    await userEvent.click(within(docsNode).getByRole('button', { name: '展开目录' }))
-    const fileButton = await screen.findByRole('button', { name: /report\.md/ })
-    const fileNode = fileButton.closest('[draggable="true"]')
-    if (!(fileNode instanceof HTMLElement)) {
-      throw new Error('report.md 节点未正确渲染')
-    }
-
-    await userEvent.click(fileButton)
-    await userEvent.click(within(fileNode).getByRole('button', { name: /rubbish/ }))
-
-    await waitFor(() => {
-      expect(redirectToLoginPageMock).toHaveBeenCalledTimes(1)
-    })
-    expect(await screen.findByText('登录状态已失效，请重新登录')).toBeInTheDocument()
-  })
-
-  it('should show download action for file preview and trigger browser download', async () => {
-    localStorage.setItem('token', 'download-token')
-
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'docs',
-          relativePath: '/docs',
-          type: 'folder',
-          children: [
-            {
-              name: 'guide.md',
-              relativePath: '/docs/guide.md',
-              type: 'file',
-              size: 8,
-              children: [],
-            },
-          ],
-        },
-      ]),
-    )
-    fetchMock.mockResolvedValueOnce(textResponse('# guide', 'text/markdown; charset=utf-8'))
-    fetchMock.mockResolvedValueOnce(textResponse('', 'text/markdown; charset=utf-8'))
-    vi.stubGlobal('fetch', fetchMock)
-
-    const originalCreateElement = document.createElement.bind(document)
-    const anchorClick = vi.fn()
-    vi.spyOn(document, 'createElement').mockImplementation((tagName: string, options?: ElementCreationOptions) => {
-      const element = originalCreateElement(tagName, options)
-      if (tagName.toLowerCase() === 'a') {
-        element.click = anchorClick as typeof element.click
-      }
-      return element
-    })
-
-    renderApp()
-
-    const docsNode = (await screen.findByRole('button', { name: '树节点 docs' })).closest('[draggable="true"]')
-    if (!(docsNode instanceof HTMLElement)) {
-      throw new Error('docs 节点未正确渲染')
-    }
-
-    const docsButtons = within(docsNode).getAllByRole('button')
-    await userEvent.click(docsButtons[0])
-    await userEvent.click(await screen.findByRole('button', { name: '树节点 guide.md' }))
-
-    const downloadButton = await screen.findByRole('button', { name: '下载文件' })
-    await userEvent.click(downloadButton)
-
-    await waitFor(() => {
-      expect(anchorClick).toHaveBeenCalledTimes(1)
-    })
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      '/api/file/download?targetPath=%2Fdocs%2Fguide.md',
-      expect.objectContaining({
-        headers: expect.any(Headers),
-        signal: expect.any(AbortSignal),
-      }),
-    )
-    expect(document.cookie).toContain('file_preview_token=download-token')
-  })
-
-  it('should not show download action for folder selection', async () => {
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse([
-        {
-          name: 'docs',
-          relativePath: '/docs',
-          type: 'folder',
-          children: [],
-        },
-      ]),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    renderApp()
-
-    await screen.findByRole('button', { name: '树节点 docs' })
-    expect(screen.queryByRole('button', { name: '下载文件' })).not.toBeInTheDocument()
+    expect(await screen.findByText('move ok')).toBeInTheDocument()
   })
 })

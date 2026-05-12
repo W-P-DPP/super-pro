@@ -1,3 +1,4 @@
+import { resolveAuthenticatedIdentityFromJwtPayload } from '@super-pro/shared-server';
 import type { Request } from 'express';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
 
@@ -28,26 +29,14 @@ function normalizeRole(value: unknown): CurrentUserRole {
 }
 
 export function resolveCurrentUser(req: Request): CurrentUserDto {
-  const rawUserId = req.jwtPayload?.userId;
-  const userId =
-    typeof rawUserId === 'number'
-      ? rawUserId
-      : typeof rawUserId === 'string'
-        ? Number(rawUserId)
-        : NaN;
-
-  if (!Number.isInteger(userId) || userId <= 0) {
+  try {
+    const identity = resolveAuthenticatedIdentityFromJwtPayload(req.jwtPayload);
+    return {
+      userId: identity.userId,
+      username: identity.username,
+      role: normalizeRole(req.jwtPayload?.role),
+    };
+  } catch {
     throw new AuthBusinessError('当前登录状态无效');
   }
-
-  const rawUsername = req.jwtPayload?.username;
-
-  return {
-    userId,
-    username:
-      typeof rawUsername === 'string' && rawUsername.trim()
-        ? rawUsername.trim()
-        : `user-${userId}`,
-    role: normalizeRole(req.jwtPayload?.role),
-  };
 }

@@ -1,4 +1,5 @@
 import express, { type Router } from 'express';
+import authorizationRouter from './authorization/authorization.router.ts';
 import contactRouter from './contact/contact.router.ts';
 import fileRouter from './file/file.router.ts';
 import screenRouter from './screen/screen.router.ts';
@@ -9,6 +10,7 @@ import { jwtMiddleware } from '../utils/middleware/jwtMiddleware.ts';
 const router: Router = express.Router();
 
 router.use('/contact', contactRouter);
+router.use('/authorization', jwtMiddleware, authorizationRouter);
 router.use('/file', jwtMiddleware, fileRouter);
 router.use('/screen', jwtMiddleware, screenRouter);
 router.use('/site-menu',  siteMenuRouter);

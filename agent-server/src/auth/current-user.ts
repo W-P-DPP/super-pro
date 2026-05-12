@@ -1,3 +1,4 @@
+import { resolveAuthenticatedIdentityFromJwtPayload } from '@super-pro/shared-server';
 import type { Request } from 'express';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
 
@@ -17,25 +18,13 @@ export class AuthBusinessError extends Error {
 }
 
 export function resolveCurrentUser(req: Request): CurrentUserDto {
-  const rawUserId = req.jwtPayload?.userId;
-  const userId =
-    typeof rawUserId === 'number'
-      ? rawUserId
-      : typeof rawUserId === 'string'
-        ? Number(rawUserId)
-        : NaN;
-
-  if (!Number.isInteger(userId) || userId <= 0) {
+  try {
+    const identity = resolveAuthenticatedIdentityFromJwtPayload(req.jwtPayload);
+    return {
+      userId: identity.userId,
+      username: identity.username,
+    };
+  } catch {
     throw new AuthBusinessError('当前登录状态无效');
   }
-
-  const rawUsername = req.jwtPayload?.username;
-
-  return {
-    userId,
-    username:
-      typeof rawUsername === 'string' && rawUsername.trim()
-        ? rawUsername.trim()
-        : `user-${userId}`,
-  };
 }

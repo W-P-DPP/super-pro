@@ -8,7 +8,9 @@ import {
   scryptSync,
   timingSafeEqual,
 } from 'crypto';
+import type { AuthorizationRoleSummary } from '@super-pro/shared-types';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { authorizationService } from '../authorization/authorization.service.ts';
 import { generateToken } from '../../utils/middleware/jwtMiddleware.ts';
 import { UserRoleEnum } from './user.dto.ts';
 import type {
@@ -407,6 +409,31 @@ function normalizeDateTime(value: unknown): string | undefined {
   return undefined;
 }
 
+function normalizeIdList(value: unknown, field: string, label: string): number[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new UserBusinessError(
+      `${label}不合法`,
+      {
+        nodePath: 'user',
+        field,
+        reason: `${label}必须是数组`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return Array.from(
+    new Set(
+      value.map((item, index) => ensurePositiveInteger(Number(item), `${field}.${index}`)),
+    ),
+  );
+}
+
 function ensurePassword(value: unknown, field: string, label: string): string {
   const password = ensureString(value, field, label);
 
@@ -438,6 +465,7 @@ function toResponseDto(entity: UserEntity): UserResponseDto {
     phone: entity.phone,
     status: entity.status,
     role: entity.role,
+    assignedRoles: [],
     ...(entity.createBy ? { createBy: entity.createBy } : {}),
     ...(createTime ? { createTime } : {}),
     ...(entity.updateBy ? { updateBy: entity.updateBy } : {}),
@@ -454,6 +482,7 @@ function validateCreateInput(input: Record<string, unknown>): CreateUserRequestD
     phone: normalizeOptionalString(input.phone, 'phone', '用户手机号'),
     status: normalizeStatus(input.status),
     role: normalizeRole(input.role),
+    assignedRoleIds: normalizeIdList(input.assignedRoleIds, 'assignedRoleIds', '角色标识'),
   };
 
   if (typeof input.remark === 'string') {
@@ -509,6 +538,14 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateUserRequestD
     if (role !== undefined) {
       payload.role = role;
     }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'assignedRoleIds')) {
+    payload.assignedRoleIds = normalizeIdList(
+      input.assignedRoleIds,
+      'assignedRoleIds',
+      '角色标识',
+    );
   }
 
   if (Object.prototype.hasOwnProperty.call(input, 'remark')) {
@@ -583,6 +620,16 @@ function validateRegisterInput(input: Record<string, unknown>): RegisterUserRequ
   };
 }
 
+function withAssignedRoles(
+  user: UserResponseDto,
+  assignedRoles: AuthorizationRoleSummary[] | undefined,
+): UserResponseDto {
+  return {
+    ...user,
+    assignedRoles: assignedRoles ? [...assignedRoles].sort((left, right) => left.id - right.id) : [],
+  };
+}
+
 function validateUserListQuery(input: Record<string, unknown>): UserListQueryDto {
   const keyword = normalizeOptionalKeyword(input.keyword);
   const role = normalizeOptionalRole(input.role);
@@ -628,7 +675,16 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 }
 
 export class UserService {
-  constructor(private readonly repository: UserRepositoryPort = userRepository) {}
+  constructor(
+    private readonly repository: UserRepositoryPort = userRepository,
+    private readonly authzService: Pick<
+      typeof authorizationService,
+      | 'getAssignedRolesByUserIds'
+      | 'ensureRoleIdsExist'
+      | 'replaceUserRoleAssignments'
+      | 'clearUserRoleAssignments'
+    > = authorizationService,
+  ) {}
 
   getLoginPublicKey(): GetLoginPublicKeyResponseDto {
     return {
@@ -641,8 +697,13 @@ export class UserService {
 
     try {
       const result = await this.repository.getUserList(query);
+      const assignedRoleMap = await this.authzService.getAssignedRolesByUserIds(
+        result.items.map((item) => item.id),
+      );
       return {
-        items: result.items.map(toResponseDto),
+        items: result.items.map((item) =>
+          withAssignedRoles(toResponseDto(item), assignedRoleMap.get(item.id)),
+        ),
         total: result.total,
         page: result.page,
         pageSize: result.pageSize,
@@ -677,11 +738,13 @@ export class UserService {
       );
     }
 
-    return toResponseDto(entity);
+    const assignedRoleMap = await this.authzService.getAssignedRolesByUserIds([targetId]);
+    return withAssignedRoles(toResponseDto(entity), assignedRoleMap.get(targetId));
   }
 
   async createUser(input: CreateUserRequestDto | Record<string, unknown>): Promise<UserResponseDto> {
     const payload = validateCreateInput(input as Record<string, unknown>);
+    await this.authzService.ensureRoleIdsExist(payload.assignedRoleIds ?? []);
     const existed = await this.repository.getUserByUsername(payload.username);
 
     if (existed) {
@@ -737,7 +800,12 @@ export class UserService {
       );
     }
 
-    return toResponseDto(created);
+    await this.authzService.replaceUserRoleAssignments(
+      created.id,
+      payload.assignedRoleIds ?? [],
+    );
+    const assignedRoleMap = await this.authzService.getAssignedRolesByUserIds([created.id]);
+    return withAssignedRoles(toResponseDto(created), assignedRoleMap.get(created.id));
   }
 
   async updateUser(
@@ -761,6 +829,9 @@ export class UserService {
     }
 
     const payload = validateUpdateInput(input as Record<string, unknown>);
+    if (payload.assignedRoleIds) {
+      await this.authzService.ensureRoleIdsExist(payload.assignedRoleIds);
+    }
     if (payload.username && payload.username !== current.username) {
       const existed = await this.repository.getUserByUsername(payload.username);
       if (existed && existed.id !== targetId) {
@@ -810,7 +881,14 @@ export class UserService {
       );
     }
 
-    return toResponseDto(updated);
+    if (payload.assignedRoleIds) {
+      await this.authzService.replaceUserRoleAssignments(
+        targetId,
+        payload.assignedRoleIds,
+      );
+    }
+    const assignedRoleMap = await this.authzService.getAssignedRolesByUserIds([targetId]);
+    return withAssignedRoles(toResponseDto(updated), assignedRoleMap.get(targetId));
   }
 
   async deleteUser(id: number): Promise<UserResponseDto> {
@@ -830,7 +908,8 @@ export class UserService {
       );
     }
 
-    return toResponseDto(deleted);
+    await this.authzService.clearUserRoleAssignments(targetId);
+    return withAssignedRoles(toResponseDto(deleted), []);
   }
 
   async loginUser(input: LoginUserRequestDto | Record<string, unknown>): Promise<LoginUserResponseDto> {

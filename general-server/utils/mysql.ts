@@ -3,6 +3,12 @@ import { getDatabaseConfig } from '@super-pro/shared-server';
 import { DataSource } from 'typeorm';
 import config from '../src/config.ts';
 import { ContactMessageEntitySchema } from '../src/contact/contact.entity.ts';
+import {
+    PermissionEntitySchema,
+    RoleEntitySchema,
+    RolePermissionAssignmentEntitySchema,
+    UserRoleAssignmentEntitySchema,
+} from '../src/authorization/authorization.entity.ts';
 import { OperationLogEntity } from '../src/operationLog/operationLog.entity.ts';
 import { SiteMenuEntitySchema } from '../src/siteMenu/siteMenu.entity.ts';
 import { UserEntitySchema } from '../src/user/user.entity.ts';
@@ -43,7 +49,16 @@ export default async function initDataBase() {
         timezone: databaseConfig.timezone,
         charset: databaseConfig.charset,
 
-        entities: [OperationLogEntity, SiteMenuEntitySchema, UserEntitySchema, ContactMessageEntitySchema],
+        entities: [
+            OperationLogEntity,
+            SiteMenuEntitySchema,
+            UserEntitySchema,
+            ContactMessageEntitySchema,
+            RoleEntitySchema,
+            PermissionEntitySchema,
+            UserRoleAssignmentEntitySchema,
+            RolePermissionAssignmentEntitySchema,
+        ],
         migrations: ['src/**/*.migration.ts']
     });
 
