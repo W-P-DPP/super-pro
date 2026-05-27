@@ -10,6 +10,7 @@ import {
     UserRoleAssignmentEntitySchema,
 } from '../src/authorization/authorization.entity.ts';
 import { OperationLogEntity } from '../src/operationLog/operationLog.entity.ts';
+import { ProjectEntitySchema } from '../src/project/project.entity.ts';
 import { SiteMenuEntitySchema } from '../src/siteMenu/siteMenu.entity.ts';
 import { UserEntitySchema } from '../src/user/user.entity.ts';
 import { Logger } from './index.ts';
@@ -51,6 +52,7 @@ export default async function initDataBase() {
 
         entities: [
             OperationLogEntity,
+            ProjectEntitySchema,
             SiteMenuEntitySchema,
             UserEntitySchema,
             ContactMessageEntitySchema,

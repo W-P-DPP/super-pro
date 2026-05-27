@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3Icon,
+  BriefcaseIcon,
   HomeIcon,
   Settings2Icon,
   ShieldCheckIcon,
@@ -173,6 +174,38 @@ export const adminModules: AdminModule[] = [
         ['role:edit', '按钮', '角色管理', '启用'],
         ['site:publish', '按钮', '站点菜单', '待审批'],
         ['report:region', '数据', '区域维度', '启用'],
+      ],
+    },
+  },
+  {
+    slug: 'projects',
+    title: '项目管理',
+    shortTitle: '项目',
+    group: '组织与权限',
+    description: '统一维护后台项目档案，支撑项目名称与项目编码的新增、修改、查询和删除。',
+    icon: BriefcaseIcon,
+    primaryAction: '新增项目',
+    secondaryAction: '查看编码规范',
+    metrics: [
+      { label: '项目总数', value: '12', hint: '建议按业务线持续归档' },
+      { label: '本周新增', value: '3', hint: '用于支撑新权限与新菜单挂载' },
+      { label: '待补权限', value: '2', hint: '项目创建后可继续补齐角色与权限映射' },
+      { label: '编码冲突', value: '0', hint: '保持全局唯一' },
+    ],
+    highlights: [
+      { title: '唯一编码', detail: '项目编码建议作为权限、菜单和环境配置的统一关联键。', status: '必备' },
+      { title: '轻量维护', detail: '先提供基础 CRUD，后续可继续扩展负责人、状态和权限映射。', status: '可实施' },
+      { title: '组织复用', detail: '项目项可作为角色分配、资源隔离和数据权限的上游维度。', status: '建议' },
+    ],
+    table: {
+      title: '最近项目维护',
+      description: '用于承接项目管理页的默认信息结构。',
+      columns: ['项目名称', '项目编码', '维护人', '状态'],
+      rows: [
+        ['用户中台', 'user-center', '管理员', '已启用'],
+        ['结算系统', 'finance-core', '运营', '已启用'],
+        ['数据平台', 'data-platform', '产品', '待补录'],
+        ['管理后台', 'admin-console', '前端', '规划中'],
       ],
     },
   },
