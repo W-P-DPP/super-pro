@@ -134,6 +134,29 @@ describe('ProjectService', () => {
     });
   });
 
+  it('maps createTime and updateTime into response dto', async () => {
+    const datedRecords = [
+      Object.assign(new ProjectEntity(), {
+        id: 3,
+        projectName: '项目中台',
+        projectCode: 'project-center',
+        createTime: '2026-05-28 10:00:00',
+        updateTime: '2026-05-28 12:30:00',
+      }),
+    ];
+    const service = createService(datedRecords);
+
+    const result = await service.getProjectDetail(3);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 3,
+        createTime: '2026-05-28 10:00:00',
+        updateTime: '2026-05-28 12:30:00',
+      }),
+    );
+  });
+
   it('updates project name and code', async () => {
     const service = createService(records);
 

@@ -51,11 +51,24 @@ export class ProjectRepository implements ProjectRepositoryPort {
     return manager.getRepository(ProjectEntity);
   }
 
+  private createDetailQueryBuilder(repository: Repository<ProjectEntity>) {
+    return repository.createQueryBuilder('project').select([
+      'project.id',
+      'project.projectName',
+      'project.projectCode',
+      'project.createBy',
+      'project.createTime',
+      'project.updateBy',
+      'project.updateTime',
+      'project.remark',
+    ]);
+  }
+
   async getProjectList(query: ProjectListQueryDto): Promise<ProjectListRepositoryResult> {
     const repository = await this.getRepository();
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 10;
-    const queryBuilder = repository.createQueryBuilder('project');
+    const queryBuilder = this.createDetailQueryBuilder(repository);
 
     if (query.keyword) {
       queryBuilder.andWhere(
@@ -89,16 +102,16 @@ export class ProjectRepository implements ProjectRepositoryPort {
 
   async getProjectById(id: number): Promise<ProjectEntity | null> {
     const repository = await this.getRepository();
-    return repository.findOne({
-      where: { id },
-    });
+    return this.createDetailQueryBuilder(repository)
+      .where('project.id = :id', { id })
+      .getOne();
   }
 
   async getProjectByCode(projectCode: string): Promise<ProjectEntity | null> {
     const repository = await this.getRepository();
-    return repository.findOne({
-      where: { projectCode },
-    });
+    return this.createDetailQueryBuilder(repository)
+      .where('project.projectCode = :projectCode', { projectCode })
+      .getOne();
   }
 
   async createProject(input: CreateProjectEntityInput): Promise<ProjectEntity | null> {
@@ -112,9 +125,9 @@ export class ProjectRepository implements ProjectRepositoryPort {
     });
 
     const saved = await repository.save(entity);
-    return repository.findOne({
-      where: { id: saved.id },
-    });
+    return this.createDetailQueryBuilder(repository)
+      .where('project.id = :id', { id: saved.id })
+      .getOne();
   }
 
   async updateProject(id: number, input: UpdateProjectEntityInput): Promise<ProjectEntity | null> {
@@ -140,16 +153,16 @@ export class ProjectRepository implements ProjectRepositoryPort {
     current.updateBy = 'system';
     await repository.save(current);
 
-    return repository.findOne({
-      where: { id },
-    });
+    return this.createDetailQueryBuilder(repository)
+      .where('project.id = :id', { id })
+      .getOne();
   }
 
   async deleteProject(id: number): Promise<ProjectEntity | null> {
     const repository = await this.getRepository();
-    const current = await repository.findOne({
-      where: { id },
-    });
+    const current = await this.createDetailQueryBuilder(repository)
+      .where('project.id = :id', { id })
+      .getOne();
 
     if (!current) {
       return null;
