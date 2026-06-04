@@ -270,7 +270,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   async listPermissions(appCode?: string): Promise<AuthorizationPermissionSummary[]> {
     const repository = await this.getPermissionRepository();
     const entities = await repository.find({
-      where: appCode ? { appCode } : {},
+      where: appCode ? { appCode, deleteFlag: 0 } : { deleteFlag: 0 },
       order: {
         appCode: 'ASC',
         resourceCode: 'ASC',
@@ -288,8 +288,11 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     }
 
     const repository = await this.getPermissionRepository();
-    const entities = await repository.findBy({
-      id: In(ids),
+    const entities = await repository.find({
+      where: {
+        id: In(ids),
+        deleteFlag: 0,
+      },
     });
     return entities.map(toPermissionSummary);
   }
@@ -297,7 +300,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   async getPermissionByCode(code: string): Promise<AuthorizationPermissionSummary | null> {
     const repository = await this.getPermissionRepository();
     const entity = await repository.findOne({
-      where: { code },
+      where: { code, deleteFlag: 0 },
     });
 
     return entity ? toPermissionSummary(entity) : null;
@@ -306,7 +309,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   async listRoles(appCode?: string): Promise<AuthorizationRoleSummary[]> {
     const repository = await this.getRoleRepository();
     const entities = await repository.find({
-      where: appCode ? { appCode } : {},
+      where: appCode ? { appCode, deleteFlag: 0 } : { deleteFlag: 0 },
       order: {
         appCode: 'ASC',
         id: 'ASC',
@@ -322,8 +325,11 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     }
 
     const repository = await this.getRoleRepository();
-    const entities = await repository.findBy({
-      id: In(ids),
+    const entities = await repository.find({
+      where: {
+        id: In(ids),
+        deleteFlag: 0,
+      },
     });
     return entities.map(toRoleSummary);
   }
@@ -335,7 +341,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
 
     const repository = await this.getRoleRepository();
     const entities = await repository.find({
-      where: codes.map((code) => ({ code })),
+      where: codes.map((code) => ({ code, deleteFlag: 0 })),
       order: {
         id: 'ASC',
       },
@@ -384,7 +390,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   ): Promise<AuthorizationRoleSummary | null> {
     const repository = await this.getRoleRepository();
     const current = await repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
@@ -418,7 +424,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   ): Promise<AuthorizationPermissionSummary | null> {
     const repository = await this.getPermissionRepository();
     const current = await repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
@@ -459,7 +465,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     const permissionRepository = await this.getPermissionRepository();
     const rolePermissionRepository = await this.getRolePermissionRepository();
     const current = await permissionRepository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
@@ -467,8 +473,10 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     }
 
     await rolePermissionRepository.delete({ permissionId: id });
-    await permissionRepository.remove(current);
-    return toPermissionSummary(current);
+    current.deleteFlag = 1;
+    current.updateBy = 'system';
+    const saved = await permissionRepository.save(current);
+    return toPermissionSummary(saved);
   }
 
   async replaceRolePermissionAssignments(
@@ -529,8 +537,14 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     const rows = (await dataSource
       .getRepository(UserRoleAssignmentEntity)
       .createQueryBuilder('userRole')
-      .innerJoin(RoleEntity, 'role', 'role.id = userRole.role_id')
+      .innerJoin(
+        RoleEntity,
+        'role',
+        'role.id = userRole.role_id AND role.delete_flag = :roleDeleteFlag',
+        { roleDeleteFlag: 0 },
+      )
       .where('userRole.user_id IN (:...userIds)', { userIds })
+      .andWhere('userRole.delete_flag = :userRoleDeleteFlag', { userRoleDeleteFlag: 0 })
       .select([
         'userRole.userId AS userId',
         'role.id AS id',
@@ -579,9 +593,13 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
       .innerJoin(
         PermissionEntity,
         'permission',
-        'permission.id = rolePermission.permission_id',
+        'permission.id = rolePermission.permission_id AND permission.delete_flag = :permissionDeleteFlag',
+        { permissionDeleteFlag: 0 },
       )
       .where('rolePermission.role_id IN (:...roleIds)', { roleIds })
+      .andWhere('rolePermission.delete_flag = :rolePermissionDeleteFlag', {
+        rolePermissionDeleteFlag: 0,
+      })
       .select([
         'rolePermission.roleId AS roleId',
         'permission.id AS id',

@@ -1,4 +1,4 @@
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import type { CurrentUserDto } from '../auth/current-user.ts';
 import { knowledgeRepository } from '../knowledge/knowledge.repository.ts';
 import type {

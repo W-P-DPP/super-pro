@@ -1,5 +1,5 @@
+import { BaseEntity, BaseSchemaColumns } from '@super-pro/shared-server';
 import { EntitySchema } from 'typeorm';
-import { BaseEntity, BaseSchemaColumns } from '../../utils/entities/base.entity.ts';
 import type { ReimbursementCategory, ReimbursementStatus } from './reimbursement.dto.ts';
 
 export class ReimbursementEntity extends BaseEntity {

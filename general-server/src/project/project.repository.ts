@@ -67,7 +67,8 @@ export class ProjectRepository implements ProjectRepositoryPort {
       'project.updateBy',
       'project.updateTime',
       'project.remark',
-    ]);
+    ])
+      .where('project.deleteFlag = :deleteFlag', { deleteFlag: 0 });
   }
 
   async getProjectList(query: ProjectListQueryDto): Promise<ProjectListRepositoryResult> {
@@ -98,7 +99,8 @@ export class ProjectRepository implements ProjectRepositoryPort {
                 subQuery
                   .select('COUNT(permission.id)', 'permissionCount')
                   .from(PermissionEntity, 'permission')
-                  .where('permission.appCode = project.projectCode'),
+                  .where('permission.appCode = project.projectCode')
+                  .andWhere('permission.deleteFlag = :deleteFlag', { deleteFlag: 0 }),
               'permissionCount',
             )
             .orderBy('project.id', 'ASC')
@@ -123,14 +125,14 @@ export class ProjectRepository implements ProjectRepositoryPort {
   async getProjectById(id: number): Promise<ProjectEntity | null> {
     const repository = await this.getRepository();
     return this.createDetailQueryBuilder(repository)
-      .where('project.id = :id', { id })
+      .andWhere('project.id = :id', { id })
       .getOne();
   }
 
   async getProjectByCode(projectCode: string): Promise<ProjectEntity | null> {
     const repository = await this.getRepository();
     return this.createDetailQueryBuilder(repository)
-      .where('project.projectCode = :projectCode', { projectCode })
+      .andWhere('project.projectCode = :projectCode', { projectCode })
       .getOne();
   }
 
@@ -146,14 +148,14 @@ export class ProjectRepository implements ProjectRepositoryPort {
 
     const saved = await repository.save(entity);
     return this.createDetailQueryBuilder(repository)
-      .where('project.id = :id', { id: saved.id })
+      .andWhere('project.id = :id', { id: saved.id })
       .getOne();
   }
 
   async updateProject(id: number, input: UpdateProjectEntityInput): Promise<ProjectEntity | null> {
     const repository = await this.getRepository();
     const current = await repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
@@ -174,21 +176,23 @@ export class ProjectRepository implements ProjectRepositoryPort {
     await repository.save(current);
 
     return this.createDetailQueryBuilder(repository)
-      .where('project.id = :id', { id })
+      .andWhere('project.id = :id', { id })
       .getOne();
   }
 
   async deleteProject(id: number): Promise<ProjectEntity | null> {
     const repository = await this.getRepository();
     const current = await this.createDetailQueryBuilder(repository)
-      .where('project.id = :id', { id })
+      .andWhere('project.id = :id', { id })
       .getOne();
 
     if (!current) {
       return null;
     }
 
-    await repository.remove(current);
+    current.deleteFlag = 1;
+    current.updateBy = 'system';
+    await repository.save(current);
     return current;
   }
 }

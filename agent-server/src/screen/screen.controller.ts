@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import { ScreenBusinessError, screenService } from './screen.service.ts';
 
 function resolveRange(req: Request) {

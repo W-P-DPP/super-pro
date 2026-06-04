@@ -6,7 +6,7 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedPrincipal,
 } from '@super-pro/shared-types'
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts'
+import { HttpStatus } from '@super-pro/shared-constants'
 import {
   loadAuthenticatedPrincipal,
   requireAllPermissions,

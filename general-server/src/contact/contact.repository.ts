@@ -52,12 +52,19 @@ async function ensureContactMessageTable(dataSource: DataSource) {
       create_time DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
       update_by VARCHAR(64) NULL COMMENT '更新者',
       update_time DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      delete_flag TINYINT NOT NULL DEFAULT 0 COMMENT 'delete flag',
       remark VARCHAR(255) NULL COMMENT '备注',
       PRIMARY KEY (id),
       KEY idx_resume_contact_message_create_time (create_time),
       KEY idx_resume_contact_message_mail_status (mail_status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='简历联系方式记录表'
   `)
+    .then(() =>
+      dataSource.query(`
+        ALTER TABLE resume_contact_message
+        ADD COLUMN IF NOT EXISTS delete_flag TINYINT NOT NULL DEFAULT 0 COMMENT 'delete flag'
+      `),
+    )
     .then(() => {
       ensureTablePromise = null;
     })
@@ -110,7 +117,7 @@ export class ContactRepository implements ContactRepositoryPort {
 
     const saved = await repository.save(entity);
     return repository.findOne({
-      where: { id: saved.id },
+      where: { id: saved.id, deleteFlag: 0 },
     });
   }
 
@@ -120,7 +127,7 @@ export class ContactRepository implements ContactRepositoryPort {
   ): Promise<ContactMessageEntity | null> {
     const repository = await this.getRepository();
     const current = await repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
@@ -138,7 +145,7 @@ export class ContactRepository implements ContactRepositoryPort {
 
     await repository.save(current);
     return repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
   }
 }

@@ -16,7 +16,7 @@ import type {
   AuthorizationRoleSummary,
   PermissionCode,
 } from '@super-pro/shared-types';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import type {
   AuthorizationPermissionListDto,
   AuthorizationRoleListDto,

@@ -1,4 +1,4 @@
-import { BaseEntity } from '../../utils/entities/base.entity.ts';
+import { BaseEntity } from '@super-pro/shared-server';
 import type { FileNodeType } from './file.dto.ts';
 
 export class FileEntity extends BaseEntity {

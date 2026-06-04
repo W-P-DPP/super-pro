@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { PermissionCode } from '@super-pro/shared-types';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import {
   AuthorizationBusinessError,
   authorizationService,

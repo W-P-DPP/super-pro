@@ -1,4 +1,4 @@
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import {
   agentService,
   FIXED_AGENT_MODEL,

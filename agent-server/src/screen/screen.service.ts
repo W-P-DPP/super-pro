@@ -1,5 +1,5 @@
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import type {
   ScreenActivityItem,
   ScreenActivityResponse,

@@ -1,5 +1,5 @@
 import type { Express } from 'express';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import type {
   CreateReimbursementRequestDto,
   RejectReimbursementRequestDto,

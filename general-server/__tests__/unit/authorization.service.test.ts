@@ -7,7 +7,7 @@ import {
   type AuthorizationPermissionSummary,
   type AuthorizationRoleSummary,
 } from '@super-pro/shared-types'
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts'
+import { HttpStatus } from '@super-pro/shared-constants'
 import type { AuthorizationRepositoryPort } from '../../src/authorization/authorization.repository.ts'
 import {
   AuthorizationBusinessError,

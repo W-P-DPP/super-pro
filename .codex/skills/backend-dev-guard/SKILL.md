@@ -55,6 +55,7 @@ description: 约束本仓库的后端工程开发规则。适用于 super-pro �
 规则：
 
 - 新的通用运行时、可观测性、告警、开发测试能力必须先进 `packages/shared-server`。
+- 服务内发现可跨服务复用的 `utils`、`constant`、`entity base`、事件总线、通用解析器或响应帮助方法时，默认先下沉到 `packages`（后端优先 `packages/shared-server`，纯常量优先 `packages/shared-constants`），服务目录只保留薄适配或兼容 re-export。
 - 服务的 `app.ts`、`main.ts` 应尽量只做路由编排、本地依赖注入和 runtime 接线。
 - 不要在每个服务里复制健康检查、优雅退出、异常上报、测试调试路由。
 

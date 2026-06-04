@@ -1,5 +1,5 @@
+import { BaseEntity, BaseSchemaColumns } from '@super-pro/shared-server';
 import { EntitySchema } from 'typeorm';
-import { BaseEntity, BaseSchemaColumns } from '../../utils/entities/base.entity.ts';
 
 export class ChatSessionEntity extends BaseEntity {
   id!: number;

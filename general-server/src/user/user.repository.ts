@@ -67,7 +67,11 @@ export class UserRepository implements UserRepositoryPort {
     const repository = await this.getRepository();
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 10;
-    const queryBuilder = repository.createQueryBuilder('user');
+    const queryBuilder = repository
+      .createQueryBuilder('user')
+      .where('user.deleteFlag = :deleteFlag', {
+        deleteFlag: 0,
+      });
 
     if (query.keyword) {
       queryBuilder.andWhere(
@@ -114,21 +118,21 @@ export class UserRepository implements UserRepositoryPort {
   async getUserById(id: number): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     return repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
   }
 
   async getUserByUsername(username: string): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     return repository.findOne({
-      where: { username },
+      where: { username, deleteFlag: 0 },
     });
   }
 
   async getUserByPhone(phone: string): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     return repository.findOne({
-      where: { phone },
+      where: { phone, deleteFlag: 0 },
     });
   }
 
@@ -138,6 +142,7 @@ export class UserRepository implements UserRepositoryPort {
       .createQueryBuilder('user')
       .addSelect('user.passwordHash')
       .where('user.username = :username', { username })
+      .andWhere('user.deleteFlag = :deleteFlag', { deleteFlag: 0 })
       .getOne();
   }
 
@@ -158,14 +163,14 @@ export class UserRepository implements UserRepositoryPort {
 
     const saved = await repository.save(entity);
     return repository.findOne({
-      where: { id: saved.id },
+      where: { id: saved.id, deleteFlag: 0 },
     });
   }
 
   async updateUser(id: number, input: UpdateUserEntityInput): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     const current = await repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
@@ -201,21 +206,23 @@ export class UserRepository implements UserRepositoryPort {
     await repository.save(current);
 
     return repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
   }
 
   async deleteUser(id: number): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     const current = await repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
       return null;
     }
 
-    await repository.remove(current);
+    current.deleteFlag = 1;
+    current.updateBy = 'system';
+    await repository.save(current);
     return current;
   }
 }

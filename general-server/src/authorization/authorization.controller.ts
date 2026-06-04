@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import type { CreatePermissionRequestDto, UpdatePermissionRequestDto } from './authorization.dto.ts';
 import { AuthorizationBusinessError, authorizationService } from './authorization.service.ts';
 

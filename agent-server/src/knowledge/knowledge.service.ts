@@ -1,5 +1,5 @@
 import path from 'path';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import { agentService } from '../agent/agent.service.ts';
 import type {
   CreateKnowledgeBaseRequestDto,

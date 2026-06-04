@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { createApp } from '../../app.ts';
-import { generateToken } from '../../utils/middleware/jwtMiddleware.ts';
+import { generateJwtToken } from '@super-pro/shared-server';
 
 const app = createApp();
 
@@ -37,7 +37,7 @@ describe('JWT 中间件启用时', () => {
   });
 
   it('访问 /api/reimbursements 且 token 有效时返回 200', async () => {
-    const token = generateToken({ userId: 1, username: 'employee', role: 'employee' });
+    const token = generateJwtToken({ userId: 1, username: 'employee', role: 'employee' });
     const res = await request(app)
       .get('/api/reimbursements')
       .set('Authorization', `Bearer ${token}`);
@@ -46,7 +46,7 @@ describe('JWT 中间件启用时', () => {
   });
 
   it('访问 /api/me 且 token 有效时返回当前用户信息', async () => {
-    const token = generateToken({ userId: 7, username: 'reimburse-user', role: 'approver' });
+    const token = generateJwtToken({ userId: 7, username: 'reimburse-user', role: 'approver' });
     const res = await request(app)
       .get('/api/me')
       .set('Authorization', `Bearer ${token}`);

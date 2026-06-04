@@ -8,6 +8,8 @@ export const ENV_FILE_NAMES = {
   productionExample: '.env.production.example',
 } as const;
 
+export * from './http-status.ts';
+
 export function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
 }

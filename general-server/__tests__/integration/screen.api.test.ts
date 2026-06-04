@@ -33,8 +33,8 @@ describe('GET /api/screen/device 鉴权', () => {
   });
 
   it('有效 token 时应返回 200', async () => {
-    const { generateToken } = await import('../../utils/middleware/jwtMiddleware.ts');
-    const token = generateToken({ userId: 1 });
+    const { generateJwtToken } = await import('@super-pro/shared-server');
+    const token = generateJwtToken({ userId: 1 });
     const res = await request(app)
       .get('/api/screen/device')
       .set('Authorization', `Bearer ${token}`);

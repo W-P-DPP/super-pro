@@ -1,4 +1,4 @@
-import eventEmitter from './utils/EventEmitter.ts';
+import { sharedEventBus as eventEmitter } from '@super-pro/shared-server';
 
 eventEmitter.on("testEvent", (data: any) => {
   console.log("testEvent received with data:", data);

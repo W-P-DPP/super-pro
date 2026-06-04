@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import { resolveCurrentUser } from '../auth/current-user.ts';
 import { ChatBusinessError, chatService } from './chat.service.ts';
 

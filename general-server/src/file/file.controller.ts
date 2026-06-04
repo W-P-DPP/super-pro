@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
 import type { Request, Response } from 'express'
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts'
+import { HttpStatus } from '@super-pro/shared-constants'
 import type {
   CompleteChunkUploadBatchRequestDto,
   CompleteChunkUploadRequestDto,

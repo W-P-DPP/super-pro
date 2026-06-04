@@ -35,8 +35,8 @@ describe('JWT 中间件（启用状态）', () => {
   });
 
   it('有效 token 应返回 200', async () => {
-    const { generateToken } = await import('../../utils/middleware/jwtMiddleware.ts');
-    const token = generateToken({ userId: 1 });
+    const { generateJwtToken } = await import('@super-pro/shared-server');
+    const token = generateJwtToken({ userId: 1 });
     const res = await request(app)
       .get('/api/screen/overview')
       .set('Authorization', `Bearer ${token}`);

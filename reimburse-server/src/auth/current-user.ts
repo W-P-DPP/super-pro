@@ -1,6 +1,6 @@
 import { resolveAuthenticatedIdentityFromJwtPayload } from '@super-pro/shared-server';
 import type { Request } from 'express';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 
 export type CurrentUserRole = 'admin' | 'employee' | 'approver' | 'guest';
 

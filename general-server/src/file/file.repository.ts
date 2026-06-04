@@ -15,7 +15,7 @@ import {
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts'
+import { HttpStatus } from '@super-pro/shared-constants'
 import { FileEntity } from './file.entity.ts'
 
 const DEFAULT_FILE_ROOT_PATH = fileURLToPath(new URL('../../../file', import.meta.url))

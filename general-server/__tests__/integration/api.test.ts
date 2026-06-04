@@ -1228,8 +1228,8 @@ describe('JWT 中间件（中文返回）', () => {
   });
 
   it('有效 token 应保持查询成功', async () => {
-    const { generateToken } = await import('../../utils/middleware/jwtMiddleware.ts');
-    const token = generateToken({ userId: 1 });
+    const { generateJwtToken } = await import('@super-pro/shared-server');
+    const token = generateJwtToken({ userId: 1 });
     const res = await request(app)
       .get('/api/site-menu/getMenu')
       .set('Authorization', `Bearer ${token}`);
@@ -1280,8 +1280,8 @@ describe('JWT route mounting', () => {
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.code).toBe(200);
 
-    const { generateToken } = await import('../../utils/middleware/jwtMiddleware.ts');
-    const token = generateToken({ userId: 1, username: 'zhangsan' });
+    const { generateJwtToken } = await import('@super-pro/shared-server');
+    const token = generateJwtToken({ userId: 1, username: 'zhangsan' });
     const authorizedRes = await request(app)
       .get('/api/user/getUser')
       .set('Authorization', `Bearer ${token}`);

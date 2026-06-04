@@ -8,10 +8,10 @@ import {
   scryptSync,
   timingSafeEqual,
 } from 'crypto';
+import { generateJwtToken } from '@super-pro/shared-server';
 import type { AuthorizationRoleSummary } from '@super-pro/shared-types';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import { authorizationService } from '../authorization/authorization.service.ts';
-import { generateToken } from '../../utils/middleware/jwtMiddleware.ts';
 import { UserRoleEnum } from './user.dto.ts';
 import type {
   CreateUserRequestDto,
@@ -944,7 +944,7 @@ export class UserService {
     }
 
     return {
-      token: generateToken(
+      token: generateJwtToken(
         {
           userId: entity.id,
           username: entity.username,

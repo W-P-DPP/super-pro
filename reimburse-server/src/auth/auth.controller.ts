@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import { AuthBusinessError, resolveCurrentUser } from './current-user.ts';
 import { authService } from './auth.service.ts';
 

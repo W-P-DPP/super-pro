@@ -24,6 +24,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
     "@ai-sdk/openai": "^3.0.41",
+    "@super-pro/shared-constants": "workspace:*",
     "@super-pro/shared-server": "workspace:*",
     "@super-pro/shared-types": "workspace:*",
     "ai": "^6.0.116",
