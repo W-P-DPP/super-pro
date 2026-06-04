@@ -135,7 +135,11 @@ async function requestJson<T>(pathName: string, init?: RequestInit): Promise<Api
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${API_BASE_URL}${pathName}`, { ...init, headers })
+  const response = await fetch(`${API_BASE_URL}${pathName}`, {
+    cache: 'no-store',
+    ...init,
+    headers,
+  })
   if (shouldRedirectToLogin(response.status)) {
     redirectToLoginPage()
     throw new Error('登录状态已失效，请重新登录')
@@ -151,7 +155,10 @@ async function requestJson<T>(pathName: string, init?: RequestInit): Promise<Api
 
 async function requestAuthorizationSnapshot(): Promise<AppAuthorizationSnapshot> {
   const headers = getAuthHeaders()
-  const response = await fetch(buildAuthorizationSnapshotUrl(), { headers })
+  const response = await fetch(buildAuthorizationSnapshotUrl(), {
+    headers,
+    cache: 'no-store',
+  })
   if (shouldRedirectToLogin(response.status)) {
     redirectToLoginPage()
     throw new Error('登录状态已失效，请重新登录')

@@ -79,6 +79,8 @@ export interface AuthorizationRoleSummary {
   name: string;
   appCode: string;
   description?: string;
+  status?: number;
+  updateTime?: string;
 }
 
 export interface AuthorizationPermissionSummary {

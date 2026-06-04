@@ -124,6 +124,9 @@ function parseRangeHeader(rangeHeader: string, fileSize: number): ByteRange | nu
 const getFileTree = async (req: Request, res: Response) => {
   try {
     const tree = await fileService.getFileTree()
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
     res.sendSuccess(tree, '获取文件树成功')
   } catch (error) {
     if (error instanceof FileBusinessError) {

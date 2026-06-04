@@ -229,6 +229,10 @@ function validateCreateRoleInput(
     name: ensureNonEmptyString(input.name, 'name', '角色名称'),
     appCode: ensureNonEmptyString(input.appCode, 'appCode', '应用编码'),
     description: normalizeOptionalString(input.description, 'description', '角色说明'),
+    status:
+      input.status === undefined
+        ? 1
+        : normalizePermissionStatus(input.status, 'status'),
     permissionIds: normalizeIdList(input.permissionIds, 'permissionIds', '权限标识'),
   };
 }
@@ -271,6 +275,9 @@ function validateUpdateRoleInput(
       'description',
       '角色说明',
     );
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'status')) {
+    payload.status = normalizePermissionStatus(input.status, 'status');
   }
   if (Object.prototype.hasOwnProperty.call(input, 'permissionIds')) {
     payload.permissionIds = normalizeIdList(
@@ -475,6 +482,7 @@ export class AuthorizationService {
       code: payload.code,
       name: payload.name,
       appCode: payload.appCode,
+      status: payload.status ?? 1,
       description: payload.description ?? '',
     });
     await this.repository.replaceRolePermissionAssignments(
@@ -547,6 +555,7 @@ export class AuthorizationService {
       ...(payload.code !== undefined ? { code: payload.code } : {}),
       ...(payload.name !== undefined ? { name: payload.name } : {}),
       ...(payload.appCode !== undefined ? { appCode: payload.appCode } : {}),
+      ...(payload.status !== undefined ? { status: payload.status } : {}),
       ...(payload.description !== undefined
         ? { description: payload.description }
         : {}),

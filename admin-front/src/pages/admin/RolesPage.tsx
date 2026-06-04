@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
 import {
+  getAuthorizationRoles,
+  updateAuthorizationRole,
+  type AuthorizationRoleResponseDto,
+  type UpdateAuthorizationRoleRequestDto,
+} from '@/api/modules/authorization'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -64,53 +70,23 @@ type RoleFormState = {
   status: number
 }
 
-const INITIAL_ROLE_ROWS: RoleRecord[] = [
-  {
-    id: 1,
-    name: '超级管理员',
-    code: 'super-admin',
-    memberCount: 2,
-    scope: '全部系统',
-    description: '拥有全量后台权限与配置能力',
-    status: 1,
-    updatedAt: '2026-05-10 09:20',
-  },
-  {
-    id: 2,
-    name: '运营主管',
-    code: 'operation-manager',
-    memberCount: 6,
-    scope: '用户与权限',
-    description: '负责日常人员管理与权限分配',
-    status: 1,
-    updatedAt: '2026-05-09 19:10',
-  },
-  {
-    id: 3,
-    name: '审核专员',
-    code: 'reviewer',
-    memberCount: 12,
-    scope: '内容审核',
-    description: '负责内容审核与异常处理',
-    status: 1,
-    updatedAt: '2026-05-09 14:30',
-  },
-  {
-    id: 4,
-    name: '财务专员',
-    code: 'finance-operator',
-    memberCount: 4,
-    scope: '订单结算',
-    description: '负责结算、账单与财务对账',
-    status: 0,
-    updatedAt: '2026-05-06 11:45',
-  },
-]
+function mapRoleRecord(role: AuthorizationRoleResponseDto): RoleRecord {
+  return {
+    id: role.id,
+    name: role.name,
+    code: role.code,
+    memberCount: 0,
+    scope: role.appCode,
+    description: role.description ?? '',
+    status: role.status ?? 1,
+    updatedAt: role.updateTime ?? '--',
+  }
+}
 
 const TABLE_COLUMN_COUNT = 7
 
 export function RolesPage() {
-  const [roleRecords, setRoleRecords] = useState<RoleRecord[]>(INITIAL_ROLE_ROWS)
+  const [roleRecords, setRoleRecords] = useState<RoleRecord[]>([])
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -147,6 +123,26 @@ export function RolesPage() {
     description: '',
     status: 1,
   })
+
+  useEffect(() => {
+    async function syncRoles() {
+      setLoadState('loading')
+      setErrorMessage('')
+
+      try {
+        const result = await getAuthorizationRoles()
+        setRoleRecords(result.items.map(mapRoleRecord))
+      } catch (error) {
+        setRoleRecords([])
+        setRoleRows([])
+        setTotalRoles(0)
+        setLoadState('error')
+        setErrorMessage(error instanceof Error ? error.message : '加载角色列表失败，请稍后重试。')
+      }
+    }
+
+    void syncRoles()
+  }, [reloadKey])
 
   useEffect(() => {
     async function loadRoles() {
@@ -187,7 +183,7 @@ export function RolesPage() {
     }
 
     void loadRoles()
-  }, [appliedFilters, currentPage, pageSize, reloadKey, roleRecords])
+  }, [appliedFilters, currentPage, pageSize, roleRecords])
 
   const totalPages = Math.max(1, Math.ceil(totalRoles / pageSize))
   const isEditDialogOpen = editingRoleId !== null
@@ -338,19 +334,13 @@ export function RolesPage() {
 
     try {
       const nextStatus = checked ? 1 : 0
-      setRoleRecords((currentRecords) =>
-        currentRecords.map((record) =>
-          record.id === role.id
-            ? {
-                ...record,
-                status: nextStatus,
-                updatedAt: formatDateTimeLabel(),
-              }
-            : record,
-        ),
-      )
+      await updateAuthorizationRole(role.id, {
+        status: nextStatus,
+      } satisfies UpdateAuthorizationRoleRequestDto)
       toast.success(`角色状态已切换为${formatStatus(nextStatus)}`)
       setReloadKey((currentValue) => currentValue + 1)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '切换角色状态失败，请稍后重试。')
     } finally {
       setTogglingRoleId(null)
     }

@@ -6,6 +6,7 @@ export class RoleEntity extends BaseEntity {
   code!: string;
   name!: string;
   appCode!: string;
+  status!: number;
   description!: string;
 }
 
@@ -61,6 +62,12 @@ export const RoleEntitySchema = new EntitySchema<RoleEntity>({
       type: String,
       length: 64,
       nullable: false,
+    },
+    status: {
+      name: 'status',
+      type: Number,
+      nullable: false,
+      default: 1,
     },
     description: {
       name: 'description',

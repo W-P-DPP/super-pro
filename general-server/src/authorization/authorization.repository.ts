@@ -22,6 +22,7 @@ export interface CreateRoleEntityInput {
   code: string;
   name: string;
   appCode: string;
+  status: number;
   description: string;
 }
 
@@ -40,6 +41,7 @@ export interface UpdateRoleEntityInput {
   code?: string;
   name?: string;
   appCode?: string;
+  status?: number;
   description?: string;
 }
 
@@ -96,6 +98,8 @@ function toRoleSummary(entity: RoleEntity): AuthorizationRoleSummary {
     code: entity.code,
     name: entity.name,
     appCode: entity.appCode,
+    status: entity.status,
+    ...(entity.updateTime ? { updateTime: String(entity.updateTime) } : {}),
     ...(entity.description ? { description: entity.description } : {}),
   };
 }
@@ -117,6 +121,7 @@ function toPermissionSummary(entity: PermissionEntity): AuthorizationPermissionS
 
 export class AuthorizationRepository implements AuthorizationRepositoryPort {
   private seedPromise: Promise<void> | null = null;
+  private seedInitialized = false;
 
   private async getRoleRepository(manager?: EntityManager): Promise<Repository<RoleEntity>> {
     const dataSource = await ensureDataSource();
@@ -151,6 +156,10 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async ensureSeedData(): Promise<void> {
+    if (this.seedInitialized) {
+      return;
+    }
+
     if (this.seedPromise) {
       return this.seedPromise;
     }
@@ -168,17 +177,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
         );
 
         for (const seed of SEEDED_PERMISSIONS) {
-          const current = permissionByCode.get(seed.code);
-          if (current) {
-            current.appCode = seed.appCode;
-            current.status = 1;
-            current.resourceType = seed.resourceType;
-            current.resourceCode = seed.resourceCode;
-            current.action = seed.action;
-            current.name = seed.name;
-            current.description = seed.description;
-            current.updateBy = 'system';
-            await permissionRepository.save(current);
+          if (permissionByCode.has(seed.code)) {
             continue;
           }
 
@@ -206,13 +205,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
         const roleByCode = new Map(existingRoles.map((item) => [item.code, item]));
 
         for (const seed of SEEDED_ROLES) {
-          const current = roleByCode.get(seed.code);
-          if (current) {
-            current.name = seed.name;
-            current.appCode = seed.appCode;
-            current.description = seed.description;
-            current.updateBy = 'system';
-            await roleRepository.save(current);
+          if (roleByCode.has(seed.code)) {
             continue;
           }
 
@@ -220,6 +213,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
             code: seed.code,
             name: seed.name,
             appCode: seed.appCode,
+            status: 1,
             description: seed.description,
             createBy: 'system',
             updateBy: 'system',
@@ -264,6 +258,8 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
           }
         }
       });
+
+      this.seedInitialized = true;
     })().finally(() => {
       this.seedPromise = null;
     });
@@ -272,7 +268,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async listPermissions(appCode?: string): Promise<AuthorizationPermissionSummary[]> {
-    await this.ensureSeedData();
     const repository = await this.getPermissionRepository();
     const entities = await repository.find({
       where: appCode ? { appCode } : {},
@@ -288,7 +283,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async getPermissionsByIds(ids: number[]): Promise<AuthorizationPermissionSummary[]> {
-    await this.ensureSeedData();
     if (ids.length === 0) {
       return [];
     }
@@ -301,7 +295,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async getPermissionByCode(code: string): Promise<AuthorizationPermissionSummary | null> {
-    await this.ensureSeedData();
     const repository = await this.getPermissionRepository();
     const entity = await repository.findOne({
       where: { code },
@@ -311,7 +304,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async listRoles(appCode?: string): Promise<AuthorizationRoleSummary[]> {
-    await this.ensureSeedData();
     const repository = await this.getRoleRepository();
     const entities = await repository.find({
       where: appCode ? { appCode } : {},
@@ -325,7 +317,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async getRolesByIds(ids: number[]): Promise<AuthorizationRoleSummary[]> {
-    await this.ensureSeedData();
     if (ids.length === 0) {
       return [];
     }
@@ -338,7 +329,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async getRolesByCodes(codes: readonly string[]): Promise<AuthorizationRoleSummary[]> {
-    await this.ensureSeedData();
     if (codes.length === 0) {
       return [];
     }
@@ -354,12 +344,12 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async createRole(input: CreateRoleEntityInput): Promise<AuthorizationRoleSummary> {
-    await this.ensureSeedData();
     const repository = await this.getRoleRepository();
     const entity = repository.create({
       code: input.code,
       name: input.name,
       appCode: input.appCode,
+      status: input.status,
       description: input.description,
       createBy: 'system',
       updateBy: 'system',
@@ -371,7 +361,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   async createPermission(
     input: CreatePermissionEntityInput,
   ): Promise<AuthorizationPermissionSummary> {
-    await this.ensureSeedData();
     const repository = await this.getPermissionRepository();
     const entity = repository.create({
       code: input.code,
@@ -393,7 +382,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     id: number,
     input: UpdateRoleEntityInput,
   ): Promise<AuthorizationRoleSummary | null> {
-    await this.ensureSeedData();
     const repository = await this.getRoleRepository();
     const current = await repository.findOne({
       where: { id },
@@ -412,6 +400,9 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     if (input.appCode !== undefined) {
       current.appCode = input.appCode;
     }
+    if (input.status !== undefined) {
+      current.status = input.status;
+    }
     if (input.description !== undefined) {
       current.description = input.description;
     }
@@ -425,7 +416,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     id: number,
     input: UpdatePermissionEntityInput,
   ): Promise<AuthorizationPermissionSummary | null> {
-    await this.ensureSeedData();
     const repository = await this.getPermissionRepository();
     const current = await repository.findOne({
       where: { id },
@@ -466,7 +456,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async deletePermission(id: number): Promise<AuthorizationPermissionSummary | null> {
-    await this.ensureSeedData();
     const permissionRepository = await this.getPermissionRepository();
     const rolePermissionRepository = await this.getRolePermissionRepository();
     const current = await permissionRepository.findOne({
@@ -486,7 +475,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     roleId: number,
     permissionIds: number[],
   ): Promise<void> {
-    await this.ensureSeedData();
     const repository = await this.getRolePermissionRepository();
     await repository.delete({ roleId });
 
@@ -506,7 +494,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async replaceUserRoleAssignments(userId: number, roleIds: number[]): Promise<void> {
-    await this.ensureSeedData();
     const repository = await this.getUserRoleRepository();
     await repository.delete({ userId });
 
@@ -526,7 +513,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   }
 
   async clearUserRoleAssignments(userId: number): Promise<void> {
-    await this.ensureSeedData();
     const repository = await this.getUserRoleRepository();
     await repository.delete({ userId });
   }
@@ -534,7 +520,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   async getAssignedRolesByUserIds(
     userIds: number[],
   ): Promise<Map<number, AuthorizationRoleSummary[]>> {
-    await this.ensureSeedData();
     const result = new Map<number, AuthorizationRoleSummary[]>();
     if (userIds.length === 0) {
       return result;
@@ -582,7 +567,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   async getPermissionSummariesByRoleIdsMap(
     roleIds: number[],
   ): Promise<Map<number, AuthorizationPermissionSummary[]>> {
-    await this.ensureSeedData();
     const result = new Map<number, AuthorizationPermissionSummary[]>();
     if (roleIds.length === 0) {
       return result;

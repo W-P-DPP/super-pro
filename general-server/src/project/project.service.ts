@@ -1,5 +1,4 @@
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
-import { authorizationRepository } from '../authorization/authorization.repository.ts';
 import type {
   CreateProjectRequestDto,
   ProjectListDto,
@@ -322,7 +321,6 @@ export class ProjectService {
     const query = validateProjectListQuery(input as Record<string, unknown>);
 
     try {
-      await authorizationRepository.ensureSeedData();
       const result = await this.repository.getProjectList(query);
       return {
         items: result.items.map((item) => toProjectListResponseDto(item)),

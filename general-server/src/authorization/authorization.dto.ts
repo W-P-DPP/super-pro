@@ -29,6 +29,7 @@ export interface CreateRoleRequestDto {
   name: string;
   appCode: string;
   description?: string;
+  status?: number;
   permissionIds?: number[];
 }
 
@@ -48,6 +49,7 @@ export interface UpdateRoleRequestDto {
   name?: string;
   appCode?: string;
   description?: string;
+  status?: number;
   permissionIds?: number[];
 }
 
