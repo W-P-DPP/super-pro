@@ -39,6 +39,7 @@ const treePermission: AuthorizationPermissionSummary = {
   id: 11,
   code: FILE_SERVER_PERMISSION_CODES.treeRead,
   appCode: FILE_SERVER_APP_CODE,
+  status: 1,
   resourceType: 'api',
   resourceCode: 'tree',
   action: 'read',
@@ -49,6 +50,7 @@ const movePermission: AuthorizationPermissionSummary = {
   id: 12,
   code: FILE_SERVER_PERMISSION_CODES.fileMove,
   appCode: FILE_SERVER_APP_CODE,
+  status: 1,
   resourceType: 'button',
   resourceCode: 'file',
   action: 'move',
@@ -59,10 +61,22 @@ const platformPermission: AuthorizationPermissionSummary = {
   id: 13,
   code: 'platform.audit.read',
   appCode: 'platform',
+  status: 1,
   resourceType: 'api',
   resourceCode: 'audit',
   action: 'read',
   name: 'audit',
+}
+
+const disabledPermission: AuthorizationPermissionSummary = {
+  id: 14,
+  code: 'file-server.disabled.read',
+  appCode: FILE_SERVER_APP_CODE,
+  status: 0,
+  resourceType: 'api',
+  resourceCode: 'disabled',
+  action: 'read',
+  name: 'disabled',
 }
 
 function createRepositoryMock(
@@ -72,9 +86,15 @@ function createRepositoryMock(
     ensureSeedData: async () => {},
     listPermissions: async () => [],
     getPermissionsByIds: async () => [],
+    getPermissionByCode: async () => null,
     listRoles: async () => [],
     getRolesByIds: async () => [],
     getRolesByCodes: async () => [],
+    createPermission: async () => {
+      throw new Error('not implemented')
+    },
+    updatePermission: async () => null,
+    deletePermission: async () => null,
     createRole: async () => {
       throw new Error('not implemented')
     },
@@ -139,6 +159,52 @@ describe('AuthorizationService', () => {
       FILE_SERVER_PERMISSION_CODES.treeRead,
       FILE_SERVER_PERMISSION_CODES.fileMove,
     ])
+  })
+
+  it('ignores disabled permissions when calculating granted permission codes', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () => new Map([[identity.userId, [editorRole]]]),
+      getPermissionSummariesByRoleIds: async () => [
+        treePermission,
+        disabledPermission,
+      ],
+    })
+    const service = new AuthorizationService(repository)
+
+    const principal = await service.getAuthenticatedPrincipal(identity)
+
+    expect(principal.permissionCodes).toEqual([FILE_SERVER_PERMISSION_CODES.treeRead])
+  })
+
+  it('creates a permission', async () => {
+    const repository = createRepositoryMock({
+      createPermission: async (input) => ({
+        id: 88,
+        ...input,
+        updateTime: '2026-06-04 12:00:00',
+      }),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.createPermission({
+      code: 'project.project.audit',
+      appCode: 'project',
+      status: 1,
+      resourceType: 'button',
+      resourceCode: 'project',
+      action: 'audit',
+      name: '项目审核',
+      description: '允许审核项目',
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 88,
+        code: 'project.project.audit',
+        appCode: 'project',
+        status: 1,
+      }),
+    )
   })
 
   it('converts invalid JWT payloads into authorization business errors', () => {

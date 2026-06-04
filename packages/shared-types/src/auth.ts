@@ -23,6 +23,7 @@ export type PermissionCode = string;
 
 export const FILE_SERVER_APP_CODE = 'file-server' as const;
 export const PROJECT_APP_CODE = 'project' as const;
+export const ADMIN_CONSOLE_APP_CODE = 'admin-console' as const;
 
 export const FILE_SERVER_PERMISSION_CODES = {
   treeRead: 'file-server.tree.read',
@@ -47,6 +48,25 @@ export const PROJECT_PERMISSION_CODES = {
 export type ProjectPermissionCode =
   (typeof PROJECT_PERMISSION_CODES)[keyof typeof PROJECT_PERMISSION_CODES];
 
+export const ADMIN_CONSOLE_PERMISSION_CODES = {
+  dashboardMenuView: 'admin-console.menu.dashboard.view',
+  usersMenuView: 'admin-console.menu.users.view',
+  rolesMenuView: 'admin-console.menu.roles.view',
+  permissionsMenuView: 'admin-console.menu.permissions.view',
+  projectsMenuView: 'admin-console.menu.projects.view',
+  reportsMenuView: 'admin-console.menu.reports.view',
+  settingsMenuView: 'admin-console.menu.settings.view',
+  permissionCreate: 'admin-console.button.permissions.create',
+  permissionUpdate: 'admin-console.button.permissions.update',
+  permissionDelete: 'admin-console.button.permissions.delete',
+  projectCreate: 'admin-console.button.projects.create',
+  projectUpdate: 'admin-console.button.projects.update',
+  projectDelete: 'admin-console.button.projects.delete',
+} as const;
+
+export type AdminConsolePermissionCode =
+  (typeof ADMIN_CONSOLE_PERMISSION_CODES)[keyof typeof ADMIN_CONSOLE_PERMISSION_CODES];
+
 export interface AuthenticatedIdentity {
   userId: number;
   username: string;
@@ -70,6 +90,8 @@ export interface AuthorizationPermissionSummary {
   action: string;
   name: string;
   description?: string;
+  status?: number;
+  updateTime?: string;
 }
 
 export interface AuthenticatedPrincipal extends AuthenticatedIdentity {

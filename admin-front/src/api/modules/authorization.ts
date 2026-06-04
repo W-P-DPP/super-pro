@@ -1,0 +1,111 @@
+import type {
+  ApiEnvelope,
+  AuthorizationPermissionSummary,
+  AuthorizationResourceType,
+} from '@super-pro/shared-types'
+import { RequestError, request } from '../request'
+
+export interface AuthorizationPermissionResponseDto extends AuthorizationPermissionSummary {}
+
+export interface AuthorizationPermissionListDto {
+  items: AuthorizationPermissionResponseDto[]
+}
+
+export interface AuthorizationPermissionListQueryDto {
+  appCode?: string
+}
+
+export interface CreateAuthorizationPermissionRequestDto {
+  code: string
+  appCode: string
+  resourceType: AuthorizationPermissionSummary['resourceType']
+  resourceCode: string
+  action: string
+  name: string
+  description?: string
+  status?: number
+}
+
+export interface UpdateAuthorizationPermissionRequestDto {
+  code?: string
+  appCode?: string
+  resourceType?: AuthorizationPermissionSummary['resourceType']
+  resourceCode?: string
+  action?: string
+  name?: string
+  description?: string
+  status?: number
+}
+
+type ApiResponse<T> = ApiEnvelope<T> & {
+  timestamp: number
+}
+
+async function unwrapResponse<T>(promise: Promise<ApiResponse<T>>, fallbackMessage: string) {
+  const response = await promise
+
+  if (response.code !== 200) {
+    throw new RequestError(response.msg || fallbackMessage, {
+      status: response.code,
+      details: response,
+    })
+  }
+
+  return response.data
+}
+
+export function getAuthorizationPermissions(query: AuthorizationPermissionListQueryDto = {}) {
+  return unwrapResponse(
+    request.get<ApiResponse<AuthorizationPermissionListDto>>('/authorization/permissions', {
+      params: query,
+      requiresAuth: true,
+    }),
+    '获取权限列表失败，请稍后重试。',
+  ).then((data) => data ?? { items: [] })
+}
+
+export function createAuthorizationPermission(payload: CreateAuthorizationPermissionRequestDto) {
+  return unwrapResponse(
+    request.post<ApiResponse<AuthorizationPermissionResponseDto>, CreateAuthorizationPermissionRequestDto>(
+      '/authorization/permissions',
+      payload,
+      {
+        requiresAuth: true,
+      },
+    ),
+    '创建权限失败，请稍后重试。',
+  )
+}
+
+export function updateAuthorizationPermission(
+  id: number,
+  payload: UpdateAuthorizationPermissionRequestDto,
+) {
+  return unwrapResponse(
+    request.put<ApiResponse<AuthorizationPermissionResponseDto>>(
+      `/authorization/permissions/${id}`,
+      payload,
+      {
+        requiresAuth: true,
+      },
+    ),
+    '更新权限失败，请稍后重试。',
+  )
+}
+
+export function deleteAuthorizationPermission(id: number) {
+  return unwrapResponse(
+    request.delete<ApiResponse<AuthorizationPermissionResponseDto>>(`/authorization/permissions/${id}`, {
+      requiresAuth: true,
+    }),
+    '删除权限失败，请稍后重试。',
+  )
+}
+
+export const AUTHORIZATION_RESOURCE_TYPE_OPTIONS = [
+  'menu',
+  'route',
+  'button',
+  'api',
+  'data',
+] as const satisfies readonly AuthorizationResourceType[]

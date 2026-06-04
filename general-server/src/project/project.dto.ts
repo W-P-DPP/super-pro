@@ -2,6 +2,7 @@ export interface ProjectResponseDto {
   id: number
   projectName: string
   projectCode: string
+  permissionCount?: number
   createBy?: string
   createTime?: string
   updateBy?: string

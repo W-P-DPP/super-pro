@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import type { CreatePermissionRequestDto, UpdatePermissionRequestDto } from './authorization.dto.ts';
 import { AuthorizationBusinessError, authorizationService } from './authorization.service.ts';
 
 function handleAuthorizationError(
@@ -60,6 +61,17 @@ export const createRole = async (req: Request, res: Response) => {
   }
 };
 
+export const createPermission = async (req: Request, res: Response) => {
+  try {
+    const result = await authorizationService.createPermission(
+      req.body as CreatePermissionRequestDto,
+    );
+    res.sendSuccess(result, '创建权限成功');
+  } catch (error) {
+    return handleAuthorizationError(error, res, '创建权限失败');
+  }
+};
+
 export const updateRole = async (req: Request, res: Response) => {
   try {
     const result = await authorizationService.updateRole(
@@ -69,5 +81,26 @@ export const updateRole = async (req: Request, res: Response) => {
     res.sendSuccess(result, '更新角色成功');
   } catch (error) {
     return handleAuthorizationError(error, res, '更新角色失败');
+  }
+};
+
+export const updatePermission = async (req: Request, res: Response) => {
+  try {
+    const result = await authorizationService.updatePermission(
+      Number(req.params.id),
+      req.body as UpdatePermissionRequestDto,
+    );
+    res.sendSuccess(result, '更新权限成功');
+  } catch (error) {
+    return handleAuthorizationError(error, res, '更新权限失败');
+  }
+};
+
+export const deletePermission = async (req: Request, res: Response) => {
+  try {
+    const result = await authorizationService.deletePermission(Number(req.params.id));
+    res.sendSuccess(result, '删除权限成功');
+  } catch (error) {
+    return handleAuthorizationError(error, res, '删除权限失败');
   }
 };

@@ -1,5 +1,8 @@
+import { jest } from '@jest/globals'
+import { authorizationRepository } from '../../src/authorization/authorization.repository.ts';
 import type {
   CreateProjectEntityInput,
+  ProjectListItemRepositoryRecord,
   ProjectRepositoryPort,
   UpdateProjectEntityInput,
 } from '../../src/project/project.repository.ts';
@@ -21,9 +24,13 @@ function createRepositoryMock(records: ProjectEntity[]): ProjectRepositoryPort {
         const haystack = `${record.projectName} ${record.projectCode}`.toLowerCase();
         return !keyword || haystack.includes(keyword);
       });
+      const items: ProjectListItemRepositoryRecord[] = filteredRecords.map((record, index) => ({
+        entity: cloneProject(record),
+        permissionCount: index + 1,
+      }));
 
       return {
-        items: filteredRecords.map(cloneProject),
+        items,
         total: filteredRecords.length,
         page: 1,
         pageSize: query.pageSize ?? 10,
@@ -65,6 +72,14 @@ function createService(records: ProjectEntity[]) {
 }
 
 describe('ProjectService', () => {
+  beforeEach(() => {
+    jest.spyOn(authorizationRepository, 'ensureSeedData').mockResolvedValue();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   const records = [
     Object.assign(new ProjectEntity(), {
       id: 1,
@@ -126,6 +141,7 @@ describe('ProjectService', () => {
           id: 2,
           projectName: '结算系统',
           projectCode: 'finance-core',
+          permissionCount: 1,
         }),
       ],
       total: 1,

@@ -1,4 +1,5 @@
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { authorizationRepository } from '../authorization/authorization.repository.ts';
 import type {
   CreateProjectRequestDto,
   ProjectListDto,
@@ -10,6 +11,7 @@ import type {
 import type { ProjectEntity } from './project.entity.ts';
 import {
   projectRepository,
+  type ProjectListItemRepositoryRecord,
   type ProjectRepositoryPort,
 } from './project.repository.ts';
 
@@ -216,7 +218,12 @@ function normalizeRemark(value: unknown): string | undefined {
   return value.trim();
 }
 
-function toResponseDto(entity: ProjectEntity): ProjectResponseDto {
+function toResponseDto(
+  entity: ProjectEntity,
+  options?: {
+    permissionCount?: number
+  },
+): ProjectResponseDto {
   const createTime = normalizeDateTime(entity.createTime);
   const updateTime = normalizeDateTime(entity.updateTime);
 
@@ -224,12 +231,19 @@ function toResponseDto(entity: ProjectEntity): ProjectResponseDto {
     id: entity.id,
     projectName: entity.projectName,
     projectCode: entity.projectCode,
+    ...(options?.permissionCount !== undefined ? { permissionCount: options.permissionCount } : {}),
     ...(entity.createBy ? { createBy: entity.createBy } : {}),
     ...(createTime ? { createTime } : {}),
     ...(entity.updateBy ? { updateBy: entity.updateBy } : {}),
     ...(updateTime ? { updateTime } : {}),
     ...(entity.remark ? { remark: entity.remark } : {}),
   };
+}
+
+function toProjectListResponseDto(item: ProjectListItemRepositoryRecord): ProjectResponseDto {
+  return toResponseDto(item.entity, {
+    permissionCount: item.permissionCount,
+  });
 }
 
 function validateCreateInput(input: Record<string, unknown>): CreateProjectRequestDto {
@@ -308,9 +322,10 @@ export class ProjectService {
     const query = validateProjectListQuery(input as Record<string, unknown>);
 
     try {
+      await authorizationRepository.ensureSeedData();
       const result = await this.repository.getProjectList(query);
       return {
-        items: result.items.map((item) => toResponseDto(item)),
+        items: result.items.map((item) => toProjectListResponseDto(item)),
         total: result.total,
         page: result.page,
         pageSize: result.pageSize,

@@ -13,6 +13,7 @@ export class PermissionEntity extends BaseEntity {
   id!: number;
   code!: string;
   appCode!: string;
+  status!: number;
   resourceType!: string;
   resourceCode!: string;
   action!: string;
@@ -106,6 +107,12 @@ export const PermissionEntitySchema = new EntitySchema<PermissionEntity>({
       type: String,
       length: 64,
       nullable: false,
+    },
+    status: {
+      name: 'status',
+      type: Number,
+      nullable: false,
+      default: 1,
     },
     resourceType: {
       name: 'resource_type',

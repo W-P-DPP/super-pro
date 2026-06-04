@@ -32,12 +32,34 @@ export interface CreateRoleRequestDto {
   permissionIds?: number[];
 }
 
+export interface CreatePermissionRequestDto {
+  code: string;
+  appCode: string;
+  resourceType: AuthorizationPermissionSummary['resourceType'];
+  resourceCode: string;
+  action: string;
+  name: string;
+  description?: string;
+  status?: number;
+}
+
 export interface UpdateRoleRequestDto {
   code?: string;
   name?: string;
   appCode?: string;
   description?: string;
   permissionIds?: number[];
+}
+
+export interface UpdatePermissionRequestDto {
+  code?: string;
+  appCode?: string;
+  resourceType?: AuthorizationPermissionSummary['resourceType'];
+  resourceCode?: string;
+  action?: string;
+  name?: string;
+  description?: string;
+  status?: number;
 }
 
 export interface AuthorizationRoleListDto {

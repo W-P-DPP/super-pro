@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui'
+import { cn } from '@/lib/utils'
 import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
 
 export const DEFAULT_PAGE_SIZE = 10
@@ -123,7 +124,7 @@ export function ModuleSelect({
   onValueChange,
   options,
   placeholder,
-  className = 'h-9 w-full bg-background',
+  className,
 }: {
   value: string
   onValueChange: (value: string) => void
@@ -133,7 +134,7 @@ export function ModuleSelect({
 }) {
   return (
     <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className={className}>
+      <SelectTrigger size="lg" className={cn('w-full bg-background text-sm', className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent position="popper">

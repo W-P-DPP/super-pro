@@ -25,6 +25,17 @@ export interface CreateRoleEntityInput {
   description: string;
 }
 
+export interface CreatePermissionEntityInput {
+  code: string;
+  appCode: string;
+  status: number;
+  resourceType: AuthorizationPermissionSummary['resourceType'];
+  resourceCode: string;
+  action: string;
+  name: string;
+  description: string;
+}
+
 export interface UpdateRoleEntityInput {
   code?: string;
   name?: string;
@@ -32,13 +43,31 @@ export interface UpdateRoleEntityInput {
   description?: string;
 }
 
+export interface UpdatePermissionEntityInput {
+  code?: string;
+  appCode?: string;
+  status?: number;
+  resourceType?: AuthorizationPermissionSummary['resourceType'];
+  resourceCode?: string;
+  action?: string;
+  name?: string;
+  description?: string;
+}
+
 export interface AuthorizationRepositoryPort {
   ensureSeedData(): Promise<void>;
   listPermissions(appCode?: string): Promise<AuthorizationPermissionSummary[]>;
   getPermissionsByIds(ids: number[]): Promise<AuthorizationPermissionSummary[]>;
+  getPermissionByCode(code: string): Promise<AuthorizationPermissionSummary | null>;
   listRoles(appCode?: string): Promise<AuthorizationRoleSummary[]>;
   getRolesByIds(ids: number[]): Promise<AuthorizationRoleSummary[]>;
   getRolesByCodes(codes: readonly string[]): Promise<AuthorizationRoleSummary[]>;
+  createPermission(input: CreatePermissionEntityInput): Promise<AuthorizationPermissionSummary>;
+  updatePermission(
+    id: number,
+    input: UpdatePermissionEntityInput,
+  ): Promise<AuthorizationPermissionSummary | null>;
+  deletePermission(id: number): Promise<AuthorizationPermissionSummary | null>;
   createRole(input: CreateRoleEntityInput): Promise<AuthorizationRoleSummary>;
   updateRole(id: number, input: UpdateRoleEntityInput): Promise<AuthorizationRoleSummary | null>;
   replaceRolePermissionAssignments(roleId: number, permissionIds: number[]): Promise<void>;
@@ -76,11 +105,13 @@ function toPermissionSummary(entity: PermissionEntity): AuthorizationPermissionS
     id: entity.id,
     code: entity.code,
     appCode: entity.appCode,
+    status: entity.status,
     resourceType: entity.resourceType as AuthorizationPermissionSummary['resourceType'],
     resourceCode: entity.resourceCode,
     action: entity.action,
     name: entity.name,
     ...(entity.description ? { description: entity.description } : {}),
+    ...(entity.updateTime ? { updateTime: String(entity.updateTime) } : {}),
   };
 }
 
@@ -140,6 +171,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
           const current = permissionByCode.get(seed.code);
           if (current) {
             current.appCode = seed.appCode;
+            current.status = 1;
             current.resourceType = seed.resourceType;
             current.resourceCode = seed.resourceCode;
             current.action = seed.action;
@@ -153,6 +185,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
           const created = permissionRepository.create({
             code: seed.code,
             appCode: seed.appCode,
+            status: 1,
             resourceType: seed.resourceType,
             resourceCode: seed.resourceCode,
             action: seed.action,
@@ -267,6 +300,16 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     return entities.map(toPermissionSummary);
   }
 
+  async getPermissionByCode(code: string): Promise<AuthorizationPermissionSummary | null> {
+    await this.ensureSeedData();
+    const repository = await this.getPermissionRepository();
+    const entity = await repository.findOne({
+      where: { code },
+    });
+
+    return entity ? toPermissionSummary(entity) : null;
+  }
+
   async listRoles(appCode?: string): Promise<AuthorizationRoleSummary[]> {
     await this.ensureSeedData();
     const repository = await this.getRoleRepository();
@@ -325,6 +368,27 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     return toRoleSummary(saved);
   }
 
+  async createPermission(
+    input: CreatePermissionEntityInput,
+  ): Promise<AuthorizationPermissionSummary> {
+    await this.ensureSeedData();
+    const repository = await this.getPermissionRepository();
+    const entity = repository.create({
+      code: input.code,
+      appCode: input.appCode,
+      status: input.status,
+      resourceType: input.resourceType,
+      resourceCode: input.resourceCode,
+      action: input.action,
+      name: input.name,
+      description: input.description,
+      createBy: 'system',
+      updateBy: 'system',
+    });
+    const saved = await repository.save(entity);
+    return toPermissionSummary(saved);
+  }
+
   async updateRole(
     id: number,
     input: UpdateRoleEntityInput,
@@ -355,6 +419,67 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
 
     const saved = await repository.save(current);
     return toRoleSummary(saved);
+  }
+
+  async updatePermission(
+    id: number,
+    input: UpdatePermissionEntityInput,
+  ): Promise<AuthorizationPermissionSummary | null> {
+    await this.ensureSeedData();
+    const repository = await this.getPermissionRepository();
+    const current = await repository.findOne({
+      where: { id },
+    });
+
+    if (!current) {
+      return null;
+    }
+
+    if (input.code !== undefined) {
+      current.code = input.code;
+    }
+    if (input.appCode !== undefined) {
+      current.appCode = input.appCode;
+    }
+    if (input.status !== undefined) {
+      current.status = input.status;
+    }
+    if (input.resourceType !== undefined) {
+      current.resourceType = input.resourceType;
+    }
+    if (input.resourceCode !== undefined) {
+      current.resourceCode = input.resourceCode;
+    }
+    if (input.action !== undefined) {
+      current.action = input.action;
+    }
+    if (input.name !== undefined) {
+      current.name = input.name;
+    }
+    if (input.description !== undefined) {
+      current.description = input.description;
+    }
+    current.updateBy = 'system';
+
+    const saved = await repository.save(current);
+    return toPermissionSummary(saved);
+  }
+
+  async deletePermission(id: number): Promise<AuthorizationPermissionSummary | null> {
+    await this.ensureSeedData();
+    const permissionRepository = await this.getPermissionRepository();
+    const rolePermissionRepository = await this.getRolePermissionRepository();
+    const current = await permissionRepository.findOne({
+      where: { id },
+    });
+
+    if (!current) {
+      return null;
+    }
+
+    await rolePermissionRepository.delete({ permissionId: id });
+    await permissionRepository.remove(current);
+    return toPermissionSummary(current);
   }
 
   async replaceRolePermissionAssignments(

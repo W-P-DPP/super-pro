@@ -1,5 +1,6 @@
 import type { EntityManager, Repository } from 'typeorm';
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
+import { PermissionEntity } from '../authorization/authorization.entity.ts';
 import { ProjectEntity } from './project.entity.ts';
 import type { ProjectListQueryDto } from './project.dto.ts';
 
@@ -16,10 +17,15 @@ export interface UpdateProjectEntityInput {
 }
 
 export interface ProjectListRepositoryResult {
-  items: ProjectEntity[]
+  items: ProjectListItemRepositoryRecord[]
   total: number
   page: number
   pageSize: number
+}
+
+export interface ProjectListItemRepositoryRecord {
+  entity: ProjectEntity
+  permissionCount: number
 }
 
 export interface ProjectRepositoryPort {
@@ -87,10 +93,24 @@ export class ProjectRepository implements ProjectRepositoryPort {
         ? []
         : await queryBuilder
             .clone()
+            .addSelect(
+              (subQuery) =>
+                subQuery
+                  .select('COUNT(permission.id)', 'permissionCount')
+                  .from(PermissionEntity, 'permission')
+                  .where('permission.appCode = project.projectCode'),
+              'permissionCount',
+            )
             .orderBy('project.id', 'ASC')
             .skip((currentPage - 1) * pageSize)
             .take(pageSize)
-            .getMany();
+            .getRawAndEntities()
+            .then(({ raw, entities }) =>
+              entities.map((entity, index) => ({
+                entity,
+                permissionCount: Number(raw[index]?.permissionCount ?? 0),
+              })),
+            );
 
     return {
       items,
