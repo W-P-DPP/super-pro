@@ -1,6 +1,8 @@
 import {
   FILE_SERVER_APP_CODE,
   FILE_SERVER_PERMISSION_CODES,
+  PROJECT_APP_CODE,
+  PROJECT_PERMISSION_CODES,
   type CompatibilityUserRole,
   type AuthorizationResourceType,
 } from '@super-pro/shared-types';
@@ -86,6 +88,42 @@ export const SEEDED_PERMISSIONS: readonly SeedPermissionDefinition[] = [
     name: '移动文件',
     description: '允许在 file-server 中拖拽移动文件或文件夹。',
   },
+  {
+    code: PROJECT_PERMISSION_CODES.projectRead,
+    appCode: PROJECT_APP_CODE,
+    resourceType: 'api',
+    resourceCode: 'project',
+    action: 'read',
+    name: '项目查看',
+    description: '允许查看项目列表和项目详情。',
+  },
+  {
+    code: PROJECT_PERMISSION_CODES.projectCreate,
+    appCode: PROJECT_APP_CODE,
+    resourceType: 'button',
+    resourceCode: 'project',
+    action: 'create',
+    name: '项目新增',
+    description: '允许新增项目。',
+  },
+  {
+    code: PROJECT_PERMISSION_CODES.projectUpdate,
+    appCode: PROJECT_APP_CODE,
+    resourceType: 'button',
+    resourceCode: 'project',
+    action: 'update',
+    name: '项目编辑',
+    description: '允许修改项目信息。',
+  },
+  {
+    code: PROJECT_PERMISSION_CODES.projectDelete,
+    appCode: PROJECT_APP_CODE,
+    resourceType: 'button',
+    resourceCode: 'project',
+    action: 'delete',
+    name: '项目删除',
+    description: '允许删除项目。',
+  },
 ] as const;
 
 export const SEEDED_ROLES: readonly SeedRoleDefinition[] = [
@@ -93,7 +131,7 @@ export const SEEDED_ROLES: readonly SeedRoleDefinition[] = [
     code: 'platform.admin',
     name: '平台管理员',
     appCode: 'platform',
-    description: '平台权限试点管理员，默认拥有 file-server 试点的全部权限。',
+    description: '平台权限试点管理员，默认拥有 file-server 与 project 试点的全部权限。',
   },
   {
     code: 'file-server.viewer',
@@ -107,6 +145,18 @@ export const SEEDED_ROLES: readonly SeedRoleDefinition[] = [
     appCode: FILE_SERVER_APP_CODE,
     description: '允许执行 file-server 试点中的全部文件操作。',
   },
+  {
+    code: 'project.viewer',
+    name: '项目管理只读',
+    appCode: PROJECT_APP_CODE,
+    description: '允许查看 project 模块的项目列表与详情。',
+  },
+  {
+    code: 'project.editor',
+    name: '项目管理编辑',
+    appCode: PROJECT_APP_CODE,
+    description: '允许执行 project 模块的项目新增、修改和删除。',
+  },
 ] as const;
 
 export const SEEDED_ROLE_PERMISSION_CODES: Readonly<Record<string, readonly string[]>> = {
@@ -116,14 +166,29 @@ export const SEEDED_ROLE_PERMISSION_CODES: Readonly<Record<string, readonly stri
     FILE_SERVER_PERMISSION_CODES.previewRead,
     FILE_SERVER_PERMISSION_CODES.downloadRead,
   ],
-  'file-server.editor': SEEDED_PERMISSIONS.map((item) => item.code),
+  'file-server.editor': [
+    FILE_SERVER_PERMISSION_CODES.treeRead,
+    FILE_SERVER_PERMISSION_CODES.previewRead,
+    FILE_SERVER_PERMISSION_CODES.downloadRead,
+    FILE_SERVER_PERMISSION_CODES.folderCreate,
+    FILE_SERVER_PERMISSION_CODES.fileUpload,
+    FILE_SERVER_PERMISSION_CODES.fileDelete,
+    FILE_SERVER_PERMISSION_CODES.fileMove,
+  ],
+  'project.viewer': [PROJECT_PERMISSION_CODES.projectRead],
+  'project.editor': [
+    PROJECT_PERMISSION_CODES.projectRead,
+    PROJECT_PERMISSION_CODES.projectCreate,
+    PROJECT_PERMISSION_CODES.projectUpdate,
+    PROJECT_PERMISSION_CODES.projectDelete,
+  ],
 };
 
 export const COMPATIBILITY_ROLE_FALLBACK_ROLE_CODES: Readonly<
   Record<CompatibilityUserRole, readonly string[]>
 > = {
   admin: ['platform.admin'],
-  employee: ['file-server.editor'],
-  approver: ['file-server.editor'],
-  guest: ['file-server.viewer'],
+  employee: ['file-server.editor', 'project.editor'],
+  approver: ['file-server.editor', 'project.editor'],
+  guest: ['file-server.viewer', 'project.viewer'],
 };

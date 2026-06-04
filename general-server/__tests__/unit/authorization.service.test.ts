@@ -2,6 +2,7 @@ import { jest } from '@jest/globals'
 import {
   FILE_SERVER_APP_CODE,
   FILE_SERVER_PERMISSION_CODES,
+  PROJECT_PERMISSION_CODES,
   type AuthenticatedIdentity,
   type AuthorizationPermissionSummary,
   type AuthorizationRoleSummary,
@@ -167,6 +168,48 @@ describe('AuthorizationService', () => {
           permissionCodes: [FILE_SERVER_PERMISSION_CODES.treeRead],
         },
         FILE_SERVER_PERMISSION_CODES.fileMove,
+        'forbidden',
+      ),
+    ).rejects.toMatchObject<Partial<AuthorizationBusinessError>>({
+      message: 'forbidden',
+      statusCode: HttpStatus.FORBIDDEN,
+    })
+  })
+
+  it('passes when the authenticated principal has any configured permission', async () => {
+    const service = new AuthorizationService(createRepositoryMock())
+
+    await expect(
+      service.requireAnyPermission(
+        {
+          ...identity,
+          roles: [viewerRole],
+          permissionCodes: [FILE_SERVER_PERMISSION_CODES.treeRead],
+        },
+        [PROJECT_PERMISSION_CODES.projectRead, FILE_SERVER_PERMISSION_CODES.treeRead],
+        'forbidden',
+      ),
+    ).resolves.toBeUndefined()
+  })
+
+  it('returns controlled 403 errors when the authenticated principal lacks one of all required permissions', async () => {
+    const service = new AuthorizationService(createRepositoryMock())
+
+    await expect(
+      service.requireAllPermissions(
+        {
+          ...identity,
+          roles: [viewerRole],
+          permissionCodes: [
+            FILE_SERVER_PERMISSION_CODES.treeRead,
+            PROJECT_PERMISSION_CODES.projectRead,
+          ],
+        },
+        [
+          FILE_SERVER_PERMISSION_CODES.treeRead,
+          PROJECT_PERMISSION_CODES.projectRead,
+          FILE_SERVER_PERMISSION_CODES.fileMove,
+        ],
         'forbidden',
       ),
     ).rejects.toMatchObject<Partial<AuthorizationBusinessError>>({

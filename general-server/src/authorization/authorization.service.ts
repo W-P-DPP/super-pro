@@ -1,5 +1,6 @@
 import {
   ensurePermission,
+  hasPermission,
   resolveAuthenticatedIdentityFromJwtPayload,
   type AuthenticationRequiredError,
 } from '@super-pro/shared-server';
@@ -10,6 +11,7 @@ import type {
   AuthorizationPermissionSummary,
   AuthorizationRoleDetail,
   AuthorizationRoleSummary,
+  PermissionCode,
 } from '@super-pro/shared-types';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
 import type {
@@ -404,7 +406,7 @@ export class AuthorizationService {
 
   async requirePermission(
     principal: AuthenticatedPrincipal,
-    permissionCode: string,
+    permissionCode: PermissionCode,
     message: string,
   ): Promise<void> {
     try {
@@ -421,6 +423,52 @@ export class AuthorizationService {
         HttpStatus.FORBIDDEN,
       );
     }
+  }
+
+  async requireAnyPermission(
+    principal: AuthenticatedPrincipal,
+    permissionCodes: readonly PermissionCode[],
+    message: string,
+  ): Promise<void> {
+    if (permissionCodes.some((permissionCode) => hasPermission(principal, permissionCode))) {
+      return;
+    }
+
+    throw new AuthorizationBusinessError(
+      message,
+      {
+        nodePath: 'authorization',
+        field: 'permissionCodes',
+        reason: 'missing any required permission',
+        value: permissionCodes,
+      },
+      HttpStatus.FORBIDDEN,
+    );
+  }
+
+  async requireAllPermissions(
+    principal: AuthenticatedPrincipal,
+    permissionCodes: readonly PermissionCode[],
+    message: string,
+  ): Promise<void> {
+    const missingPermissionCode = permissionCodes.find(
+      (permissionCode) => !hasPermission(principal, permissionCode),
+    );
+
+    if (!missingPermissionCode) {
+      return;
+    }
+
+    throw new AuthorizationBusinessError(
+      message,
+      {
+        nodePath: 'authorization',
+        field: 'permissionCodes',
+        reason: 'missing one or more required permissions',
+        value: permissionCodes,
+      },
+      HttpStatus.FORBIDDEN,
+    );
   }
 
   async getAssignedRolesByUserIds(

@@ -22,6 +22,7 @@ export type CompatibilityUserRole =
 export type PermissionCode = string;
 
 export const FILE_SERVER_APP_CODE = 'file-server' as const;
+export const PROJECT_APP_CODE = 'project' as const;
 
 export const FILE_SERVER_PERMISSION_CODES = {
   treeRead: 'file-server.tree.read',
@@ -35,6 +36,16 @@ export const FILE_SERVER_PERMISSION_CODES = {
 
 export type FileServerPermissionCode =
   (typeof FILE_SERVER_PERMISSION_CODES)[keyof typeof FILE_SERVER_PERMISSION_CODES];
+
+export const PROJECT_PERMISSION_CODES = {
+  projectRead: 'project.project.read',
+  projectCreate: 'project.project.create',
+  projectUpdate: 'project.project.update',
+  projectDelete: 'project.project.delete',
+} as const;
+
+export type ProjectPermissionCode =
+  (typeof PROJECT_PERMISSION_CODES)[keyof typeof PROJECT_PERMISSION_CODES];
 
 export interface AuthenticatedIdentity {
   userId: number;

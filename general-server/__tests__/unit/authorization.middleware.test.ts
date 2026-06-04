@@ -2,12 +2,15 @@ import type { NextFunction, Request, Response } from 'express'
 import { jest } from '@jest/globals'
 import {
   FILE_SERVER_PERMISSION_CODES,
+  PROJECT_PERMISSION_CODES,
   type AuthenticatedIdentity,
   type AuthenticatedPrincipal,
 } from '@super-pro/shared-types'
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts'
 import {
   loadAuthenticatedPrincipal,
+  requireAllPermissions,
+  requireAnyPermission,
   requirePermission as createRequirePermissionMiddleware,
 } from '../../src/authorization/authorization.middleware.ts'
 import {
@@ -122,13 +125,13 @@ describe('authorization middleware', () => {
     const next = jest.fn() as NextFunction
 
     jest
-      .spyOn(authorizationService, 'requirePermission')
+      .spyOn(authorizationService, 'requireAllPermissions')
       .mockRejectedValue(
         new AuthorizationBusinessError(
           'forbidden',
           {
             nodePath: 'authorization',
-            field: 'permissionCode',
+            field: 'permissionCodes',
             reason: 'missing permission',
           },
           HttpStatus.FORBIDDEN,
@@ -154,7 +157,7 @@ describe('authorization middleware', () => {
     const res = createMockResponse()
     const next = jest.fn() as NextFunction
 
-    jest.spyOn(authorizationService, 'requirePermission').mockResolvedValue()
+    jest.spyOn(authorizationService, 'requireAllPermissions').mockResolvedValue()
 
     const middleware = createRequirePermissionMiddleware(
       FILE_SERVER_PERMISSION_CODES.treeRead,
@@ -166,5 +169,59 @@ describe('authorization middleware', () => {
     expect(next).toHaveBeenCalledTimes(1)
     expect(res.status).not.toHaveBeenCalled()
     expect(res.sendFail).not.toHaveBeenCalled()
+  })
+
+  it('allows the request through when any configured permission is granted', async () => {
+    const req = createRequest({
+      authPrincipal: createPrincipal(),
+    })
+    const res = createMockResponse()
+    const next = jest.fn() as NextFunction
+
+    jest.spyOn(authorizationService, 'requireAnyPermission').mockResolvedValue()
+
+    const middleware = requireAnyPermission(
+      [FILE_SERVER_PERMISSION_CODES.fileMove, PROJECT_PERMISSION_CODES.projectRead],
+      'allowed',
+    )
+
+    await middleware(req, res, next)
+
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(res.status).not.toHaveBeenCalled()
+    expect(res.sendFail).not.toHaveBeenCalled()
+  })
+
+  it('returns controlled 403 responses when all configured permissions are not granted', async () => {
+    const req = createRequest({
+      authPrincipal: createPrincipal(),
+    })
+    const res = createMockResponse()
+    const next = jest.fn() as NextFunction
+
+    jest
+      .spyOn(authorizationService, 'requireAllPermissions')
+      .mockRejectedValue(
+        new AuthorizationBusinessError(
+          'forbidden',
+          {
+            nodePath: 'authorization',
+            field: 'permissionCodes',
+            reason: 'missing permissions',
+          },
+          HttpStatus.FORBIDDEN,
+        ),
+      )
+
+    const middleware = requireAllPermissions(
+      [FILE_SERVER_PERMISSION_CODES.treeRead, PROJECT_PERMISSION_CODES.projectRead],
+      'forbidden',
+    )
+
+    await middleware(req, res, next)
+
+    expect(next).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(HttpStatus.FORBIDDEN)
+    expect(res.sendFail).toHaveBeenCalledWith('forbidden', HttpStatus.FORBIDDEN)
   })
 })

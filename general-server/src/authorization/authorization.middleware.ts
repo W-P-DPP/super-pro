@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import type { PermissionCode } from '@super-pro/shared-types';
 import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
 import {
   AuthorizationBusinessError,
@@ -33,15 +34,33 @@ export async function loadAuthenticatedPrincipal(
 
     return res
       .status(HttpStatus.ERROR)
-      .sendFail('加载当前用户权限失败', HttpStatus.ERROR);
+      .sendFail('Failed to load current user permissions', HttpStatus.ERROR);
   }
 }
 
-export function requirePermission(permissionCode: string, message: string) {
+type PermissionGuardMode = 'any' | 'all';
+
+function createPermissionGuard(
+  permissionCodes: readonly PermissionCode[],
+  message: string,
+  mode: PermissionGuardMode,
+) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const principal = await ensureRequestPrincipal(req);
-      await authorizationService.requirePermission(principal, permissionCode, message);
+      if (mode === 'any') {
+        await authorizationService.requireAnyPermission(
+          principal,
+          permissionCodes,
+          message,
+        );
+      } else {
+        await authorizationService.requireAllPermissions(
+          principal,
+          permissionCodes,
+          message,
+        );
+      }
       return next();
     } catch (error) {
       if (error instanceof AuthorizationBusinessError) {
@@ -50,7 +69,25 @@ export function requirePermission(permissionCode: string, message: string) {
 
       return res
         .status(HttpStatus.ERROR)
-        .sendFail('权限校验失败', HttpStatus.ERROR);
+        .sendFail('Permission check failed', HttpStatus.ERROR);
     }
   };
+}
+
+export function requirePermission(permissionCode: PermissionCode, message: string) {
+  return createPermissionGuard([permissionCode], message, 'all');
+}
+
+export function requireAnyPermission(
+  permissionCodes: readonly PermissionCode[],
+  message: string,
+) {
+  return createPermissionGuard(permissionCodes, message, 'any');
+}
+
+export function requireAllPermissions(
+  permissionCodes: readonly PermissionCode[],
+  message: string,
+) {
+  return createPermissionGuard(permissionCodes, message, 'all');
 }
