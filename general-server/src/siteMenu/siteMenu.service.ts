@@ -293,6 +293,23 @@ function containsNode(node: SiteMenuResponseDto, targetId: number): boolean {
   return node.children.some((child) => child.id === targetId || containsNode(child, targetId));
 }
 
+function ensureParentMenuIsTopLevel(parent: SiteMenuEntity, parentId: number): void {
+  if (parent.parentId == null && parent.isTop) {
+    return;
+  }
+
+  throw new SiteMenuBusinessError(
+    '\u7236\u7ea7\u83dc\u5355\u53ea\u80fd\u9009\u62e9\u4e00\u7ea7\u83dc\u5355',
+    {
+      nodePath: 'siteMenu',
+      field: 'parentId',
+      reason: '\u7236\u7ea7\u83dc\u5355\u53ea\u80fd\u9009\u62e9\u4e00\u7ea7\u83dc\u5355',
+      value: parentId,
+    },
+    HttpStatus.BAD_REQUEST,
+  );
+}
+
 function normalizeImportValidationMessage(message: string): string {
   return message.replaceAll('菜单种子', '菜单文件');
 }
@@ -651,6 +668,13 @@ export class SiteMenuService {
       }
     }
 
+    if (payload.parentId != null) {
+      const parent = await this.repository.getNodeById(payload.parentId);
+      if (parent) {
+        ensureParentMenuIsTopLevel(parent, payload.parentId);
+      }
+    }
+
     const created = await this.repository.createNode({
       ...payload,
       isTop: payload.parentId == null,
@@ -739,6 +763,13 @@ export class SiteMenuService {
           },
           HttpStatus.NOT_FOUND,
         );
+      }
+    }
+
+    if (nextParentId != null) {
+      const parent = await this.repository.getNodeById(nextParentId);
+      if (parent) {
+        ensureParentMenuIsTopLevel(parent, nextParentId);
       }
     }
 

@@ -62,6 +62,8 @@ type SiteMenuFormState = {
 
 type SiteMenuRowRecord = SiteMenuListItemDto
 
+const TOP_LEVEL_MENU_LABEL = '\u9876\u7ea7\u83dc\u5355'
+
 function buildEmptyDraft(): SiteMenuFormState {
   return {
     parentId: 'root',
@@ -126,6 +128,18 @@ function flattenSiteMenuTree(
 
       return [current, ...flattenSiteMenuTree(node.children, level + 1, node.name)]
     })
+}
+
+function buildTopLevelParentOptions(nodes: SiteMenuRowRecord[]) {
+  return [
+    { value: 'root', label: TOP_LEVEL_MENU_LABEL },
+    ...nodes
+      .filter((record) => record.level === 0)
+      .map((record) => ({
+        value: String(record.id),
+        label: record.name,
+      })),
+  ]
 }
 
 function collectDescendantIds(node: SiteMenuResponseDto): number[] {
@@ -308,16 +322,7 @@ export function SettingsPage() {
     return map
   }, [menuTree])
 
-  const parentOptions = useMemo(
-    () => [
-      { value: 'root', label: '顶级菜单' },
-      ...flatMenuRecords.map((record) => ({
-        value: String(record.id),
-        label: `${'· '.repeat(record.level)}${record.name}`,
-      })),
-    ],
-    [flatMenuRecords],
-  )
+  const parentOptions = useMemo(() => buildTopLevelParentOptions(flatMenuRecords), [flatMenuRecords])
 
   const editingParentOptions = useMemo(() => {
     if (!editingMenu) {
@@ -327,9 +332,9 @@ export function SettingsPage() {
     const excludedIds = new Set<number>([editingMenu.id, ...collectDescendantIds(editingMenu)])
 
     return [
-      { value: 'root', label: '顶级菜单' },
+      { value: 'root', label: TOP_LEVEL_MENU_LABEL },
       ...flatMenuRecords
-        .filter((record) => !excludedIds.has(record.id))
+        .filter((record) => record.level === 0 && !excludedIds.has(record.id))
         .map((record) => ({
           value: String(record.id),
           label: `${'· '.repeat(record.level)}${record.name}`,
