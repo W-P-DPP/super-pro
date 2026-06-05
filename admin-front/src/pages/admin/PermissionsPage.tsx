@@ -43,7 +43,15 @@ import {
   toast,
 } from '@/components/ui'
 import { cn } from '@/lib/utils'
-import { DEFAULT_PAGE_SIZE, ListPagination, type LoadState, ModuleSelect, formatStatus } from './module-page-shared'
+import {
+  ADMIN_PAGE_FILL_CARD_CLASS,
+  ADMIN_PAGE_FILL_LAYOUT_CLASS,
+  DEFAULT_PAGE_SIZE,
+  ListPagination,
+  type LoadState,
+  ModuleSelect,
+  formatStatus,
+} from './module-page-shared'
 
 type PermissionFilters = {
   keyword: string
@@ -484,7 +492,7 @@ export function PermissionsPage() {
     }
 
     return (
-      <ScrollArea className="h-56 md:h-[32rem]">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="grid gap-2">
           {visibleProjectRecords.map((project) => {
             const isSelected = project.id === selectedProjectId
@@ -536,10 +544,10 @@ export function PermissionsPage() {
   }
 
   return (
-    <section className="mx-auto flex w-full max-w-[var(--app-shell-page-width)] flex-col gap-4 px-4 py-4 md:px-6 md:py-6">
-      <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
-        <Card className="border border-border/70 bg-card/95 pt-2 pb-4 shadow-sm xl:sticky xl:top-6 xl:self-start">
-          <CardContent className="grid gap-3 pt-1">
+    <section className={ADMIN_PAGE_FILL_LAYOUT_CLASS}>
+      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+        <Card className="h-full min-h-0 border border-border/70 bg-card/95 pt-2 pb-4 shadow-sm">
+          <CardContent className="flex h-full min-h-0 flex-col gap-3 pt-1">
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -553,8 +561,8 @@ export function PermissionsPage() {
           </CardContent>
         </Card>
 
-        <div className="grid min-w-0 content-start items-start gap-4 self-start">
-          <Card className="border border-border/70 bg-card/95 pt-2 pb-4 shadow-sm">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4">
+          <Card className="shrink-0 border border-border/70 bg-card/95 pt-2 pb-4 shadow-sm">
             <CardContent className="grid gap-4 pt-1">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(11rem,0.7fr)_minmax(11rem,0.7fr)_auto_auto_auto]">
                 <div className="relative">
@@ -628,9 +636,9 @@ export function PermissionsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-border/70 bg-card/95 pt-2 pb-4 shadow-sm">
-            <CardContent className="space-y-4 pt-1">
-              <div className="overflow-x-auto">
+          <Card className={cn(ADMIN_PAGE_FILL_CARD_CLASS, 'pt-2 pb-4')}>
+            <CardContent className="flex h-full min-h-0 flex-col gap-4 pt-1">
+              <div className="min-h-0 flex-1 overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>

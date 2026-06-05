@@ -38,6 +38,8 @@ import {
   updateProject,
 } from '@/api/modules/projects'
 import {
+  ADMIN_PAGE_FILL_CARD_CLASS,
+  ADMIN_PAGE_FILL_LAYOUT_CLASS,
   DEFAULT_PAGE_SIZE,
   ListPagination,
   type LoadState,
@@ -216,8 +218,8 @@ export function ProjectsPage() {
   }
 
   return (
-    <section className="mx-auto flex w-full max-w-[var(--app-shell-page-width)] flex-col gap-4 px-4 py-4 md:px-6 md:py-6">
-      <Card className="border border-border/70 bg-card/95 shadow-sm">
+    <section className={ADMIN_PAGE_FILL_LAYOUT_CLASS}>
+      <Card className="shrink-0 border border-border/70 bg-card/95 shadow-sm">
         <CardContent className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -261,9 +263,10 @@ export function ProjectsPage() {
         </CardContent>
       </Card>
 
-      <Card className="border border-border/70 bg-card/95 shadow-sm">
-        <CardContent className="space-y-4">
-          <Table>
+      <Card className={ADMIN_PAGE_FILL_CARD_CLASS}>
+        <CardContent className="flex h-full min-h-0 flex-col gap-4">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>项目名称</TableHead>
@@ -327,7 +330,8 @@ export function ProjectsPage() {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
 
           <ListPagination
             currentPage={currentPage}

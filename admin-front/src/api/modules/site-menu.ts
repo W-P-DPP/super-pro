@@ -36,6 +36,30 @@ let siteMenuTreeRequest: Promise<SiteMenuResponseDto[]> | null = null
 let cachedSiteMenuConfig: SiteMenuConfigResponseDto | null = null
 let siteMenuConfigRequest: Promise<SiteMenuConfigResponseDto> | null = null
 
+export interface CreateSiteMenuRequestDto {
+  parentId: number | null
+  name: string
+  path: string
+  icon: string
+  isTop?: boolean
+  strict?: boolean
+  hide?: boolean
+  sort?: number
+  remark?: string
+}
+
+export interface UpdateSiteMenuRequestDto {
+  parentId?: number | null
+  name?: string
+  path?: string
+  icon?: string
+  isTop?: boolean
+  strict?: boolean
+  hide?: boolean
+  sort?: number
+  remark?: string
+}
+
 async function fetchSiteMenuTree() {
   const response = await request.get<ApiResponse<SiteMenuResponseDto[]>>('/site-menu/getMenu', {
     requiresAuth: true,
@@ -49,6 +73,11 @@ async function fetchSiteMenuTree() {
   }
 
   return response.data ?? []
+}
+
+function clearSiteMenuCache() {
+  cachedSiteMenuTree = null
+  siteMenuTreeRequest = null
 }
 
 async function fetchSiteMenuConfig() {
@@ -93,6 +122,58 @@ export async function getSiteMenuTree(options?: { forceRefresh?: boolean }) {
   }
 
   return siteMenuTreeRequest
+}
+
+export async function createSiteMenu(payload: CreateSiteMenuRequestDto) {
+  const response = await request.post<ApiResponse<SiteMenuResponseDto>, CreateSiteMenuRequestDto>(
+    '/site-menu/createMenu',
+    payload,
+    {
+      requiresAuth: true,
+    },
+  )
+
+  if (response.code !== 200) {
+    throw new RequestError(response.msg || '新增站点菜单失败，请稍后重试。', {
+      status: response.code,
+      details: response,
+    })
+  }
+
+  clearSiteMenuCache()
+  return response.data
+}
+
+export async function updateSiteMenu(id: number, payload: UpdateSiteMenuRequestDto) {
+  const response = await request.put<ApiResponse<SiteMenuResponseDto>>(`/site-menu/updateMenu/${id}`, payload, {
+    requiresAuth: true,
+  })
+
+  if (response.code !== 200) {
+    throw new RequestError(response.msg || '更新站点菜单失败，请稍后重试。', {
+      status: response.code,
+      details: response,
+    })
+  }
+
+  clearSiteMenuCache()
+  return response.data
+}
+
+export async function deleteSiteMenu(id: number) {
+  const response = await request.delete<ApiResponse<SiteMenuResponseDto>>(`/site-menu/deleteMenu/${id}`, {
+    requiresAuth: true,
+  })
+
+  if (response.code !== 200) {
+    throw new RequestError(response.msg || '删除站点菜单失败，请稍后重试。', {
+      status: response.code,
+      details: response,
+    })
+  }
+
+  clearSiteMenuCache()
+  return response.data
 }
 
 export async function getSiteMenuConfig(options?: { forceRefresh?: boolean }) {

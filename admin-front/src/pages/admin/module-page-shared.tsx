@@ -35,6 +35,11 @@ import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
 
 export const DEFAULT_PAGE_SIZE = 10
 export const PAGE_SIZE_OPTIONS = [10, 20, 50]
+export const ADMIN_PAGE_SCROLL_LAYOUT_CLASS =
+  'mx-auto flex min-h-full w-full max-w-[var(--app-shell-page-width)] flex-col gap-4 px-4 py-4 md:px-6 md:py-6'
+export const ADMIN_PAGE_FILL_LAYOUT_CLASS =
+  'mx-auto flex h-full min-h-0 w-full max-w-[var(--app-shell-page-width)] flex-col gap-4 overflow-hidden px-4 py-4 md:px-6 md:py-6'
+export const ADMIN_PAGE_FILL_CARD_CLASS = 'min-h-0 flex-1 border border-border/70 bg-card/95 shadow-sm'
 export const USER_ROLE_OPTIONS = [
   'admin',
   'employee',
@@ -171,7 +176,7 @@ export function ListPagination({
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t border-border/70 pt-4 md:flex-row md:items-center md:justify-between">
+    <div className="flex shrink-0 flex-col gap-3 border-t border-border/70 pt-4 md:flex-row md:items-center md:justify-between">
       <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center">
         <div>
           第 {currentPage} / {totalPages} 页，共 {total} 条
@@ -259,7 +264,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
     : adminModules.filter((item) => item.slug !== 'dashboard')
 
   return (
-    <section className="mx-auto flex w-full max-w-[var(--app-shell-page-width)] flex-col gap-4 px-4 py-4 md:px-6 md:py-6">
+    <section className={ADMIN_PAGE_SCROLL_LAYOUT_CLASS}>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.8fr)]">
         <Card className="border border-border/70 bg-card/95 shadow-sm">
           <CardHeader className="gap-3 border-b border-border/70">

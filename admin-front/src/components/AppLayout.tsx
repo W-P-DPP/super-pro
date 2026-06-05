@@ -253,7 +253,7 @@ export function AppLayout() {
   }
 
   return (
-    <SidebarProvider defaultOpen>
+    <SidebarProvider defaultOpen className="h-dvh min-h-dvh overflow-hidden">
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader
           className={`${APP_SHELL_HEADER_CLASS} justify-center border-b border-sidebar-border/80 px-3 py-0`}
@@ -377,7 +377,7 @@ export function AppLayout() {
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset className="min-h-svh bg-transparent">
+      <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-transparent">
         <header
           className={`sticky top-0 z-30 ${APP_SHELL_HEADER_CLASS} border-b border-border/70 bg-background/92 backdrop-blur-md`}
         >
@@ -500,7 +500,9 @@ export function AppLayout() {
           </div>
         </header>
 
-        <Outlet />
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <Outlet />
+        </div>
       </SidebarInset>
 
       <Dialog open={isCurrentUserDialogOpen} onOpenChange={setIsCurrentUserDialogOpen}>
