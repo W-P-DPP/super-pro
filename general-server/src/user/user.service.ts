@@ -39,6 +39,7 @@ const LOGIN_PASSWORD_KEY_FIELD = 'passwordCiphertext';
 const DEFAULT_USER_LIST_PAGE = 1;
 const DEFAULT_USER_LIST_PAGE_SIZE = 10;
 const MAX_USER_LIST_PAGE_SIZE = 100;
+const SUPER_ADMIN_ROLE_CODES = new Set(['platform.admin', 'super-admin']);
 
 type LoginEncryptionKeyPair = {
   publicKey: string
@@ -632,7 +633,7 @@ function deriveCompatibilityRole(
     .map((role) => role.code.trim().toLowerCase())
     .filter(Boolean);
 
-  if (roleCodes.includes('platform.admin')) {
+  if (roleCodes.some((roleCode) => SUPER_ADMIN_ROLE_CODES.has(roleCode))) {
     return 'admin';
   }
 

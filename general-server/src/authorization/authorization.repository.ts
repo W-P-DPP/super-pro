@@ -8,6 +8,7 @@ import initDataBase, { getDataSource } from '../../utils/mysql.ts';
 import {
   COMPATIBILITY_ROLE_FALLBACK_ROLE_CODES,
   SEEDED_PERMISSIONS,
+  SEEDED_PROJECTS,
   SEEDED_ROLE_PERMISSION_CODES,
   SEEDED_ROLES,
 } from './authorization.permissions.ts';
@@ -23,6 +24,9 @@ import type {
   AuthorizationPermissionListQueryDto,
   AuthorizationRoleListQueryDto,
 } from './authorization.dto.ts';
+
+const SUPER_ADMIN_ROLE_CODES = new Set(['platform.admin', 'super-admin']);
+const GLOBAL_PERMISSION_CODE = '*.*.*';
 
 export interface AuthorizationProjectSummary {
   id: number;
@@ -201,6 +205,96 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
       .where('permission.deleteFlag = :deleteFlag', { deleteFlag: 0 });
   }
 
+  private async syncSeedPermissions(manager?: EntityManager): Promise<void> {
+    const permissionRepository = await this.getPermissionRepository(manager);
+    const existingPermissions = await permissionRepository.find();
+    const permissionByCode = new Map(existingPermissions.map((item) => [item.code, item]));
+
+    for (const seed of SEEDED_PERMISSIONS) {
+      const existing = permissionByCode.get(seed.code);
+
+      if (!existing) {
+        const created = permissionRepository.create({
+          code: seed.code,
+          appCode: seed.appCode,
+          status: 1,
+          resourceType: seed.resourceType,
+          resourceCode: seed.resourceCode,
+          action: seed.action,
+          name: seed.name,
+          description: seed.description,
+          createBy: 'system',
+          updateBy: 'system',
+        });
+        const savedPermission = await permissionRepository.save(created);
+        permissionByCode.set(seed.code, savedPermission);
+        continue;
+      }
+
+      if (
+        existing.deleteFlag !== 0 ||
+        existing.appCode !== seed.appCode ||
+        existing.status !== 1 ||
+        existing.resourceType !== seed.resourceType ||
+        existing.resourceCode !== seed.resourceCode ||
+        existing.action !== seed.action ||
+        existing.name !== seed.name ||
+        existing.description !== seed.description
+      ) {
+        existing.deleteFlag = 0;
+        existing.appCode = seed.appCode;
+        existing.status = 1;
+        existing.resourceType = seed.resourceType;
+        existing.resourceCode = seed.resourceCode;
+        existing.action = seed.action;
+        existing.name = seed.name;
+        existing.description = seed.description;
+        existing.updateBy = 'system';
+        const savedPermission = await permissionRepository.save(existing);
+        permissionByCode.set(seed.code, savedPermission);
+      }
+    }
+  }
+
+  private async syncSeedRoles(manager?: EntityManager): Promise<void> {
+    const roleRepository = await this.getRoleRepository(manager);
+    const existingRoles = await roleRepository.find();
+    const roleByCode = new Map(existingRoles.map((item) => [item.code, item]));
+
+    for (const seed of SEEDED_ROLES) {
+      const existing = roleByCode.get(seed.code);
+
+      if (!existing) {
+        const created = roleRepository.create({
+          code: seed.code,
+          name: seed.name,
+          status: 1,
+          description: seed.description,
+          createBy: 'system',
+          updateBy: 'system',
+        });
+        const savedRole = await roleRepository.save(created);
+        roleByCode.set(seed.code, savedRole);
+        continue;
+      }
+
+      if (
+        existing.deleteFlag !== 0 ||
+        existing.name !== seed.name ||
+        existing.status !== 1 ||
+        existing.description !== seed.description
+      ) {
+        existing.deleteFlag = 0;
+        existing.name = seed.name;
+        existing.status = 1;
+        existing.description = seed.description;
+        existing.updateBy = 'system';
+        const savedRole = await roleRepository.save(existing);
+        roleByCode.set(seed.code, savedRole);
+      }
+    }
+  }
+
   private async getUserRoleRepository(
     manager?: EntityManager,
   ): Promise<Repository<UserRoleAssignmentEntity>> {
@@ -226,6 +320,80 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     return manager
       ? manager.getRepository(RoleProjectAssignmentEntity)
       : dataSource.getRepository(RoleProjectAssignmentEntity);
+  }
+
+  private async getProjectRepository(
+    manager?: EntityManager,
+  ): Promise<Repository<ProjectEntity>> {
+    const dataSource = await ensureDataSource();
+    return manager ? manager.getRepository(ProjectEntity) : dataSource.getRepository(ProjectEntity);
+  }
+
+  private async syncSeedProjects(manager?: EntityManager): Promise<void> {
+    const projectRepository = await this.getProjectRepository(manager);
+    const existingProjects = await projectRepository.find({
+      where: { deleteFlag: 0 },
+      order: { id: 'ASC' },
+    });
+    const projectByCode = new Map(
+      existingProjects.map((project) => [project.projectCode.trim().toLowerCase(), project]),
+    );
+
+    for (const seed of SEEDED_PROJECTS) {
+      const canonicalCode = seed.projectCode.trim().toLowerCase();
+      let canonicalProject = projectByCode.get(canonicalCode) ?? null;
+
+      for (const aliasCode of seed.aliases ?? []) {
+        const normalizedAliasCode = aliasCode.trim().toLowerCase();
+        const aliasProject = projectByCode.get(normalizedAliasCode);
+
+        if (!aliasProject) {
+          continue;
+        }
+
+        if (canonicalProject && canonicalProject.id !== aliasProject.id) {
+          aliasProject.deleteFlag = 1;
+          aliasProject.updateBy = 'system';
+          await projectRepository.save(aliasProject);
+          projectByCode.delete(normalizedAliasCode);
+          continue;
+        }
+
+        aliasProject.projectCode = seed.projectCode;
+        aliasProject.projectName = seed.projectName;
+        aliasProject.remark = seed.remark ?? aliasProject.remark ?? '';
+        aliasProject.updateBy = 'system';
+        const savedProject = await projectRepository.save(aliasProject);
+        projectByCode.delete(normalizedAliasCode);
+        projectByCode.set(canonicalCode, savedProject);
+        canonicalProject = savedProject;
+      }
+
+      if (canonicalProject) {
+        const nextRemark = seed.remark ?? canonicalProject.remark ?? '';
+        if (
+          canonicalProject.projectName !== seed.projectName ||
+          canonicalProject.remark !== nextRemark
+        ) {
+          canonicalProject.projectName = seed.projectName;
+          canonicalProject.remark = nextRemark;
+          canonicalProject.updateBy = 'system';
+          const savedProject = await projectRepository.save(canonicalProject);
+          projectByCode.set(canonicalCode, savedProject);
+        }
+        continue;
+      }
+
+      const createdProject = projectRepository.create({
+        projectCode: seed.projectCode,
+        projectName: seed.projectName,
+        remark: seed.remark ?? '',
+        createBy: 'system',
+        updateBy: 'system',
+      });
+      const savedProject = await projectRepository.save(createdProject);
+      projectByCode.set(canonicalCode, savedProject);
+    }
   }
 
   private async syncRoleProjectAssignments(
@@ -260,8 +428,17 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
       .innerJoin(
         ProjectEntity,
         'project',
-        'project.project_code = permission.app_code AND project.delete_flag = :projectDeleteFlag',
-        { projectDeleteFlag: 0 },
+        `project.delete_flag = :projectDeleteFlag
+         AND (
+           project.project_code = permission.app_code
+           OR permission.app_code = :wildcardAppCode
+           OR permission.code = :globalPermissionCode
+         )`,
+        {
+          projectDeleteFlag: 0,
+          wildcardAppCode: '*',
+          globalPermissionCode: '*.*.*',
+        },
       )
       .where('rolePermission.role_id IN (:...roleIds)', { roleIds })
       .andWhere('rolePermission.delete_flag = :rolePermissionDeleteFlag', {
@@ -302,57 +479,19 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
       const dataSource = await ensureDataSource();
       await dataSource.transaction(async (manager) => {
         const roleRepository = await this.getRoleRepository(manager);
-        const permissionRepository = await this.getPermissionRepository(manager);
         const rolePermissionRepository = await this.getRolePermissionRepository(manager);
+        const permissionRepository = await this.getPermissionRepository(manager);
 
-        const existingPermissions = await permissionRepository.find();
-        const permissionByCode = new Map(
-          existingPermissions.map((item) => [item.code, item]),
-        );
-
-        for (const seed of SEEDED_PERMISSIONS) {
-          if (permissionByCode.has(seed.code)) {
-            continue;
-          }
-
-          const created = permissionRepository.create({
-            code: seed.code,
-            appCode: seed.appCode,
-            status: 1,
-            resourceType: seed.resourceType,
-            resourceCode: seed.resourceCode,
-            action: seed.action,
-            name: seed.name,
-            description: seed.description,
-            createBy: 'system',
-            updateBy: 'system',
-          });
-          await permissionRepository.save(created);
-        }
+        await this.syncSeedPermissions(manager);
 
         const latestPermissions = await permissionRepository.find();
         const latestPermissionByCode = new Map(
           latestPermissions.map((item) => [item.code, item]),
         );
 
-        const existingRoles = await roleRepository.find();
-        const roleByCode = new Map(existingRoles.map((item) => [item.code, item]));
+        await this.syncSeedRoles(manager);
 
-        for (const seed of SEEDED_ROLES) {
-          if (roleByCode.has(seed.code)) {
-            continue;
-          }
-
-          const created = roleRepository.create({
-            code: seed.code,
-            name: seed.name,
-            status: 1,
-            description: seed.description,
-            createBy: 'system',
-            updateBy: 'system',
-          });
-          await roleRepository.save(created);
-        }
+        await this.syncSeedProjects(manager);
 
         const latestRoles = await roleRepository.find();
         const latestRoleByCode = new Map(latestRoles.map((item) => [item.code, item]));
@@ -360,6 +499,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
         const assignmentSet = new Set(
           currentAssignments.map((item) => `${item.roleId}:${item.permissionId}`),
         );
+        const globalPermission = latestPermissionByCode.get(GLOBAL_PERMISSION_CODE);
 
         for (const [roleCode, permissionCodes] of Object.entries(
           SEEDED_ROLE_PERMISSION_CODES,
@@ -384,6 +524,28 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
             const created = rolePermissionRepository.create({
               roleId: role.id,
               permissionId: permission.id,
+              createBy: 'system',
+              updateBy: 'system',
+            });
+            await rolePermissionRepository.save(created);
+          }
+        }
+
+        if (globalPermission) {
+          for (const role of latestRoles) {
+            if (!SUPER_ADMIN_ROLE_CODES.has(role.code.trim().toLowerCase())) {
+              continue;
+            }
+
+            const assignmentKey = `${role.id}:${globalPermission.id}`;
+            if (assignmentSet.has(assignmentKey)) {
+              continue;
+            }
+
+            assignmentSet.add(assignmentKey);
+            const created = rolePermissionRepository.create({
+              roleId: role.id,
+              permissionId: globalPermission.id,
               createBy: 'system',
               updateBy: 'system',
             });

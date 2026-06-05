@@ -1,9 +1,18 @@
-import type { AdminMenuResponseDto } from '@super-pro/shared-types'
+import {
+  ADMIN_CONSOLE_APP_CODE,
+  type AdminMenuResponseDto,
+  type PermissionCode,
+} from '@super-pro/shared-types'
+import { createProjectPermissionChecker } from '@super-pro/shared-web'
 import type { PropsWithChildren } from 'react'
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import {
+  getCurrentUserProjectPermission,
+  type AuthorizationUserProjectPermissionResponseDto,
+} from '@/api/modules/authorization'
+import { getAdminMenuTree } from '@/api/modules/admin-menu'
 import type { AdminModule } from '@/data/admin-navigation'
 import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
-import { getAdminMenuTree } from '@/api/modules/admin-menu'
 import { resolveAdminMenuIcon } from '@/lib/admin-menu-icons'
 
 export type AdminMenuLoadStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -31,13 +40,21 @@ export interface RuntimeAdminNavGroup {
 type AdminMenuContextValue = {
   status: AdminMenuLoadStatus
   errorMessage: string
+  permissionStatus: AdminMenuLoadStatus
+  permissionErrorMessage: string
+  projectPermission: AuthorizationUserProjectPermissionResponseDto | null
+  permissionCodes: PermissionCode[]
   menuTree: AdminMenuResponseDto[]
   navGroups: RuntimeAdminNavGroup[]
   visibleNavGroups: RuntimeAdminNavGroup[]
   modules: RuntimeAdminModule[]
   visibleModules: RuntimeAdminModule[]
   getModuleBySlug: (slug?: string) => RuntimeAdminModule | undefined
+  getVisibleModuleBySlug: (slug?: string) => RuntimeAdminModule | undefined
+  hasPermission: (permissionCode: PermissionCode) => boolean
+  canAccessModule: (slug?: string) => boolean
   reload: () => void
+  reloadPermissions: () => void
 }
 
 const AdminMenuContext = createContext<AdminMenuContextValue | null>(null)
@@ -104,7 +121,10 @@ function buildRuntimeModule(
   }
 }
 
-function buildMenuViewModel(tree: AdminMenuResponseDto[]) {
+function buildMenuViewModel(
+  tree: AdminMenuResponseDto[],
+  hasPermission: (permissionCode: PermissionCode) => boolean,
+) {
   const navGroups = tree
     .filter((node) => node.menuType === 'group')
     .sort((left, right) => left.sort - right.sort || left.id - right.id)
@@ -125,7 +145,9 @@ function buildMenuViewModel(tree: AdminMenuResponseDto[]) {
   const visibleNavGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.status === 1),
+      items: group.items.filter(
+        (item) => item.status === 1 && (!item.permissionCode || hasPermission(item.permissionCode)),
+      ),
     }))
     .filter((group) => group.status === 1 && group.items.length > 0)
   const visibleModules = visibleNavGroups.flatMap((group) => group.items)
@@ -141,8 +163,13 @@ function buildMenuViewModel(tree: AdminMenuResponseDto[]) {
 export function AdminMenuProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<AdminMenuLoadStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [permissionStatus, setPermissionStatus] = useState<AdminMenuLoadStatus>('idle')
+  const [permissionErrorMessage, setPermissionErrorMessage] = useState('')
+  const [projectPermission, setProjectPermission] =
+    useState<AuthorizationUserProjectPermissionResponseDto | null>(null)
   const [menuTree, setMenuTree] = useState<AdminMenuResponseDto[]>([])
   const [reloadKey, setReloadKey] = useState(0)
+  const [permissionReloadKey, setPermissionReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -178,21 +205,85 @@ export function AdminMenuProvider({ children }: PropsWithChildren) {
     }
   }, [reloadKey])
 
-  const menuViewModel = useMemo(() => buildMenuViewModel(menuTree), [menuTree])
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadProjectPermission() {
+      setPermissionStatus('loading')
+      setPermissionErrorMessage('')
+
+      try {
+        const data = await getCurrentUserProjectPermission(ADMIN_CONSOLE_APP_CODE)
+
+        if (cancelled) {
+          return
+        }
+
+        setProjectPermission(data.item)
+        setPermissionStatus('success')
+      } catch (error) {
+        if (cancelled) {
+          return
+        }
+
+        setProjectPermission(null)
+        setPermissionStatus('error')
+        setPermissionErrorMessage(error instanceof Error ? error.message : '获取当前用户后台权限失败，请稍后重试。')
+      }
+    }
+
+    void loadProjectPermission()
+
+    return () => {
+      cancelled = true
+    }
+  }, [permissionReloadKey])
+
+  const permissionChecker = useMemo(
+    () => createProjectPermissionChecker(projectPermission),
+    [projectPermission],
+  )
+
+  const menuViewModel = useMemo(
+    () => buildMenuViewModel(menuTree, (permissionCode) => permissionChecker.has(permissionCode)),
+    [menuTree, permissionChecker],
+  )
 
   const value = useMemo<AdminMenuContextValue>(
     () => ({
       status,
       errorMessage,
+      permissionStatus,
+      permissionErrorMessage,
+      projectPermission,
+      permissionCodes: permissionChecker.permissionCodes,
       menuTree,
       navGroups: menuViewModel.navGroups,
       visibleNavGroups: menuViewModel.visibleNavGroups,
       modules: menuViewModel.modules,
       visibleModules: menuViewModel.visibleModules,
       getModuleBySlug: (slug) => menuViewModel.modules.find((module) => module.slug === slug),
+      getVisibleModuleBySlug: (slug) =>
+        menuViewModel.visibleModules.find((module) => module.slug === slug),
+      hasPermission: (permissionCode) => permissionChecker.has(permissionCode),
+      canAccessModule: (slug) =>
+        Boolean(slug && menuViewModel.visibleModules.some((module) => module.slug === slug)),
       reload: () => setReloadKey((currentValue) => currentValue + 1),
+      reloadPermissions: () => setPermissionReloadKey((currentValue) => currentValue + 1),
     }),
-    [errorMessage, menuTree, menuViewModel, status],
+    [
+      errorMessage,
+      menuTree,
+      menuViewModel.modules,
+      menuViewModel.navGroups,
+      menuViewModel.visibleModules,
+      menuViewModel.visibleNavGroups,
+      permissionChecker,
+      permissionErrorMessage,
+      permissionStatus,
+      projectPermission,
+      status,
+    ],
   )
 
   return <AdminMenuContext.Provider value={value}>{children}</AdminMenuContext.Provider>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { ADMIN_CONSOLE_PERMISSION_CODES } from '@super-pro/shared-types'
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
 import { TreeDataTable, type TreeDataTableColumn } from '@super-pro/shared-ui'
 import {
@@ -37,6 +38,7 @@ import {
   Textarea,
   toast,
 } from '@/components/ui'
+import { useAdminMenu } from '@/contexts/admin-menu-context'
 import { resolveSiteMenuIcon } from '@/data/tool-directory'
 import {
   ADMIN_PAGE_FILL_CARD_CLASS,
@@ -257,6 +259,7 @@ function SiteMenuFormFields({
 }
 
 export function SettingsPage() {
+  const { hasPermission } = useAdminMenu()
   const [menuTree, setMenuTree] = useState<SiteMenuResponseDto[]>([])
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorMessage, setErrorMessage] = useState('')
@@ -335,6 +338,9 @@ export function SettingsPage() {
   }, [editingMenu, flatMenuRecords, parentOptions])
 
   const totalPages = Math.max(1, Math.ceil(totalMenus / pageSize))
+  const canCreateMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.settingCreate)
+  const canUpdateMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.settingUpdate)
+  const canDeleteMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.settingDelete)
   const canCreateMenu = createDraft.name.trim().length > 0
   const canSaveMenu = editingDraft.name.trim().length > 0
 
@@ -413,36 +419,40 @@ export function SettingsPage() {
         headerClassName: 'w-[10rem]',
         cell: (row) => (
           <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const source = menuNodeMap.get(row.id)
-                if (!source) {
-                  return
-                }
+            {canUpdateMenuAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const source = menuNodeMap.get(row.id)
+                  if (!source) {
+                    return
+                  }
 
-                setEditingMenu(source)
-                setEditingDraft(buildDraftFromRow(row))
-              }}
-            >
-              修改
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeletingMenu(row)}
-            >
-              删除
-            </Button>
+                  setEditingMenu(source)
+                  setEditingDraft(buildDraftFromRow(row))
+                }}
+              >
+                修改
+              </Button>
+            ) : null}
+            {canDeleteMenuAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeletingMenu(row)}
+              >
+                删除
+              </Button>
+            ) : null}
           </div>
         ),
       },
     ],
-    [menuNodeMap],
+    [canDeleteMenuAction, canUpdateMenuAction, menuNodeMap],
   )
 
   useEffect(() => {
@@ -597,10 +607,12 @@ export function SettingsPage() {
             <RotateCcwIcon data-icon="inline-start" />
             重置
           </Button>
-          <Button type="button" className="h-9" onClick={() => setIsCreateDialogOpen(true)}>
-            <PlusIcon data-icon="inline-start" />
-            新增菜单
-          </Button>
+          {canCreateMenuAction ? (
+            <Button type="button" className="h-9" onClick={() => setIsCreateDialogOpen(true)}>
+              <PlusIcon data-icon="inline-start" />
+              新增菜单
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 

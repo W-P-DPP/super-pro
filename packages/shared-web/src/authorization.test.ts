@@ -67,6 +67,25 @@ const projectPermission: AuthorizationUserProjectPermission = {
   ],
 };
 
+const superAdminPermission: AuthorizationUserProjectPermission = {
+  id: 2,
+  projectCode: 'platform',
+  projectName: '超级管理员',
+  roles: [],
+  permissions: [
+    {
+      id: 99,
+      code: '*.*.*',
+      appCode: '*',
+      resourceType: 'api',
+      resourceCode: '*',
+      action: '*',
+      name: '全部权限',
+      status: 1,
+    },
+  ],
+};
+
 describe('shared-web authorization helpers', () => {
   it('checks granted permissions by permission code', () => {
     expect(hasProjectPermission(projectPermission, 'file-server.tree.read')).toBe(true);
@@ -172,5 +191,22 @@ describe('shared-web authorization helpers', () => {
         'file-server.menu.manage.view',
       ]),
     ).toBe(true);
+  });
+
+  it('supports wildcard permissions for super administrators', () => {
+    const checker = createProjectPermissionChecker(superAdminPermission);
+
+    expect(
+      hasProjectPermission(superAdminPermission, 'admin-console.button.roles.create'),
+    ).toBe(true);
+    expect(
+      hasProjectPermission(superAdminPermission, {
+        appCode: 'admin-console',
+        resourceType: 'button',
+        resourceCode: 'roles',
+        action: 'create',
+      }),
+    ).toBe(true);
+    expect(checker.has('file-server.tree.read')).toBe(true);
   });
 });

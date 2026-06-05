@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ADMIN_CONSOLE_PERMISSION_CODES } from '@super-pro/shared-types'
 import { PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
 import {
   AlertDialog,
@@ -44,6 +45,7 @@ import {
   ListPagination,
   type LoadState,
 } from './module-page-shared'
+import { useAdminMenu } from '@/contexts/admin-menu-context'
 
 type ProjectFilters = {
   keyword: string
@@ -57,6 +59,7 @@ type ProjectFormState = {
 const TABLE_COLUMN_COUNT = 4
 
 export function ProjectsPage() {
+  const { hasPermission } = useAdminMenu()
   const [projectRows, setProjectRows] = useState<ProjectResponseDto[]>([])
   const [totalProjects, setTotalProjects] = useState(0)
   const [loadState, setLoadState] = useState<LoadState>('idle')
@@ -119,6 +122,9 @@ export function ProjectsPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalProjects / pageSize))
   const isEditDialogOpen = editingProject !== null
+  const canCreateProjectAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.projectCreate)
+  const canUpdateProjectAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.projectUpdate)
+  const canDeleteProjectAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.projectDelete)
   const canCreateProject = createDraft.projectName.trim().length > 0 && createDraft.projectCode.trim().length > 0
   const canSaveProject = editingDraft.projectName.trim().length > 0 && editingDraft.projectCode.trim().length > 0
 
@@ -256,10 +262,12 @@ export function ProjectsPage() {
             <RotateCcwIcon data-icon="inline-start" />
             重置
           </Button>
-          <Button type="button" className="h-9" onClick={() => setIsCreateDialogOpen(true)}>
-            <PlusIcon data-icon="inline-start" />
-            新增项目
-          </Button>
+          {canCreateProjectAction ? (
+            <Button type="button" className="h-9" onClick={() => setIsCreateDialogOpen(true)}>
+              <PlusIcon data-icon="inline-start" />
+              新增项目
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -306,18 +314,22 @@ export function ProjectsPage() {
                     <TableCell>{row.updateTime || row.createTime || '--'}</TableCell>
                     <TableCell>
                       <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleEditProject(row)}>
-                          修改
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => setDeletingProject(row)}
-                        >
-                          删除
-                        </Button>
+                        {canUpdateProjectAction ? (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => handleEditProject(row)}>
+                            修改
+                          </Button>
+                        ) : null}
+                        {canDeleteProjectAction ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeletingProject(row)}
+                          >
+                            删除
+                          </Button>
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

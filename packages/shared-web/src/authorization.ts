@@ -24,6 +24,8 @@ export type FrontendPermissionCheckTarget =
   | PermissionCode
   | FrontendPermissionRequirement;
 
+const GLOBAL_PERMISSION_CODE = '*.*.*';
+
 function isProjectPermissionSource(
   source: Exclude<FrontendPermissionSource, null | undefined>,
 ): source is Pick<AuthorizationUserProjectPermission, 'permissions'> {
@@ -68,6 +70,30 @@ function normalizeRequirement(
   };
 }
 
+function matchesPermissionCodePattern(
+  grantedPermissionCode: PermissionCode,
+  requiredPermissionCode: PermissionCode,
+): boolean {
+  if (grantedPermissionCode === GLOBAL_PERMISSION_CODE) {
+    return true;
+  }
+
+  if (grantedPermissionCode === requiredPermissionCode) {
+    return true;
+  }
+
+  const grantedSegments = grantedPermissionCode.split('.');
+  const requiredSegments = requiredPermissionCode.split('.');
+
+  if (grantedSegments.length !== requiredSegments.length) {
+    return false;
+  }
+
+  return grantedSegments.every((segment, index) => {
+    return segment === '*' || segment === requiredSegments[index];
+  });
+}
+
 function matchesRequirement(
   permission: AuthorizationPermissionSummary,
   target: FrontendPermissionCheckTarget,
@@ -88,11 +114,22 @@ function matchesRequirement(
     return false;
   }
 
-  if (requirement.code !== undefined && permission.code !== requirement.code) {
+  if (
+    requirement.code !== undefined &&
+    !matchesPermissionCodePattern(permission.code, requirement.code)
+  ) {
     return false;
   }
 
-  if (requirement.appCode !== undefined && permission.appCode !== requirement.appCode) {
+  if (permission.code === GLOBAL_PERMISSION_CODE) {
+    return true;
+  }
+
+  if (
+    requirement.appCode !== undefined &&
+    permission.appCode !== '*' &&
+    permission.appCode !== requirement.appCode
+  ) {
     return false;
   }
 
@@ -105,12 +142,17 @@ function matchesRequirement(
 
   if (
     requirement.resourceCode !== undefined &&
+    permission.resourceCode !== '*' &&
     permission.resourceCode !== requirement.resourceCode
   ) {
     return false;
   }
 
-  if (requirement.action !== undefined && permission.action !== requirement.action) {
+  if (
+    requirement.action !== undefined &&
+    permission.action !== '*' &&
+    permission.action !== requirement.action
+  ) {
     return false;
   }
 

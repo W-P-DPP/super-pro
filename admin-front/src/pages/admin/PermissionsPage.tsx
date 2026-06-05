@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { AuthorizationResourceType } from '@super-pro/shared-types'
+import {
+  ADMIN_CONSOLE_PERMISSION_CODES,
+  type AuthorizationResourceType,
+} from '@super-pro/shared-types'
 import { PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
 import {
   AUTHORIZATION_RESOURCE_TYPE_OPTIONS,
@@ -42,6 +45,7 @@ import {
   toast,
 } from '@/components/ui'
 import { cn } from '@/lib/utils'
+import { useAdminMenu } from '@/contexts/admin-menu-context'
 import {
   ADMIN_PAGE_FILL_CARD_CLASS,
   ADMIN_PAGE_FILL_LAYOUT_CLASS,
@@ -125,6 +129,7 @@ function mapPermissionRecord(permission: Awaited<ReturnType<typeof getAuthorizat
 }
 
 export function PermissionsPage() {
+  const { hasPermission } = useAdminMenu()
   const [projectRecords, setProjectRecords] = useState<ProjectResponseDto[]>([])
   const [projectLoadState, setProjectLoadState] = useState<LoadState>('idle')
   const [projectErrorMessage, setProjectErrorMessage] = useState('')
@@ -273,6 +278,9 @@ export function PermissionsPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalPermissions / pageSize))
   const isEditDialogOpen = editingPermission !== null
+  const canCreatePermissionAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.permissionCreate)
+  const canUpdatePermissionAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.permissionUpdate)
+  const canDeletePermissionAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.permissionDelete)
   const canCreatePermission =
     createDraft.projectId.trim().length > 0 &&
     createDraft.code.trim().length > 0 &&
@@ -613,10 +621,12 @@ export function PermissionsPage() {
                   <RotateCcwIcon data-icon="inline-start" />
                   重置
                 </Button>
-                <Button type="button" className="h-9" onClick={handleOpenCreateDialog} disabled={!selectedProject}>
-                  <PlusIcon data-icon="inline-start" />
-                  新增权限
-                </Button>
+                {canCreatePermissionAction ? (
+                  <Button type="button" className="h-9" onClick={handleOpenCreateDialog} disabled={!selectedProject}>
+                    <PlusIcon data-icon="inline-start" />
+                    新增权限
+                  </Button>
+                ) : null}
               </div>
             </CardContent>
           </Card>
@@ -670,7 +680,7 @@ export function PermissionsPage() {
                             <div className="flex min-w-[7rem] items-center gap-2">
                               <Switch
                                 checked={row.status === 1}
-                                disabled={togglingPermissionId === row.id}
+                                disabled={togglingPermissionId === row.id || !canUpdatePermissionAction}
                                 onCheckedChange={(checked) => void handlePermissionStatusSwitchChange(row, checked)}
                                 aria-label={`${row.name}状态开关`}
                               />
@@ -680,25 +690,29 @@ export function PermissionsPage() {
                           <TableCell>{row.updateTime}</TableCell>
                           <TableCell>
                             <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                disabled={togglingPermissionId === row.id}
-                                onClick={() => handleEditPermission(row)}
-                              >
-                                修改
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                disabled={togglingPermissionId === row.id}
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => setDeletingPermission(row)}
-                              >
-                                删除
-                              </Button>
+                              {canUpdatePermissionAction ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={togglingPermissionId === row.id}
+                                  onClick={() => handleEditPermission(row)}
+                                >
+                                  修改
+                                </Button>
+                              ) : null}
+                              {canDeletePermissionAction ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={togglingPermissionId === row.id}
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => setDeletingPermission(row)}
+                                >
+                                  删除
+                                </Button>
+                              ) : null}
                             </div>
                           </TableCell>
                         </TableRow>

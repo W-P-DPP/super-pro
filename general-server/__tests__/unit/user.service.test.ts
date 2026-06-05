@@ -307,6 +307,11 @@ describe('UserService', () => {
       'admin',
     ],
     [
+      'super-admin compatibility role',
+      [{ id: 8, code: 'super-admin', name: 'Super Admin' }],
+      'admin',
+    ],
+    [
       'guest compatibility role',
       [{ id: 2, code: 'project.viewer', name: 'Project Viewer' }],
       'guest',
