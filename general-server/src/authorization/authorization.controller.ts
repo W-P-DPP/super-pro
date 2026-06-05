@@ -23,9 +23,7 @@ function handleAuthorizationError(
 
 export const getPermissionList = async (req: Request, res: Response) => {
   try {
-    const result = await authorizationService.listPermissions(
-      typeof req.query.appCode === 'string' ? req.query.appCode : undefined,
-    );
+    const result = await authorizationService.listPermissions(req.query as Record<string, unknown>);
     res.sendSuccess(result, '获取权限列表成功');
   } catch (error) {
     return handleAuthorizationError(error, res, '获取权限列表失败');
@@ -34,9 +32,7 @@ export const getPermissionList = async (req: Request, res: Response) => {
 
 export const getRoleList = async (req: Request, res: Response) => {
   try {
-    const result = await authorizationService.listRoles(
-      typeof req.query.appCode === 'string' ? req.query.appCode : undefined,
-    );
+    const result = await authorizationService.listRoles(req.query as Record<string, unknown>);
     res.sendSuccess(result, '获取角色列表成功');
   } catch (error) {
     return handleAuthorizationError(error, res, '获取角色列表失败');

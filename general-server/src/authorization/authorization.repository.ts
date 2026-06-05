@@ -19,6 +19,10 @@ import {
   UserRoleAssignmentEntity,
 } from './authorization.entity.ts';
 import { ProjectEntity } from '../project/project.entity.ts';
+import type {
+  AuthorizationPermissionListQueryDto,
+  AuthorizationRoleListQueryDto,
+} from './authorization.dto.ts';
 
 export interface AuthorizationProjectSummary {
   id: number;
@@ -62,12 +66,30 @@ export interface UpdatePermissionEntityInput {
   description?: string;
 }
 
+export interface AuthorizationPermissionListRepositoryResult {
+  items: AuthorizationPermissionSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AuthorizationRoleListRepositoryResult {
+  items: AuthorizationRoleSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface AuthorizationRepositoryPort {
   ensureSeedData(): Promise<void>;
   listPermissions(appCode?: string): Promise<AuthorizationPermissionSummary[]>;
+  getPermissionList(
+    query: AuthorizationPermissionListQueryDto,
+  ): Promise<AuthorizationPermissionListRepositoryResult>;
   getPermissionsByIds(ids: number[]): Promise<AuthorizationPermissionSummary[]>;
   getPermissionByCode(code: string): Promise<AuthorizationPermissionSummary | null>;
   listRoles(appCode?: string): Promise<AuthorizationRoleSummary[]>;
+  getRoleList(query: AuthorizationRoleListQueryDto): Promise<AuthorizationRoleListRepositoryResult>;
   getRolesByIds(ids: number[]): Promise<AuthorizationRoleSummary[]>;
   getRolesByCodes(codes: readonly string[]): Promise<AuthorizationRoleSummary[]>;
   getRoleMemberCounts(roleIds: number[]): Promise<Map<number, number>>;
@@ -400,6 +422,69 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     return entities.map(toPermissionSummary);
   }
 
+  async getPermissionList(
+    query: AuthorizationPermissionListQueryDto,
+  ): Promise<AuthorizationPermissionListRepositoryResult> {
+    const repository = await this.getPermissionRepository();
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const queryBuilder = this.createPermissionDetailQueryBuilder(repository);
+
+    if (query.appCode) {
+      queryBuilder.andWhere('permission.appCode = :appCode', { appCode: query.appCode });
+    }
+
+    if (query.keyword) {
+      queryBuilder.andWhere(
+        `(
+          permission.code LIKE :keyword
+          OR permission.name LIKE :keyword
+          OR permission.resourceCode LIKE :keyword
+          OR permission.action LIKE :keyword
+          OR permission.description LIKE :keyword
+        )`,
+        {
+          keyword: `%${query.keyword}%`,
+        },
+      );
+    }
+
+    if (query.resourceType) {
+      queryBuilder.andWhere('permission.resourceType = :resourceType', {
+        resourceType: query.resourceType,
+      });
+    }
+
+    if (query.status !== undefined) {
+      queryBuilder.andWhere('permission.status = :status', {
+        status: query.status,
+      });
+    }
+
+    const total = await queryBuilder.getCount();
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const entities =
+      total === 0
+        ? []
+        : await queryBuilder
+            .clone()
+            .orderBy('permission.appCode', 'ASC')
+            .addOrderBy('permission.resourceCode', 'ASC')
+            .addOrderBy('permission.action', 'ASC')
+            .addOrderBy('permission.id', 'ASC')
+            .skip((currentPage - 1) * pageSize)
+            .take(pageSize)
+            .getMany();
+
+    return {
+      items: entities.map(toPermissionSummary),
+      total,
+      page: currentPage,
+      pageSize,
+    };
+  }
+
   async getPermissionsByIds(ids: number[]): Promise<AuthorizationPermissionSummary[]> {
     if (ids.length === 0) {
       return [];
@@ -449,6 +534,67 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     const entities = await queryBuilder.getMany();
 
     return entities.map(toRoleSummary);
+  }
+
+  async getRoleList(query: AuthorizationRoleListQueryDto): Promise<AuthorizationRoleListRepositoryResult> {
+    const repository = await this.getRoleRepository();
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const queryBuilder = this.createRoleDetailQueryBuilder(repository);
+
+    if (query.keyword) {
+      queryBuilder.andWhere(
+        '(role.code LIKE :keyword OR role.name LIKE :keyword OR role.description LIKE :keyword)',
+        {
+          keyword: `%${query.keyword}%`,
+        },
+      );
+    }
+
+    if (query.status !== undefined) {
+      queryBuilder.andWhere('role.status = :status', {
+        status: query.status,
+      });
+    }
+
+    if (query.appCode) {
+      queryBuilder
+        .innerJoin(
+          RolePermissionAssignmentEntity,
+          'rolePermission',
+          'rolePermission.role_id = role.id AND rolePermission.delete_flag = :rolePermissionDeleteFlag',
+          { rolePermissionDeleteFlag: 0 },
+        )
+        .innerJoin(
+          PermissionEntity,
+          'permission',
+          'permission.id = rolePermission.permission_id AND permission.delete_flag = :permissionDeleteFlag',
+          { permissionDeleteFlag: 0 },
+        )
+        .andWhere('permission.app_code = :appCode', { appCode: query.appCode })
+        .distinct(true);
+    }
+
+    const total = await queryBuilder.getCount();
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const entities =
+      total === 0
+        ? []
+        : await queryBuilder
+            .clone()
+            .orderBy('role.code', 'ASC')
+            .addOrderBy('role.id', 'ASC')
+            .skip((currentPage - 1) * pageSize)
+            .take(pageSize)
+            .getMany();
+
+    return {
+      items: entities.map(toRoleSummary),
+      total,
+      page: currentPage,
+      pageSize,
+    };
   }
 
   async getRolesByIds(ids: number[]): Promise<AuthorizationRoleSummary[]> {

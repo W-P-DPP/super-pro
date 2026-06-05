@@ -57,12 +57,35 @@ export interface UpdatePermissionRequestDto {
   status?: number;
 }
 
+export interface AuthorizationPermissionListQueryDto {
+  appCode?: string;
+  keyword?: string;
+  resourceType?: AuthorizationPermissionSummary['resourceType'];
+  status?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AuthorizationRoleListQueryDto {
+  appCode?: string;
+  keyword?: string;
+  status?: number;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface AuthorizationRoleListDto {
   items: AuthorizationRoleResponseDto[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface AuthorizationPermissionListDto {
   items: AuthorizationPermissionResponseDto[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface AssignedRoleResponseDto extends AuthorizationRoleSummary {}

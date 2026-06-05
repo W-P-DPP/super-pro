@@ -3,6 +3,7 @@ import {
   createMenu,
   deleteMenu,
   getMenu,
+  getMenuList,
   getMenuDetail,
   updateMenu,
 } from './adminMenu.controller.ts';
@@ -10,6 +11,7 @@ import {
 const adminMenuRouter: Router = express.Router();
 
 adminMenuRouter.get('/getMenu', getMenu);
+adminMenuRouter.get('/getMenuList', getMenuList);
 adminMenuRouter.get('/getMenu/:id', getMenuDetail);
 adminMenuRouter.post('/createMenu', createMenu);
 adminMenuRouter.put('/updateMenu/:id', updateMenu);

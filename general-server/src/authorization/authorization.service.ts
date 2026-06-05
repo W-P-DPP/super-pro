@@ -16,7 +16,9 @@ import {
 } from '@super-pro/shared-types';
 import type {
   AuthorizationCurrentUserProjectPermissionResponseDto,
+  AuthorizationPermissionListQueryDto,
   AuthorizationPermissionListDto,
+  AuthorizationRoleListQueryDto,
   AuthorizationRoleListDto,
   AuthorizationUserProjectPermissionListDto,
   AuthorizationUserProjectPermissionResponseDto,
@@ -30,6 +32,10 @@ import {
   authorizationRepository,
   type AuthorizationRepositoryPort,
 } from './authorization.repository.ts';
+
+const DEFAULT_AUTHORIZATION_LIST_PAGE = 1;
+const DEFAULT_AUTHORIZATION_LIST_PAGE_SIZE = 10;
+const MAX_AUTHORIZATION_LIST_PAGE_SIZE = 100;
 
 export class AuthorizationBusinessError extends Error {
   constructor(
@@ -104,6 +110,28 @@ function normalizeOptionalString(value: unknown, field: string, label: string): 
   return value.trim();
 }
 
+function normalizeOptionalQueryString(value: unknown, field: string, label: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new AuthorizationBusinessError(
+      `${label} is invalid`,
+      {
+        nodePath: 'authorization',
+        field,
+        reason: `${label} must be a string`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const normalized = value.trim();
+  return normalized ? normalized : undefined;
+}
+
 function normalizeRoleCode(value: unknown, field: string): string {
   const roleCode = ensureNonEmptyString(value, field, 'roleCode');
 
@@ -167,6 +195,14 @@ function normalizePermissionStatus(value: unknown, field: string): number {
   return parsed;
 }
 
+function normalizeOptionalPermissionStatus(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  return normalizePermissionStatus(value, field);
+}
+
 function normalizeResourceType(
   value: unknown,
   field: string,
@@ -191,6 +227,71 @@ function normalizeResourceType(
   }
 
   return resourceType as AuthorizationPermissionSummary['resourceType'];
+}
+
+function normalizeOptionalResourceType(
+  value: unknown,
+  field: string,
+): AuthorizationPermissionSummary['resourceType'] | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  return normalizeResourceType(value, field);
+}
+
+function normalizePaginationInteger(
+  value: unknown,
+  field: 'page' | 'pageSize',
+  defaultValue: number,
+  options?: {
+    min?: number;
+    max?: number;
+  },
+): number {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isInteger(parsed)) {
+    throw new AuthorizationBusinessError(
+      `${field} is invalid`,
+      {
+        nodePath: 'authorization',
+        field,
+        reason: `${field} must be an integer`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const minValue = options?.min ?? 1;
+  const maxValue = options?.max;
+  if (parsed < minValue || (maxValue !== undefined && parsed > maxValue)) {
+    throw new AuthorizationBusinessError(
+      `${field} is invalid`,
+      {
+        nodePath: 'authorization',
+        field,
+        reason:
+          field === 'page'
+            ? 'page must be greater than or equal to 1'
+            : `pageSize must be between ${minValue} and ${maxValue ?? Number.MAX_SAFE_INTEGER}`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return parsed;
 }
 
 function normalizeIdList(value: unknown, field: string, label: string): number[] {
@@ -377,6 +478,120 @@ function validateUpdatePermissionInput(
   return payload;
 }
 
+function validatePermissionListQuery(
+  input: AuthorizationPermissionListQueryDto | Record<string, unknown> = {},
+): AuthorizationPermissionListQueryDto {
+  const hasPage = Object.prototype.hasOwnProperty.call(input, 'page');
+  const hasPageSize = Object.prototype.hasOwnProperty.call(input, 'pageSize');
+
+  return {
+    ...(normalizeOptionalQueryString(input.appCode, 'appCode', 'appCode')
+      ? { appCode: normalizeOptionalQueryString(input.appCode, 'appCode', 'appCode') }
+      : {}),
+    ...(normalizeOptionalQueryString(input.keyword, 'keyword', 'keyword')
+      ? { keyword: normalizeOptionalQueryString(input.keyword, 'keyword', 'keyword') }
+      : {}),
+    ...(normalizeOptionalResourceType(input.resourceType, 'resourceType')
+      ? { resourceType: normalizeOptionalResourceType(input.resourceType, 'resourceType') }
+      : {}),
+    ...(normalizeOptionalPermissionStatus(input.status, 'status') !== undefined
+      ? { status: normalizeOptionalPermissionStatus(input.status, 'status') }
+      : {}),
+    ...(hasPage
+      ? {
+          page: normalizePaginationInteger(
+            input.page,
+            'page',
+            DEFAULT_AUTHORIZATION_LIST_PAGE,
+          ),
+        }
+      : {}),
+    ...(hasPageSize
+      ? {
+          pageSize: normalizePaginationInteger(
+            input.pageSize,
+            'pageSize',
+            DEFAULT_AUTHORIZATION_LIST_PAGE_SIZE,
+            {
+              min: 1,
+              max: MAX_AUTHORIZATION_LIST_PAGE_SIZE,
+            },
+          ),
+        }
+      : {}),
+  };
+}
+
+function validateRoleListQuery(
+  input: AuthorizationRoleListQueryDto | Record<string, unknown> = {},
+): AuthorizationRoleListQueryDto {
+  const hasPage = Object.prototype.hasOwnProperty.call(input, 'page');
+  const hasPageSize = Object.prototype.hasOwnProperty.call(input, 'pageSize');
+
+  return {
+    ...(normalizeOptionalQueryString(input.appCode, 'appCode', 'appCode')
+      ? { appCode: normalizeOptionalQueryString(input.appCode, 'appCode', 'appCode') }
+      : {}),
+    ...(normalizeOptionalQueryString(input.keyword, 'keyword', 'keyword')
+      ? { keyword: normalizeOptionalQueryString(input.keyword, 'keyword', 'keyword') }
+      : {}),
+    ...(normalizeOptionalPermissionStatus(input.status, 'status') !== undefined
+      ? { status: normalizeOptionalPermissionStatus(input.status, 'status') }
+      : {}),
+    ...(hasPage
+      ? {
+          page: normalizePaginationInteger(
+            input.page,
+            'page',
+            DEFAULT_AUTHORIZATION_LIST_PAGE,
+          ),
+        }
+      : {}),
+    ...(hasPageSize
+      ? {
+          pageSize: normalizePaginationInteger(
+            input.pageSize,
+            'pageSize',
+            DEFAULT_AUTHORIZATION_LIST_PAGE_SIZE,
+            {
+              min: 1,
+              max: MAX_AUTHORIZATION_LIST_PAGE_SIZE,
+            },
+          ),
+        }
+      : {}),
+  };
+}
+
+function shouldPaginate(query: { page?: number; pageSize?: number }): boolean {
+  return query.page !== undefined || query.pageSize !== undefined;
+}
+
+function matchesPermissionKeyword(
+  permission: AuthorizationPermissionSummary,
+  keyword: string | undefined,
+): boolean {
+  if (!keyword) {
+    return true;
+  }
+
+  return `${permission.code} ${permission.name} ${permission.resourceCode} ${permission.action} ${
+    permission.description ?? ''
+  }`
+    .toLowerCase()
+    .includes(keyword.toLowerCase());
+}
+
+function matchesRoleKeyword(role: AuthorizationRoleSummary, keyword: string | undefined): boolean {
+  if (!keyword) {
+    return true;
+  }
+
+  return `${role.name} ${role.code} ${role.description ?? ''}`
+    .toLowerCase()
+    .includes(keyword.toLowerCase());
+}
+
 function sortPermissions(
   permissions: readonly AuthorizationPermissionSummary[],
 ): AuthorizationPermissionSummary[] {
@@ -478,18 +693,67 @@ export class AuthorizationService {
     };
   }
 
-  async listPermissions(appCode?: string): Promise<AuthorizationPermissionListDto> {
+  async listPermissions(
+    input: AuthorizationPermissionListQueryDto | Record<string, unknown> = {},
+  ): Promise<AuthorizationPermissionListDto> {
     await this.ensureSeedData();
 
+    const query = validatePermissionListQuery(input);
+
+    if (shouldPaginate(query)) {
+      const result = await this.repository.getPermissionList({
+        ...query,
+        page: query.page ?? DEFAULT_AUTHORIZATION_LIST_PAGE,
+        pageSize: query.pageSize ?? DEFAULT_AUTHORIZATION_LIST_PAGE_SIZE,
+      });
+
+      return {
+        items: sortPermissions(result.items),
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+      };
+    }
+
+    const items = sortPermissions(
+      (await this.repository.listPermissions(query.appCode)).filter(
+        (permission) =>
+          matchesPermissionKeyword(permission, query.keyword) &&
+          (query.resourceType === undefined || permission.resourceType === query.resourceType) &&
+          (query.status === undefined || permission.status === query.status),
+      ),
+    );
+
     return {
-      items: sortPermissions(await this.repository.listPermissions(appCode)),
+      items,
+      total: items.length,
+      page: 1,
+      pageSize: items.length,
     };
   }
 
-  async listRoles(appCode?: string): Promise<AuthorizationRoleListDto> {
+  async listRoles(
+    input: AuthorizationRoleListQueryDto | Record<string, unknown> = {},
+  ): Promise<AuthorizationRoleListDto> {
     await this.ensureSeedData();
 
-    const roles = await this.repository.listRoles(appCode);
+    const query = validateRoleListQuery(input);
+    const paginatedRoles = shouldPaginate(query)
+      ? await this.repository.getRoleList({
+          ...query,
+          page: query.page ?? DEFAULT_AUTHORIZATION_LIST_PAGE,
+          pageSize: query.pageSize ?? DEFAULT_AUTHORIZATION_LIST_PAGE_SIZE,
+        })
+      : null;
+    const roles = paginatedRoles
+      ? paginatedRoles.items
+      : sortRoles(
+          (await this.repository.listRoles(query.appCode)).filter(
+            (role) =>
+              matchesRoleKeyword(role, query.keyword) &&
+              (query.status === undefined || role.status === query.status),
+          ),
+        );
     const roleIds = roles.map((role) => role.id);
     const memberCounts = await this.repository.getRoleMemberCounts(roleIds);
     const permissionsByRoleId = await this.repository.getPermissionSummariesByRoleIdsMap(
@@ -502,6 +766,9 @@ export class AuthorizationService {
         memberCount: memberCounts.get(role.id) ?? 0,
         permissions: sortPermissions(permissionsByRoleId.get(role.id) ?? []),
       })),
+      total: paginatedRoles?.total ?? roles.length,
+      page: paginatedRoles?.page ?? 1,
+      pageSize: paginatedRoles?.pageSize ?? roles.length,
     };
   }
 

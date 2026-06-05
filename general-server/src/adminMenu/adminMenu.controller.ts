@@ -19,6 +19,19 @@ const getMenu = async (req: Request, res: Response) => {
   }
 };
 
+const getMenuList = async (req: Request, res: Response) => {
+  try {
+    const menus = await adminMenuService.getAdminMenuList(req.query as Record<string, unknown>);
+    res.sendSuccess(menus, '鑾峰彇鍚庡彴鑿滃崟鍒楄〃鎴愬姛');
+  } catch (error) {
+    if (error instanceof AdminMenuBusinessError) {
+      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
+    }
+
+    return res.status(HttpStatus.ERROR).sendFail('鑾峰彇鍚庡彴鑿滃崟鍒楄〃澶辫触', HttpStatus.ERROR);
+  }
+};
+
 const getMenuDetail = async (req: Request, res: Response) => {
   try {
     const menu = await adminMenuService.getAdminMenuDetail(Number(req.params.id));
@@ -78,6 +91,7 @@ export {
   createMenu,
   deleteMenu,
   getMenu,
+  getMenuList,
   getMenuDetail,
   updateMenu,
 };

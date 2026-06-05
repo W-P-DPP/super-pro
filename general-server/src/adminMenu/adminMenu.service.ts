@@ -9,6 +9,11 @@ import {
   type CreateAdminMenuRequestDto,
   type UpdateAdminMenuRequestDto,
 } from '@super-pro/shared-types';
+import type {
+  AdminMenuTableListDto,
+  AdminMenuTableListItemDto,
+  AdminMenuTableListQueryDto,
+} from './adminMenu.dto.ts';
 import type { AdminMenuEntity } from './adminMenu.entity.ts';
 import {
   adminMenuRepository,
@@ -23,6 +28,9 @@ const MAX_BADGE_LENGTH = 32;
 const MAX_PERMISSION_CODE_LENGTH = 128;
 const MAX_REMARK_LENGTH = 255;
 const MENU_SLUG_REGEXP = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const DEFAULT_ADMIN_MENU_LIST_PAGE = 1;
+const DEFAULT_ADMIN_MENU_LIST_PAGE_SIZE = 10;
+const MAX_ADMIN_MENU_LIST_PAGE_SIZE = 100;
 
 export class AdminMenuBusinessError extends Error {
   constructor(
