@@ -9,10 +9,9 @@ import {
   timingSafeEqual,
 } from 'crypto';
 import { generateJwtToken } from '@super-pro/shared-server';
-import type { AuthorizationRoleSummary } from '@super-pro/shared-types';
+import type { AuthorizationRoleSummary, CompatibilityUserRole } from '@super-pro/shared-types';
 import { HttpStatus } from '@super-pro/shared-constants';
 import { authorizationService } from '../authorization/authorization.service.ts';
-import { UserRoleEnum } from './user.dto.ts';
 import type {
   CreateUserRequestDto,
   GetLoginPublicKeyResponseDto,
@@ -25,6 +24,7 @@ import type {
   UserResponseDto,
   UserValidationErrorContextDto,
 } from './user.dto.ts';
+import { UserRoleEnum } from './user.dto.ts';
 import type { UserEntity } from './user.entity.ts';
 import {
   userRepository,
@@ -464,7 +464,6 @@ function toResponseDto(entity: UserEntity): UserResponseDto {
     email: entity.email,
     phone: entity.phone,
     status: entity.status,
-    role: entity.role,
     assignedRoles: [],
     ...(entity.createBy ? { createBy: entity.createBy } : {}),
     ...(createTime ? { createTime } : {}),
@@ -481,7 +480,6 @@ function validateCreateInput(input: Record<string, unknown>): CreateUserRequestD
     email: normalizeOptionalString(input.email, 'email', '用户邮箱'),
     phone: normalizeOptionalString(input.phone, 'phone', '用户手机号'),
     status: normalizeStatus(input.status),
-    role: normalizeRole(input.role),
     assignedRoleIds: normalizeIdList(input.assignedRoleIds, 'assignedRoleIds', '角色标识'),
   };
 
@@ -530,13 +528,6 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateUserRequestD
     const status = normalizeOptionalStatus(input.status);
     if (status !== undefined) {
       payload.status = status;
-    }
-  }
-
-  if (Object.prototype.hasOwnProperty.call(input, 'role')) {
-    const role = normalizeOptionalRole(input.role);
-    if (role !== undefined) {
-      payload.role = role;
     }
   }
 
@@ -630,14 +621,39 @@ function withAssignedRoles(
   };
 }
 
+function deriveCompatibilityRole(
+  assignedRoles: AuthorizationRoleSummary[] | undefined,
+): CompatibilityUserRole {
+  if (!assignedRoles || assignedRoles.length === 0) {
+    return 'guest';
+  }
+
+  const roleCodes = assignedRoles
+    .map((role) => role.code.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (roleCodes.includes('platform.admin')) {
+    return 'admin';
+  }
+
+  if (roleCodes.every((code) => code.endsWith('.viewer'))) {
+    return 'guest';
+  }
+
+  return 'employee';
+}
+
 function validateUserListQuery(input: Record<string, unknown>): UserListQueryDto {
   const keyword = normalizeOptionalKeyword(input.keyword);
-  const role = normalizeOptionalRole(input.role);
+  const roleId =
+    input.roleId === undefined || input.roleId === null || input.roleId === ''
+      ? undefined
+      : ensurePositiveInteger(Number(input.roleId), 'roleId');
   const status = normalizeOptionalStatus(input.status);
 
   return {
     ...(keyword ? { keyword } : {}),
-    ...(role ? { role } : {}),
+    ...(roleId !== undefined ? { roleId } : {}),
     ...(status !== undefined ? { status } : {}),
     page: normalizePaginationInteger(input.page, 'page', DEFAULT_USER_LIST_PAGE),
     pageSize: normalizePaginationInteger(
@@ -783,7 +799,6 @@ export class UserService {
       email: payload.email ?? '',
       phone: payload.phone ?? '',
       status: payload.status ?? 1,
-      role: payload.role ?? UserRoleEnum.Employee,
       passwordHash: hashPassword(payload.password ?? DEFAULT_LOGIN_PASSWORD),
       ...(payload.remark !== undefined ? { remark: payload.remark } : {}),
     });
@@ -943,12 +958,14 @@ export class UserService {
       );
     }
 
+    const assignedRoleMap = await this.authzService.getAssignedRolesByUserIds([entity.id]);
+
     return {
       token: generateJwtToken(
         {
           userId: entity.id,
           username: entity.username,
-          role: entity.role,
+          role: deriveCompatibilityRole(assignedRoleMap.get(entity.id)),
         },
         LOGIN_TOKEN_EXPIRES_IN,
       ),
@@ -966,7 +983,6 @@ export class UserService {
       username: payload.username,
       nickname: payload.username,
       status: 1,
-      role: UserRoleEnum.Employee,
       password: payload.password,
     });
   }

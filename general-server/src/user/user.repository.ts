@@ -1,7 +1,8 @@
 import type { EntityManager, Repository } from 'typeorm';
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
+import { UserRoleAssignmentEntity } from '../authorization/authorization.entity.ts';
 import { UserEntity } from './user.entity.ts';
-import type { UserListQueryDto, UserRoleEnum } from './user.dto.ts';
+import type { UserListQueryDto } from './user.dto.ts';
 
 export interface CreateUserEntityInput {
   username: string
@@ -9,7 +10,6 @@ export interface CreateUserEntityInput {
   email: string
   phone: string
   status: number
-  role: UserRoleEnum
   passwordHash: string
   remark?: string
 }
@@ -20,7 +20,6 @@ export interface UpdateUserEntityInput {
   email?: string
   phone?: string
   status?: number
-  role?: UserRoleEnum
   remark?: string
   passwordHash?: string
 }
@@ -82,9 +81,19 @@ export class UserRepository implements UserRepositoryPort {
       );
     }
 
-    if (query.role) {
-      queryBuilder.andWhere('user.role = :role', {
-        role: query.role,
+    if (query.roleId !== undefined) {
+      const roleFilterSubQuery = queryBuilder
+        .subQuery()
+        .select('1')
+        .from(UserRoleAssignmentEntity, 'userRole')
+        .where('userRole.userId = user.id')
+        .andWhere('userRole.roleId = :roleId')
+        .andWhere('userRole.deleteFlag = :userRoleDeleteFlag')
+        .getQuery();
+
+      queryBuilder.andWhere(`EXISTS (${roleFilterSubQuery})`, {
+        roleId: query.roleId,
+        userRoleDeleteFlag: 0,
       });
     }
 
@@ -154,7 +163,6 @@ export class UserRepository implements UserRepositoryPort {
       email: input.email,
       phone: input.phone,
       status: input.status,
-      role: input.role,
       passwordHash: input.passwordHash,
       createBy: 'system',
       updateBy: 'system',
@@ -191,9 +199,6 @@ export class UserRepository implements UserRepositoryPort {
     }
     if (input.status !== undefined) {
       current.status = input.status;
-    }
-    if (input.role !== undefined) {
-      current.role = input.role;
     }
     if (input.remark !== undefined) {
       current.remark = input.remark;

@@ -1,23 +1,21 @@
-import { UserRoleEnum } from '../../src/user/user.dto.ts'
-import { UserEntity } from '../../src/user/user.entity.ts'
+import { UserEntity } from '../../src/user/user.entity.ts';
 import {
   hashPassword,
   UserBusinessError,
   UserService,
-} from '../../src/user/user.service.ts'
-import type { UserRepositoryPort } from '../../src/user/user.repository.ts'
+} from '../../src/user/user.service.ts';
+import type { UserRepositoryPort } from '../../src/user/user.repository.ts';
 
 function createRepositoryMock(): UserRepositoryPort {
   const user = Object.assign(new UserEntity(), {
     id: 1,
     username: 'zhangsan',
-    nickname: '张三',
+    nickname: 'zhangsan',
     email: 'zhangsan@example.com',
     phone: '13800000001',
     status: 1,
-    role: UserRoleEnum.Admin,
     passwordHash: hashPassword('123456'),
-  })
+  });
 
   return {
     async getUserList() {
@@ -26,32 +24,35 @@ function createRepositoryMock(): UserRepositoryPort {
         total: 1,
         page: 1,
         pageSize: 10,
-      }
+      };
     },
     async getUserById(id: number) {
-      return id === user.id ? user : null
+      return id === user.id ? user : null;
     },
     async getUserByUsername(username: string) {
-      return username === user.username ? user : null
+      return username === user.username ? user : null;
+    },
+    async getUserByPhone(phone: string) {
+      return phone === user.phone ? user : null;
     },
     async getUserAuthByUsername(username: string) {
-      return username === user.username ? user : null
+      return username === user.username ? user : null;
     },
     async createUser() {
-      return user
+      return user;
     },
     async updateUser() {
-      return user
+      return user;
     },
     async deleteUser() {
-      return user
+      return user;
     },
-  }
+  };
 }
 
 describe('UserService login encryption', () => {
   it('returns controlled error for invalid ciphertext', async () => {
-    const service = new UserService(createRepositoryMock())
+    const service = new UserService(createRepositoryMock());
 
     await expect(
       service.loginUser({
@@ -63,6 +64,6 @@ describe('UserService login encryption', () => {
       context: expect.objectContaining({
         field: 'passwordCiphertext',
       }),
-    })
-  })
-})
+    });
+  });
+});

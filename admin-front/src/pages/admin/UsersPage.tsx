@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
 import {
   AlertDialog,
@@ -29,6 +29,11 @@ import {
   TableRow,
   toast,
 } from '@/components/ui'
+import { MultiSelect, type MultiSelectOption } from '@super-pro/shared-ui'
+import {
+  getAuthorizationRoles,
+  type AuthorizationRoleResponseDto,
+} from '@/api/modules/authorization'
 import {
   createUser,
   deleteUser,
@@ -36,7 +41,6 @@ import {
   type CreateUserRequestDto,
   type UpdateUserRequestDto,
   updateUser,
-  UserRoleEnum,
   type UserResponseDto,
 } from '@/api/modules/users'
 import {
@@ -45,8 +49,6 @@ import {
   type LoadState,
   ModuleSelect,
   formatStatus,
-  formatUserRole,
-  USER_ROLE_OPTIONS,
 } from './module-page-shared'
 
 type UserFilters = {
@@ -59,7 +61,7 @@ type UserFormState = {
   username: string
   nickname: string
   phone: string
-  role: UserRoleEnum
+  roleIds: number[]
   status: number
 }
 
@@ -69,11 +71,52 @@ type EditableUserFormState = Omit<UserFormState, 'username'> & {
 
 const TABLE_COLUMN_COUNT = 5
 
+function buildUserFormState(): UserFormState {
+  return {
+    username: '',
+    nickname: '',
+    phone: '',
+    roleIds: [],
+    status: 1,
+  }
+}
+
+function buildEditableUserFormState(): EditableUserFormState {
+  return {
+    nickname: '',
+    phone: '',
+    roleIds: [],
+    status: 1,
+    password: '',
+  }
+}
+
+/*
+function formatAssignedRoleNames(user: UserResponseDto) {
+  const roleNames = (user.assignedRoles ?? [])
+    .map((role) => role.name.trim())
+    .filter(Boolean)
+
+  return roleNames.length > 0 ? roleNames.join(' / ') : '未分配角色'
+}
+
+*/
+function formatAssignedRoleNames(user: UserResponseDto) {
+  const roleNames = (user.assignedRoles ?? [])
+    .map((role) => role.name.trim())
+    .filter(Boolean)
+
+  return roleNames.length > 0 ? roleNames.join(' / ') : '\u672a\u5206\u914d\u89d2\u8272'
+}
+
 export function UsersPage() {
   const [userRows, setUserRows] = useState<UserResponseDto[]>([])
   const [totalUsers, setTotalUsers] = useState(0)
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [roleOptions, setRoleOptions] = useState<AuthorizationRoleResponseDto[]>([])
+  const [roleLoadState, setRoleLoadState] = useState<LoadState>('idle')
+  const [roleErrorMessage, setRoleErrorMessage] = useState('')
   const [keyword, setKeyword] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -88,20 +131,8 @@ export function UsersPage() {
   const [isDeletingUser, setIsDeletingUser] = useState(false)
   const [togglingUserId, setTogglingUserId] = useState<number | null>(null)
   const [resettingUserId, setResettingUserId] = useState<number | null>(null)
-  const [createDraft, setCreateDraft] = useState<UserFormState>({
-    username: '',
-    nickname: '',
-    phone: '',
-    role: UserRoleEnum.Employee,
-    status: 1,
-  })
-  const [editingDraft, setEditingDraft] = useState<EditableUserFormState>({
-    nickname: '',
-    phone: '',
-    role: UserRoleEnum.Employee,
-    status: 1,
-    password: '',
-  })
+  const [createDraft, setCreateDraft] = useState<UserFormState>(buildUserFormState())
+  const [editingDraft, setEditingDraft] = useState<EditableUserFormState>(buildEditableUserFormState())
   const [appliedFilters, setAppliedFilters] = useState<UserFilters>({
     keyword: '',
     role: 'all',
@@ -111,7 +142,7 @@ export function UsersPage() {
   function buildUserListQuery(filters: UserFilters, page: number, nextPageSize: number) {
     return {
       ...(filters.keyword.trim() ? { keyword: filters.keyword.trim() } : {}),
-      ...(filters.role !== 'all' ? { role: filters.role as UserRoleEnum } : {}),
+      ...(filters.role !== 'all' ? { roleId: Number(filters.role) } : {}),
       ...(filters.status !== 'all' ? { status: Number(filters.status) } : {}),
       page,
       pageSize: nextPageSize,
@@ -140,24 +171,47 @@ export function UsersPage() {
     }
   }
 
+  async function loadRoleOptions() {
+    setRoleLoadState('loading')
+    setRoleErrorMessage('')
+
+    try {
+      const result = await getAuthorizationRoles()
+      setRoleOptions(result.items)
+      setRoleLoadState('success')
+    } catch (error) {
+      setRoleOptions([])
+      setRoleLoadState('error')
+      setRoleErrorMessage(error instanceof Error ? error.message : '加载角色列表失败，请稍后重试。')
+    }
+  }
+
   useEffect(() => {
     void loadUsers()
   }, [appliedFilters, currentPage, pageSize, reloadKey])
+
+  useEffect(() => {
+    void loadRoleOptions()
+  }, [])
 
   const totalPages = Math.max(1, Math.ceil(totalUsers / pageSize))
   const isEditDialogOpen = editingUserId !== null
   const canCreateUser = createDraft.username.trim().length > 0 && createDraft.nickname.trim().length > 0
   const canSaveEditingUser = editingDraft.nickname.trim().length > 0
+  const roleSelectOptions = useMemo<MultiSelectOption[]>(
+    () =>
+      roleOptions.map((role) => ({
+        value: String(role.id),
+        label: role.name,
+        description: role.code,
+        keywords: `${role.name} ${role.code} ${role.description ?? ''}`,
+      })),
+    [roleOptions],
+  )
 
   function handleCloseCreateDialog() {
     setIsCreateDialogOpen(false)
-    setCreateDraft({
-      username: '',
-      nickname: '',
-      phone: '',
-      role: UserRoleEnum.Employee,
-      status: 1,
-    })
+    setCreateDraft(buildUserFormState())
   }
 
   function handleEditUser(user: UserResponseDto) {
@@ -165,7 +219,7 @@ export function UsersPage() {
     setEditingDraft({
       nickname: user.nickname,
       phone: user.phone,
-      role: user.role,
+      roleIds: (user.assignedRoles ?? []).map((role) => role.id),
       status: user.status,
       password: '',
     })
@@ -173,13 +227,7 @@ export function UsersPage() {
 
   function handleCloseEditDialog() {
     setEditingUserId(null)
-    setEditingDraft({
-      nickname: '',
-      phone: '',
-      role: UserRoleEnum.Employee,
-      status: 1,
-      password: '',
-    })
+    setEditingDraft(buildEditableUserFormState())
   }
 
   async function handleCreateUser() {
@@ -194,7 +242,7 @@ export function UsersPage() {
         username: createDraft.username.trim(),
         nickname: createDraft.nickname.trim(),
         phone: createDraft.phone.trim(),
-        role: createDraft.role,
+        assignedRoleIds: createDraft.roleIds,
         status: createDraft.status,
       } satisfies CreateUserRequestDto)
 
@@ -220,7 +268,7 @@ export function UsersPage() {
       await updateUser(editingUserId, {
         nickname: editingDraft.nickname.trim(),
         phone: editingDraft.phone.trim(),
-        role: editingDraft.role,
+        assignedRoleIds: editingDraft.roleIds,
         status: editingDraft.status,
         ...(editingDraft.password.trim() ? { password: editingDraft.password.trim() } : {}),
       } satisfies UpdateUserRequestDto)
@@ -317,9 +365,9 @@ export function UsersPage() {
             onValueChange={setRoleFilter}
             options={[
               { value: 'all', label: '全部角色' },
-              ...USER_ROLE_OPTIONS.map((role) => ({
-                value: role,
-                label: formatUserRole(role),
+              ...roleOptions.map((role) => ({
+                value: String(role.id),
+                label: role.name,
               })),
             ]}
           />
@@ -410,7 +458,7 @@ export function UsersPage() {
                   <TableRow key={row.id}>
                     <TableCell>{row.nickname.trim() || row.username}</TableCell>
                     <TableCell>{row.phone}</TableCell>
-                    <TableCell>{formatUserRole(row.role)}</TableCell>
+                    <TableCell>{formatAssignedRoleNames(row)}</TableCell>
                     <TableCell>
                       <div className="flex min-w-[7rem] items-center gap-2">
                         <Switch
@@ -484,7 +532,7 @@ export function UsersPage() {
       </Card>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={(open) => (!open ? handleCloseCreateDialog() : setIsCreateDialogOpen(true))}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>新增用户</DialogTitle>
             <DialogDescription>填写基础信息后创建后台用户。</DialogDescription>
@@ -516,19 +564,41 @@ export function UsersPage() {
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-2">
-                <div className="text-sm font-medium">角色</div>
-                <ModuleSelect
-                  value={createDraft.role}
-                  onValueChange={(value) =>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">角色</div>
+                  <span className="text-xs text-muted-foreground">已选 {createDraft.roleIds.length} 个</span>
+                </div>
+                <MultiSelect
+                  options={roleSelectOptions}
+                  value={createDraft.roleIds.map(String)}
+                  disabled={isCreatingUser}
+                  loading={roleLoadState === 'loading'}
+                  errorText={roleLoadState === 'error' ? roleErrorMessage || '加载角色列表失败，请稍后重试。' : undefined}
+                  onRetry={() => void loadRoleOptions()}
+                  placeholder="请选择角色"
+                  searchPlaceholder="搜索角色名称或编码"
+                  emptyText="没有匹配的角色。"
+                  noOptionsText="当前暂无可分配角色。"
+                  loadingText="正在加载角色列表..."
+                  clearText="清空"
+                  countText={(selectedCount, totalCount) => `共 ${totalCount} 个角色，已选 ${selectedCount} 个`}
+                  renderValue={(selectedOptions) => {
+                    if (selectedOptions.length === 0) {
+                      return '请选择角色'
+                    }
+
+                    if (selectedOptions.length > 2) {
+                      return `已选 ${selectedOptions.length} 个角色`
+                    }
+
+                    return selectedOptions.map((option) => option.label).join(' / ')
+                  }}
+                  onValueChange={(roleIds) =>
                     setCreateDraft((currentDraft) => ({
                       ...currentDraft,
-                      role: value as UserRoleEnum,
+                      roleIds: roleIds.map((roleId) => Number(roleId)),
                     }))
                   }
-                  options={USER_ROLE_OPTIONS.map((role) => ({
-                    value: role,
-                    label: formatUserRole(role),
-                  }))}
                 />
               </div>
               <div className="grid gap-2">
@@ -561,7 +631,7 @@ export function UsersPage() {
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => (!open ? handleCloseEditDialog() : null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>修改用户</DialogTitle>
             <DialogDescription>调整用户姓名、手机号、角色、状态和密码。</DialogDescription>
@@ -595,19 +665,41 @@ export function UsersPage() {
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-2">
-                <div className="text-sm font-medium">角色</div>
-                <ModuleSelect
-                  value={editingDraft.role}
-                  onValueChange={(value) =>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">角色</div>
+                  <span className="text-xs text-muted-foreground">已选 {editingDraft.roleIds.length} 个</span>
+                </div>
+                <MultiSelect
+                  options={roleSelectOptions}
+                  value={editingDraft.roleIds.map(String)}
+                  disabled={isSavingEdit}
+                  loading={roleLoadState === 'loading'}
+                  errorText={roleLoadState === 'error' ? roleErrorMessage || '加载角色列表失败，请稍后重试。' : undefined}
+                  onRetry={() => void loadRoleOptions()}
+                  placeholder="请选择角色"
+                  searchPlaceholder="搜索角色名称或编码"
+                  emptyText="没有匹配的角色。"
+                  noOptionsText="当前暂无可分配角色。"
+                  loadingText="正在加载角色列表..."
+                  clearText="清空"
+                  countText={(selectedCount, totalCount) => `共 ${totalCount} 个角色，已选 ${selectedCount} 个`}
+                  renderValue={(selectedOptions) => {
+                    if (selectedOptions.length === 0) {
+                      return '请选择角色'
+                    }
+
+                    if (selectedOptions.length > 2) {
+                      return `已选 ${selectedOptions.length} 个角色`
+                    }
+
+                    return selectedOptions.map((option) => option.label).join(' / ')
+                  }}
+                  onValueChange={(roleIds) =>
                     setEditingDraft((currentDraft) => ({
                       ...currentDraft,
-                      role: value as UserRoleEnum,
+                      roleIds: roleIds.map((roleId) => Number(roleId)),
                     }))
                   }
-                  options={USER_ROLE_OPTIONS.map((role) => ({
-                    value: role,
-                    label: formatUserRole(role),
-                  }))}
                 />
               </div>
               <div className="grid gap-2">

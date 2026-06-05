@@ -1,4 +1,4 @@
-import type { ApiEnvelope } from '@super-pro/shared-types'
+import type { ApiEnvelope, AuthorizationRoleSummary } from '@super-pro/shared-types'
 import { RequestError, request } from '../request'
 
 export const UserRoleEnum = {
@@ -17,7 +17,7 @@ export interface UserResponseDto {
   email: string
   phone: string
   status: number
-  role: UserRoleEnum
+  assignedRoles?: AuthorizationRoleSummary[]
   createBy?: string
   createTime?: string
   updateBy?: string
@@ -27,7 +27,7 @@ export interface UserResponseDto {
 
 export interface UserListQueryDto {
   keyword?: string
-  role?: UserRoleEnum
+  roleId?: number
   status?: number
   page?: number
   pageSize?: number
@@ -46,7 +46,7 @@ export interface CreateUserRequestDto {
   email?: string
   phone?: string
   status?: number
-  role?: UserRoleEnum
+  assignedRoleIds?: number[]
   remark?: string
   password?: string
 }
@@ -57,7 +57,7 @@ export interface UpdateUserRequestDto {
   email?: string
   phone?: string
   status?: number
-  role?: UserRoleEnum
+  assignedRoleIds?: number[]
   remark?: string
   password?: string
 }

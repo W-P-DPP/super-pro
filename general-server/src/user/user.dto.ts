@@ -12,7 +12,6 @@ export interface UserResponseDto {
   email: string
   phone: string
   status: number
-  role: UserRoleEnum
   assignedRoles?: Array<{
     id: number
     code: string
@@ -27,7 +26,7 @@ export interface UserResponseDto {
 
 export interface UserListQueryDto {
   keyword?: string
-  role?: UserRoleEnum
+  roleId?: number
   status?: number
   page?: number
   pageSize?: number
@@ -57,7 +56,6 @@ export interface CreateUserRequestDto {
   email?: string
   phone?: string
   status?: number
-  role?: UserRoleEnum
   assignedRoleIds?: number[]
   remark?: string
   password?: string
@@ -69,7 +67,6 @@ export interface UpdateUserRequestDto {
   email?: string
   phone?: string
   status?: number
-  role?: UserRoleEnum
   assignedRoleIds?: number[]
   remark?: string
   password?: string

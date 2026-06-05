@@ -1,11 +1,8 @@
 import { constants, publicEncrypt } from 'crypto';
 import type {
-  CreateUserEntityInput,
-  UpdateUserEntityInput,
-  UserRepositoryPort,
-} from '../../src/user/user.repository.ts';
-import { UserRoleEnum } from '../../src/user/user.dto.ts';
-import { UserEntity } from '../../src/user/user.entity.ts';
+  AuthorizationRoleSummary,
+  CompatibilityUserRole,
+} from '@super-pro/shared-types';
 import {
   clearCachedLoginEncryptionKeyPair,
   hashPassword,
@@ -13,6 +10,12 @@ import {
   UserService,
   verifyPassword,
 } from '../../src/user/user.service.ts';
+import type {
+  CreateUserEntityInput,
+  UpdateUserEntityInput,
+  UserRepositoryPort,
+} from '../../src/user/user.repository.ts';
+import { UserEntity } from '../../src/user/user.entity.ts';
 
 const TEST_PASSWORD = '123456';
 const DISABLED_USER_PASSWORD = '654321';
@@ -29,10 +32,8 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
         const matchesKeyword =
           !keyword ||
           `${record.username} ${record.nickname} ${record.phone}`.toLowerCase().includes(keyword);
-        const matchesRole = !query.role || record.role === query.role;
         const matchesStatus = query.status === undefined || record.status === query.status;
-
-        return matchesKeyword && matchesRole && matchesStatus;
+        return matchesKeyword && matchesStatus;
       });
 
       return {
@@ -66,8 +67,8 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
         email: input.email,
         phone: input.phone,
         status: input.status,
-        role: input.role,
         passwordHash: input.passwordHash,
+        ...(input.remark !== undefined ? { remark: input.remark } : {}),
       });
     },
     async updateUser(id: number, input: UpdateUserEntityInput) {
@@ -85,26 +86,46 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
   };
 }
 
-function createAuthorizationServiceMock() {
+function createAuthorizationServiceMock(initialAssignments?: Map<number, AuthorizationRoleSummary[]>) {
+  const assignments = new Map<number, AuthorizationRoleSummary[]>();
+
+  for (const [userId, roles] of initialAssignments ?? new Map()) {
+    assignments.set(
+      userId,
+      roles.map((role) => ({ ...role })),
+    );
+  }
+
   return {
     async getAssignedRolesByUserIds(userIds: number[]) {
       return new Map(
         userIds.map((userId) => [
           userId,
-          [] as Array<{ id: number; code: string; name: string }>,
+          (assignments.get(userId) ?? []).map((role) => ({ ...role })),
         ]),
       );
     },
     async ensureRoleIdsExist() {},
-    async replaceUserRoleAssignments() {},
-    async clearUserRoleAssignments() {},
+    async replaceUserRoleAssignments(userId: number, roleIds: number[]) {
+      assignments.set(
+        userId,
+        roleIds.map((roleId) => ({
+          id: roleId,
+          code: `role.${roleId}`,
+          name: `Role ${roleId}`,
+        })),
+      );
+    },
+    async clearUserRoleAssignments(userId: number) {
+      assignments.set(userId, []);
+    },
   };
 }
 
-function createService(records: UserEntity[]) {
+function createService(records: UserEntity[], assignments?: Map<number, AuthorizationRoleSummary[]>) {
   return new UserService(
     createRepositoryMock(records),
-    createAuthorizationServiceMock(),
+    createAuthorizationServiceMock(assignments),
   );
 }
 
@@ -124,21 +145,19 @@ describe('UserService', () => {
     Object.assign(new UserEntity(), {
       id: 1,
       username: 'zhangsan',
-      nickname: '张三',
+      nickname: 'zhangsan',
       email: 'zhangsan@example.com',
       phone: '13800000001',
       status: 1,
-      role: UserRoleEnum.Admin,
       passwordHash: hashPassword(TEST_PASSWORD),
     }),
     Object.assign(new UserEntity(), {
       id: 2,
       username: 'lisi',
-      nickname: '李四',
+      nickname: 'lisi',
       email: 'lisi@example.com',
       phone: '13800000002',
       status: 0,
-      role: UserRoleEnum.Guest,
       passwordHash: hashPassword(DISABLED_USER_PASSWORD),
     }),
   ];
@@ -150,34 +169,37 @@ describe('UserService', () => {
     clearCachedLoginEncryptionKeyPair();
   });
 
-  it('creates a user with the provided compatibility role', async () => {
+  it('creates a user and returns assigned roles from the relation table', async () => {
     const service = createService(records);
 
     const result = await service.createUser({
       username: 'wangwu',
-      nickname: '王五',
+      nickname: 'wangwu',
       email: 'wangwu@example.com',
       phone: '13800000003',
       status: 1,
-      role: UserRoleEnum.Admin,
+      assignedRoleIds: [10, 20],
     });
 
     expect(result).toEqual(
       expect.objectContaining({
         id: 99,
         username: 'wangwu',
-        role: UserRoleEnum.Admin,
-        assignedRoles: [],
+        assignedRoles: [
+          { id: 10, code: 'role.10', name: 'Role 10' },
+          { id: 20, code: 'role.20', name: 'Role 20' },
+        ],
       }),
     );
+    expect(result).not.toHaveProperty('role');
   });
 
-  it('defaults compatibility role to employee', async () => {
+  it('returns empty assigned roles when no role relation exists', async () => {
     const service = createService(records);
 
     const result = await service.createUser({
       username: 'zhaoliu',
-      nickname: '赵六',
+      nickname: 'zhaoliu',
       email: 'zhaoliu@example.com',
       phone: '13800000004',
       status: 1,
@@ -186,7 +208,7 @@ describe('UserService', () => {
     expect(result).toEqual(
       expect.objectContaining({
         username: 'zhaoliu',
-        role: UserRoleEnum.Employee,
+        assignedRoles: [],
       }),
     );
   });
@@ -197,30 +219,13 @@ describe('UserService', () => {
     await expect(
       service.createUser({
         username: 'zhangsan',
-        nickname: '重复用户',
+        nickname: 'duplicate-user',
         status: 1,
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
       statusCode: 409,
       context: expect.objectContaining({
         field: 'username',
-      }),
-    });
-  });
-
-  it('rejects invalid compatibility role values', async () => {
-    const service = createService(records);
-
-    await expect(
-      service.createUser({
-        username: 'guest-user',
-        nickname: '访客',
-        role: 'invalid-role' as UserRoleEnum,
-      }),
-    ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      statusCode: 400,
-      context: expect.objectContaining({
-        field: 'role',
       }),
     });
   });
@@ -236,29 +241,46 @@ describe('UserService', () => {
     });
   });
 
-  it('updates user role and phone', async () => {
-    const service = createService(records);
+  it('updates user phone and role assignments', async () => {
+    const assignments = new Map<number, AuthorizationRoleSummary[]>([
+      [
+        1,
+        [{ id: 1, code: 'platform.admin', name: 'Platform Admin' }],
+      ],
+    ]);
+    const service = createService(records, assignments);
 
     const result = await service.updateUser(1, {
-      role: UserRoleEnum.Guest,
       phone: '13900000001',
+      assignedRoleIds: [30],
     });
 
     expect(result).toEqual(
       expect.objectContaining({
         id: 1,
-        role: UserRoleEnum.Guest,
         phone: '13900000001',
+        assignedRoles: [{ id: 30, code: 'role.30', name: 'Role 30' }],
       }),
     );
+    expect(result).not.toHaveProperty('role');
   });
 
-  it('supports filtered user list queries', async () => {
-    const service = createService(records);
+  it('supports filtered user list queries with roleId and status', async () => {
+    const assignments = new Map<number, AuthorizationRoleSummary[]>([
+      [
+        1,
+        [{ id: 101, code: 'platform.admin', name: 'Platform Admin' }],
+      ],
+      [
+        2,
+        [{ id: 202, code: 'project.viewer', name: 'Project Viewer' }],
+      ],
+    ]);
+    const service = createService(records, assignments);
 
     const result = await service.getUserList({
       keyword: 'zhang',
-      role: UserRoleEnum.Admin,
+      roleId: '101',
       status: '1',
       page: '1',
       pageSize: '1',
@@ -269,7 +291,7 @@ describe('UserService', () => {
         expect.objectContaining({
           id: 1,
           username: 'zhangsan',
-          role: UserRoleEnum.Admin,
+          assignedRoles: [{ id: 101, code: 'platform.admin', name: 'Platform Admin' }],
         }),
       ],
       total: 1,
@@ -278,8 +300,27 @@ describe('UserService', () => {
     });
   });
 
-  it('returns token metadata only on successful login', async () => {
-    const service = createService(records);
+  it.each<[string, AuthorizationRoleSummary[], CompatibilityUserRole]>([
+    [
+      'admin compatibility role',
+      [{ id: 1, code: 'platform.admin', name: 'Platform Admin' }],
+      'admin',
+    ],
+    [
+      'guest compatibility role',
+      [{ id: 2, code: 'project.viewer', name: 'Project Viewer' }],
+      'guest',
+    ],
+    [
+      'employee compatibility role',
+      [{ id: 3, code: 'project.editor', name: 'Project Editor' }],
+      'employee',
+    ],
+  ])('emits %s in jwt payload', async (_label, assignedRoles, expectedRole) => {
+    const service = createService(
+      records,
+      new Map<number, AuthorizationRoleSummary[]>([[1, assignedRoles]]),
+    );
     const publicKey = service.getLoginPublicKey().publicKey;
 
     const result = await service.loginUser({
@@ -287,6 +328,11 @@ describe('UserService', () => {
       passwordCiphertext: encryptPassword(publicKey, TEST_PASSWORD),
     });
 
+    const tokenPayload = JSON.parse(
+      Buffer.from(result.token.split('.')[1] ?? '', 'base64url').toString('utf8'),
+    ) as { role?: CompatibilityUserRole };
+
+    expect(tokenPayload.role).toBe(expectedRole);
     expect(result).toEqual(
       expect.objectContaining({
         token: expect.any(String),
@@ -294,7 +340,6 @@ describe('UserService', () => {
         expiresIn: 7200,
       }),
     );
-    expect(result).not.toHaveProperty('user');
   });
 
   it('rejects wrong password and disabled user login', async () => {
@@ -332,7 +377,7 @@ describe('UserService', () => {
     await expect(
       service.createUser({
         username: 'wangwu',
-        nickname: '重复手机号用户',
+        nickname: 'duplicate-phone-user',
         email: 'dup-phone@example.com',
         phone: '13800000001',
         status: 1,
