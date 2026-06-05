@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui'
+import { useAdminMenu } from '@/contexts/admin-menu-context'
 import { cn } from '@/lib/utils'
 import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
 
@@ -245,14 +246,17 @@ export function ListPagination({
 }
 
 export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
-  const module = getAdminModuleBySlug(moduleSlug)
+  const { getModuleBySlug, visibleModules } = useAdminMenu()
+  const module = getModuleBySlug(moduleSlug) ?? getAdminModuleBySlug(moduleSlug)
 
   if (!module) {
     return <Navigate to="/404" replace />
   }
 
   const Icon = module.icon
-  const shortcutModules = adminModules.filter((item) => item.slug !== 'dashboard')
+  const shortcutModules = visibleModules.length > 0
+    ? visibleModules.filter((item) => item.slug !== 'dashboard')
+    : adminModules.filter((item) => item.slug !== 'dashboard')
 
   return (
     <section className="mx-auto flex w-full max-w-[var(--app-shell-page-width)] flex-col gap-4 px-4 py-4 md:px-6 md:py-6">

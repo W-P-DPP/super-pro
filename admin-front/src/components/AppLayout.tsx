@@ -50,17 +50,16 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
+  Spinner,
   toast,
 } from '@/components/ui'
 import { getUserDetail, type UpdateUserRequestDto, updateUser, type UserResponseDto } from '@/api/modules/users'
-import { adminModules, adminNavGroups, getAdminModuleBySlug } from '@/data/admin-navigation'
+import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
+import { useAdminMenu } from '@/contexts/admin-menu-context'
 import { clearReusableAuthSession, getReusableAuthToken } from '@/lib/auth-session'
 import { getStrictMenuLoginUrl } from '@/lib/strict-menu-redirect'
 
 const APP_SHELL_HEADER_CLASS = 'h-[var(--app-shell-header-height)] shrink-0'
-const DEFAULT_GROUP_OPEN_STATE = Object.fromEntries(
-  adminNavGroups.map((group) => [group.label, true] as const),
-)
 
 type CurrentUserTokenPayload = {
   userId: number | null
@@ -106,8 +105,16 @@ function decodeCurrentUserToken(): CurrentUserTokenPayload | null {
 export function AppLayout() {
   const location = useLocation()
   const { resolvedTheme, setTheme } = useTheme()
+  const {
+    status: adminMenuStatus,
+    errorMessage: adminMenuErrorMessage,
+    visibleNavGroups,
+    visibleModules,
+    getModuleBySlug,
+    reload: reloadAdminMenu,
+  } = useAdminMenu()
   const [searchKeyword, setSearchKeyword] = useState('')
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(DEFAULT_GROUP_OPEN_STATE)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState<UserResponseDto | null>(null)
   const [isCurrentUserDialogOpen, setIsCurrentUserDialogOpen] = useState(false)
@@ -121,10 +128,10 @@ export function AppLayout() {
 
   const filteredGroups = useMemo(() => {
     if (!deferredSearchKeyword) {
-      return adminNavGroups
+      return visibleNavGroups
     }
 
-    return adminNavGroups
+    return visibleNavGroups
       .map((group) => ({
         ...group,
         items: group.items.filter((item) => {
@@ -133,10 +140,10 @@ export function AppLayout() {
         }),
       }))
       .filter((group) => group.items.length > 0)
-  }, [deferredSearchKeyword])
+  }, [deferredSearchKeyword, visibleNavGroups])
 
   const currentSlug = location.pathname.replace(/^\//, '') || 'dashboard'
-  const currentModule = getAdminModuleBySlug(currentSlug) ?? adminModules[0]
+  const currentModule = getModuleBySlug(currentSlug) ?? getAdminModuleBySlug(currentSlug) ?? adminModules[0]
   const themeLabel = resolvedTheme === 'dark' ? '切换浅色' : '切换深色'
   const hasSearchKeyword = deferredSearchKeyword.length > 0
   const currentUserToken = useMemo(() => decodeCurrentUserToken(), [])
@@ -146,15 +153,22 @@ export function AppLayout() {
     Boolean(currentUserToken?.userId) && currentUserDraft.nickname.trim().length > 0
 
   useEffect(() => {
-    setExpandedGroups((currentState) =>
-      currentState[currentModule.group]
-        ? currentState
-        : {
-            ...currentState,
-            [currentModule.group]: true,
-          },
-    )
-  }, [currentModule.group])
+    setExpandedGroups((currentState) => {
+      const nextState = { ...currentState }
+
+      for (const group of visibleNavGroups) {
+        if (!(group.label in nextState)) {
+          nextState[group.label] = true
+        }
+      }
+
+      if (currentModule?.group && !(currentModule.group in nextState)) {
+        nextState[currentModule.group] = true
+      }
+
+      return nextState
+    })
+  }, [currentModule?.group, visibleNavGroups])
 
   useEffect(() => {
     async function loadCurrentUser() {
@@ -254,7 +268,7 @@ export function AppLayout() {
               </div>
               <div className="mt-1 flex items-center gap-2">
                 <Badge variant="outline" className="h-5 rounded-full px-2 text-[11px]">
-                  {adminModules.length} 个菜单
+                  {visibleModules.length} 个菜单
                 </Badge>
               </div>
             </div>
@@ -267,6 +281,30 @@ export function AppLayout() {
             <SidebarGroupLabel>导航菜单</SidebarGroupLabel>
             <SidebarGroupContent>
               <div className="grid gap-4">
+                {adminMenuStatus === 'loading' && visibleNavGroups.length === 0 ? (
+                  <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
+                    <CardContent className="px-3">
+                      <div className="flex items-center gap-2 text-sm text-sidebar-foreground/75">
+                        <Spinner className="size-4" />
+                        <span>正在加载后台菜单...</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                {adminMenuStatus === 'error' && visibleNavGroups.length === 0 ? (
+                  <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
+                    <CardContent className="grid gap-3 px-3">
+                      <p className="text-sm text-sidebar-foreground/75">
+                        {adminMenuErrorMessage || '后台菜单加载失败，请稍后重试。'}
+                      </p>
+                      <Button type="button" variant="outline" size="sm" onClick={reloadAdminMenu}>
+                        重试
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : null}
+
                 {filteredGroups.map((group) => (
                   <Collapsible
                     key={group.label}
@@ -315,10 +353,12 @@ export function AppLayout() {
                   </Collapsible>
                 ))}
 
-                {filteredGroups.length === 0 ? (
+                {filteredGroups.length === 0 && adminMenuStatus === 'success' ? (
                   <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
                     <CardContent className="px-3">
-                      <p className="text-sm text-sidebar-foreground/75">没有匹配的菜单项。</p>
+                      <p className="text-sm text-sidebar-foreground/75">
+                        {hasSearchKeyword ? '没有匹配的菜单项。' : '当前没有可展示的后台菜单。'}
+                      </p>
                     </CardContent>
                   </Card>
                 ) : null}

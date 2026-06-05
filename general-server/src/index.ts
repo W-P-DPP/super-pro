@@ -1,5 +1,6 @@
 import { createJwtMiddleware } from '@super-pro/shared-server';
 import express, { type Router } from 'express';
+import adminMenuRouter from './adminMenu/adminMenu.router.ts';
 import authorizationRouter from './authorization/authorization.router.ts';
 import contactRouter from './contact/contact.router.ts';
 import fileRouter from './file/file.router.ts';
@@ -16,6 +17,7 @@ const jwtMiddleware = createJwtMiddleware({
 });
 
 router.use('/contact', contactRouter);
+router.use('/admin-menu', jwtMiddleware, adminMenuRouter);
 router.use('/authorization', jwtMiddleware, authorizationRouter);
 router.use('/file', jwtMiddleware, fileRouter);
 router.use('/project', jwtMiddleware, projectRouter);

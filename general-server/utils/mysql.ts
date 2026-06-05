@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { getDatabaseConfig } from '@super-pro/shared-server';
 import { DataSource } from 'typeorm';
 import config from '../src/config.ts';
+import { AdminMenuEntitySchema } from '../src/adminMenu/adminMenu.entity.ts';
 import { ContactMessageEntitySchema } from '../src/contact/contact.entity.ts';
 import {
     PermissionEntitySchema,
@@ -53,6 +54,7 @@ export default async function initDataBase() {
 
         entities: [
             OperationLogEntity,
+            AdminMenuEntitySchema,
             ProjectEntitySchema,
             SiteMenuEntitySchema,
             UserEntitySchema,

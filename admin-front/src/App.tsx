@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout'
 import { DashboardPage } from './pages/admin/DashboardPage'
+import { ModuleRoutePage } from './pages/admin/ModuleRoutePage'
 import { PermissionsPage } from './pages/admin/PermissionsPage'
 import { ProjectsPage } from './pages/admin/ProjectsPage'
 import { ReportsPage } from './pages/admin/ReportsPage'
@@ -21,6 +22,7 @@ function App() {
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path=":moduleSlug" element={<ModuleRoutePage />} />
         <Route path="404" element={<NotFoundPage />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Route>
