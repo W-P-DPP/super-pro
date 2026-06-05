@@ -35,6 +35,37 @@ export interface SiteMenuResponseDto {
 }
 
 export type SiteMenuListDto = SiteMenuResponseDto[]
+
+export interface SiteMenuTableListQueryDto {
+  keyword?: string
+  hide?: boolean
+  strict?: boolean
+  page?: number
+  pageSize?: number
+}
+
+export interface SiteMenuTableListItemDto {
+  id: number
+  parentId: number | null
+  parentName: string
+  level: number
+  name: string
+  path: string
+  icon: string
+  strict: boolean
+  hide: boolean
+  sort: number
+  remark: string
+  updateTime: string
+}
+
+export interface SiteMenuTableListDto {
+  items: SiteMenuTableListItemDto[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface SiteMenuConfigDto {
   appIcon: string
 }

@@ -99,10 +99,7 @@ function buildRoleFormState(): RoleFormState {
   }
 }
 
-function mapRoleRecord(
-  role: AuthorizationRoleResponseDto,
-  current?: RoleRecord | null,
-): RoleRecord {
+function mapRoleRecord(role: AuthorizationRoleResponseDto, current?: RoleRecord | null): RoleRecord {
   return {
     id: role.id,
     name: role.name,
@@ -125,7 +122,6 @@ function matchesPermissionKeyword(
 }
 
 export function RolesPage() {
-  const [roleRecords, setRoleRecords] = useState<RoleRecord[]>([])
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -149,22 +145,14 @@ export function RolesPage() {
   const [togglingRoleId, setTogglingRoleId] = useState<number | null>(null)
   const [assigningRole, setAssigningRole] = useState<RoleRecord | null>(null)
   const [projectRecords, setProjectRecords] = useState<ProjectResponseDto[]>([])
-  const [permissionRecords, setPermissionRecords] = useState<
-    AuthorizationPermissionResponseDto[]
-  >([])
-  const [permissionLoadState, setPermissionLoadState] =
-    useState<LoadState>('idle')
+  const [permissionRecords, setPermissionRecords] = useState<AuthorizationPermissionResponseDto[]>([])
+  const [permissionLoadState, setPermissionLoadState] = useState<LoadState>('idle')
   const [permissionErrorMessage, setPermissionErrorMessage] = useState('')
   const [permissionKeyword, setPermissionKeyword] = useState('')
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<number[]>([])
-  const [isSavingPermissionAssignments, setIsSavingPermissionAssignments] =
-    useState(false)
-  const [createDraft, setCreateDraft] = useState<RoleFormState>(
-    buildRoleFormState(),
-  )
-  const [editingDraft, setEditingDraft] = useState<RoleFormState>(
-    buildRoleFormState(),
-  )
+  const [isSavingPermissionAssignments, setIsSavingPermissionAssignments] = useState(false)
+  const [createDraft, setCreateDraft] = useState<RoleFormState>(buildRoleFormState())
+  const [editingDraft, setEditingDraft] = useState<RoleFormState>(buildRoleFormState())
 
   useEffect(() => {
     async function syncRoles() {
@@ -172,57 +160,30 @@ export function RolesPage() {
       setErrorMessage('')
 
       try {
-        const result = await getAuthorizationRoles()
-        setRoleRecords((currentRecords) =>
-          result.items.map((role) =>
-            mapRoleRecord(
-              role,
-              currentRecords.find((record) => record.id === role.id),
-            ),
-          ),
-        )
+        const result = await getAuthorizationRoles({
+          keyword: appliedFilters.keyword.trim() || undefined,
+          status: appliedFilters.status === 'all' ? undefined : Number(appliedFilters.status),
+          page: currentPage,
+          pageSize,
+        })
+
+        setRoleRows(result.items.map((role) => mapRoleRecord(role)))
+        setTotalRoles(result.total)
+        setLoadState('success')
+
+        if (result.page !== currentPage) {
+          setCurrentPage(result.page)
+        }
       } catch (error) {
-        setRoleRecords([])
         setRoleRows([])
         setTotalRoles(0)
         setLoadState('error')
-        setErrorMessage(
-          error instanceof Error ? error.message : '加载角色列表失败，请稍后重试。',
-        )
+        setErrorMessage(error instanceof Error ? error.message : '加载角色列表失败，请稍后重试。')
       }
     }
 
     void syncRoles()
-  }, [reloadKey])
-
-  useEffect(() => {
-    const normalizedKeyword = appliedFilters.keyword.trim().toLowerCase()
-    const filteredRecords = roleRecords.filter((record) => {
-      const matchesKeyword =
-        !normalizedKeyword ||
-        `${record.name} ${record.code}`.toLowerCase().includes(normalizedKeyword)
-      const matchesStatus =
-        appliedFilters.status === 'all' || record.status === Number(appliedFilters.status)
-
-      return matchesKeyword && matchesStatus
-    })
-
-    const total = filteredRecords.length
-    const totalPagesForFilter = Math.max(1, Math.ceil(total / pageSize))
-    const nextPage = Math.min(currentPage, totalPagesForFilter)
-    const startIndex = (nextPage - 1) * pageSize
-
-    setRoleRows(total === 0 ? [] : filteredRecords.slice(startIndex, startIndex + pageSize))
-    setTotalRoles(total)
-
-    if (nextPage !== currentPage) {
-      setCurrentPage(nextPage)
-    }
-
-    if (loadState !== 'error') {
-      setLoadState('success')
-    }
-  }, [appliedFilters, currentPage, loadState, pageSize, roleRecords])
+  }, [appliedFilters, currentPage, pageSize, reloadKey])
 
   const totalPages = Math.max(1, Math.ceil(totalRoles / pageSize))
   const isEditDialogOpen = editingRoleId !== null
@@ -244,9 +205,7 @@ export function RolesPage() {
         const allPermissions = permissionsByProjectCode.get(project.projectCode) ?? []
         const projectMatches =
           !normalizedKeyword ||
-          `${project.projectName} ${project.projectCode}`
-            .toLowerCase()
-            .includes(normalizedKeyword)
+          `${project.projectName} ${project.projectCode}`.toLowerCase().includes(normalizedKeyword)
         const visiblePermissions =
           !normalizedKeyword || projectMatches
             ? allPermissions
@@ -265,9 +224,7 @@ export function RolesPage() {
       })
       .filter(
         (group) =>
-          !normalizedKeyword ||
-          group.projectMatches ||
-          group.visiblePermissions.length > 0,
+          !normalizedKeyword || group.projectMatches || group.visiblePermissions.length > 0,
       )
   }, [permissionKeyword, permissionRecords, projectRecords])
 
@@ -302,15 +259,6 @@ export function RolesPage() {
     setIsSavingPermissionAssignments(false)
   }
 
-  function hasDuplicateRoleCode(code: string, currentId?: number) {
-    const normalizedCode = code.trim().toLowerCase()
-
-    return roleRecords.some(
-      (record) =>
-        record.code.trim().toLowerCase() === normalizedCode && record.id !== currentId,
-    )
-  }
-
   async function loadPermissionCandidates() {
     setPermissionLoadState('loading')
     setPermissionErrorMessage('')
@@ -331,9 +279,7 @@ export function RolesPage() {
       setProjectRecords([])
       setPermissionRecords([])
       setPermissionLoadState('error')
-      setPermissionErrorMessage(
-        error instanceof Error ? error.message : '加载权限列表失败，请稍后重试。',
-      )
+      setPermissionErrorMessage(error instanceof Error ? error.message : '加载权限列表失败，请稍后重试。')
     }
   }
 
@@ -354,10 +300,7 @@ export function RolesPage() {
     })
   }
 
-  function handleProjectPermissionSelectionChange(
-    permissionIds: number[],
-    checked: boolean,
-  ) {
+  function handleProjectPermissionSelectionChange(permissionIds: number[], checked: boolean) {
     setSelectedPermissionIds((currentIds) => {
       if (checked) {
         return Array.from(new Set([...currentIds, ...permissionIds]))
@@ -370,11 +313,6 @@ export function RolesPage() {
 
   async function handleCreateRole() {
     if (!canCreateRole || isCreatingRole) {
-      return
-    }
-
-    if (hasDuplicateRoleCode(createDraft.code)) {
-      toast.error('角色编码已存在')
       return
     }
 
@@ -403,11 +341,6 @@ export function RolesPage() {
       return
     }
 
-    if (hasDuplicateRoleCode(editingDraft.code, editingRoleId)) {
-      toast.error('角色编码已存在')
-      return
-    }
-
     setIsSavingRole(true)
 
     try {
@@ -432,18 +365,12 @@ export function RolesPage() {
       return
     }
 
-    const targetRole = deletingRole
     setIsDeletingRole(true)
 
     try {
-      await deleteAuthorizationRole(targetRole.id)
+      await deleteAuthorizationRole(deletingRole.id)
       toast.success('角色已删除')
       setDeletingRole(null)
-
-      if (currentPage > 1 && roleRows.length === 1) {
-        setCurrentPage(currentPage - 1)
-      }
-
       setReloadKey((currentValue) => currentValue + 1)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '删除角色失败，请稍后重试。')
@@ -485,8 +412,8 @@ export function RolesPage() {
         permissionIds: selectedPermissionIds,
       } satisfies UpdateAuthorizationRoleRequestDto)
 
-      setRoleRecords((currentRecords) =>
-        currentRecords.map((record) =>
+      setRoleRows((currentRows) =>
+        currentRows.map((record) =>
           record.id === updatedRole.id ? mapRoleRecord(updatedRole, record) : record,
         ),
       )
@@ -576,10 +503,7 @@ export function RolesPage() {
               <TableBody>
                 {loadState === 'loading' ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={TABLE_COLUMN_COUNT}
-                      className="h-24 text-center text-muted-foreground"
-                    >
+                    <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Spinner className="size-4" />
                         <span>正在加载角色列表...</span>
@@ -588,10 +512,7 @@ export function RolesPage() {
                   </TableRow>
                 ) : loadState === 'error' ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={TABLE_COLUMN_COUNT}
-                      className="h-24 text-center text-muted-foreground"
-                    >
+                    <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <span>{errorMessage || '加载角色列表失败，请稍后重试。'}</span>
                         <Button
@@ -616,14 +537,10 @@ export function RolesPage() {
                           <Switch
                             checked={row.status === 1}
                             disabled={togglingRoleId === row.id}
-                            onCheckedChange={(checked) =>
-                              void handleRoleStatusSwitchChange(row, checked)
-                            }
+                            onCheckedChange={(checked) => void handleRoleStatusSwitchChange(row, checked)}
                             aria-label={`${row.name}状态开关`}
                           />
-                          <span className="text-sm text-muted-foreground">
-                            {formatStatus(row.status)}
-                          </span>
+                          <span className="text-sm text-muted-foreground">{formatStatus(row.status)}</span>
                         </div>
                       </TableCell>
                       <TableCell>{row.updatedAt}</TableCell>
@@ -663,10 +580,7 @@ export function RolesPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell
-                      colSpan={TABLE_COLUMN_COUNT}
-                      className="h-24 text-center text-muted-foreground"
-                    >
+                    <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
                       没有匹配的角色数据。
                     </TableCell>
                   </TableRow>
@@ -689,12 +603,7 @@ export function RolesPage() {
         </CardContent>
       </Card>
 
-      <Dialog
-        open={isCreateDialogOpen}
-        onOpenChange={(open) =>
-          !open ? handleCloseCreateDialog() : setIsCreateDialogOpen(true)
-        }
-      >
+      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => (!open ? handleCloseCreateDialog() : setIsCreateDialogOpen(true))}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>新增角色</DialogTitle>
@@ -705,12 +614,7 @@ export function RolesPage() {
                 <div className="text-sm font-medium">角色名称</div>
                 <Input
                   value={createDraft.name}
-                  onChange={(event) =>
-                    setCreateDraft((currentDraft) => ({
-                      ...currentDraft,
-                      name: event.target.value,
-                    }))
-                  }
+                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, name: event.target.value }))}
                   placeholder="请输入角色名称"
                 />
               </div>
@@ -718,12 +622,7 @@ export function RolesPage() {
                 <div className="text-sm font-medium">角色编码</div>
                 <Input
                   value={createDraft.code}
-                  onChange={(event) =>
-                    setCreateDraft((currentDraft) => ({
-                      ...currentDraft,
-                      code: event.target.value,
-                    }))
-                  }
+                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, code: event.target.value }))}
                   placeholder="请输入角色编码"
                 />
               </div>
@@ -732,12 +631,7 @@ export function RolesPage() {
               <div className="text-sm font-medium">状态</div>
               <ModuleSelect
                 value={String(createDraft.status)}
-                onValueChange={(value) =>
-                  setCreateDraft((currentDraft) => ({
-                    ...currentDraft,
-                    status: Number(value),
-                  }))
-                }
+                onValueChange={(value) => setCreateDraft((currentDraft) => ({ ...currentDraft, status: Number(value) }))}
                 options={[1, 0].map((status) => ({
                   value: String(status),
                   label: formatStatus(status),
@@ -748,12 +642,7 @@ export function RolesPage() {
               <div className="text-sm font-medium">角色说明</div>
               <Input
                 value={createDraft.description}
-                onChange={(event) =>
-                  setCreateDraft((currentDraft) => ({
-                    ...currentDraft,
-                    description: event.target.value,
-                  }))
-                }
+                onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, description: event.target.value }))}
                 placeholder="请输入角色说明"
               />
             </div>
@@ -762,21 +651,14 @@ export function RolesPage() {
             <Button type="button" variant="outline" onClick={handleCloseCreateDialog}>
               取消
             </Button>
-            <Button
-              type="button"
-              onClick={() => void handleCreateRole()}
-              disabled={!canCreateRole || isCreatingRole}
-            >
+            <Button type="button" onClick={() => void handleCreateRole()} disabled={!canCreateRole || isCreatingRole}>
               {isCreatingRole ? '创建中...' : '创建'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={isEditDialogOpen}
-        onOpenChange={(open) => (!open ? handleCloseEditDialog() : null)}
-      >
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => (!open ? handleCloseEditDialog() : null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>修改角色</DialogTitle>
@@ -787,12 +669,7 @@ export function RolesPage() {
                 <div className="text-sm font-medium">角色名称</div>
                 <Input
                   value={editingDraft.name}
-                  onChange={(event) =>
-                    setEditingDraft((currentDraft) => ({
-                      ...currentDraft,
-                      name: event.target.value,
-                    }))
-                  }
+                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, name: event.target.value }))}
                   placeholder="请输入角色名称"
                 />
               </div>
@@ -800,12 +677,7 @@ export function RolesPage() {
                 <div className="text-sm font-medium">角色编码</div>
                 <Input
                   value={editingDraft.code}
-                  onChange={(event) =>
-                    setEditingDraft((currentDraft) => ({
-                      ...currentDraft,
-                      code: event.target.value,
-                    }))
-                  }
+                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, code: event.target.value }))}
                   placeholder="请输入角色编码"
                 />
               </div>
@@ -814,12 +686,7 @@ export function RolesPage() {
               <div className="text-sm font-medium">状态</div>
               <ModuleSelect
                 value={String(editingDraft.status)}
-                onValueChange={(value) =>
-                  setEditingDraft((currentDraft) => ({
-                    ...currentDraft,
-                    status: Number(value),
-                  }))
-                }
+                onValueChange={(value) => setEditingDraft((currentDraft) => ({ ...currentDraft, status: Number(value) }))}
                 options={[1, 0].map((status) => ({
                   value: String(status),
                   label: formatStatus(status),
@@ -830,12 +697,7 @@ export function RolesPage() {
               <div className="text-sm font-medium">角色说明</div>
               <Input
                 value={editingDraft.description}
-                onChange={(event) =>
-                  setEditingDraft((currentDraft) => ({
-                    ...currentDraft,
-                    description: event.target.value,
-                  }))
-                }
+                onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, description: event.target.value }))}
                 placeholder="请输入角色说明"
               />
             </div>
@@ -844,23 +706,14 @@ export function RolesPage() {
             <Button type="button" variant="outline" onClick={handleCloseEditDialog}>
               取消
             </Button>
-            <Button
-              type="button"
-              onClick={() => void handleSaveRole()}
-              disabled={!canSaveRole || isSavingRole}
-            >
+            <Button type="button" onClick={() => void handleSaveRole()} disabled={!canSaveRole || isSavingRole}>
               {isSavingRole ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={assigningRole !== null}
-        onOpenChange={(open) =>
-          !open ? handleClosePermissionAssignmentDialog() : null
-        }
-      >
+      <Dialog open={assigningRole !== null} onOpenChange={(open) => (!open ? handleClosePermissionAssignmentDialog() : null)}>
         <DialogContent
           className="flex flex-col"
           style={{
@@ -896,12 +749,7 @@ export function RolesPage() {
               ) : permissionLoadState === 'error' ? (
                 <div className="flex h-full min-h-[16rem] flex-col items-center justify-center gap-3 px-4 text-center text-sm text-muted-foreground">
                   <span>{permissionErrorMessage || '加载权限列表失败，请稍后重试。'}</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void loadPermissionCandidates()}
-                  >
+                  <Button type="button" variant="outline" size="sm" onClick={() => void loadPermissionCandidates()}>
                     重试
                   </Button>
                 </div>
@@ -910,8 +758,8 @@ export function RolesPage() {
                   <div className="p-3">
                     <Accordion type="multiple" className="gap-2">
                       {permissionProjectGroups.map((group) => {
-                        const selectedPermissionCount = group.allPermissions.filter(
-                          (permission) => selectedPermissionIds.includes(permission.id),
+                        const selectedPermissionCount = group.allPermissions.filter((permission) =>
+                          selectedPermissionIds.includes(permission.id),
                         ).length
                         const projectCheckboxState =
                           selectedPermissionCount === 0
@@ -930,15 +778,10 @@ export function RolesPage() {
                               <div className="pt-3.5">
                                 <Checkbox
                                   checked={projectCheckboxState}
-                                  disabled={
-                                    isSavingPermissionAssignments ||
-                                    group.allPermissions.length === 0
-                                  }
+                                  disabled={isSavingPermissionAssignments || group.allPermissions.length === 0}
                                   onCheckedChange={(checked) =>
                                     handleProjectPermissionSelectionChange(
-                                      group.allPermissions.map(
-                                        (permission) => permission.id,
-                                      ),
+                                      group.allPermissions.map((permission) => permission.id),
                                       checked === true,
                                     )
                                   }
@@ -949,14 +792,11 @@ export function RolesPage() {
                                   <div className="flex items-center gap-2 text-sm">
                                     <span className="font-medium">{group.projectName}</span>
                                     {group.projectRemark ? (
-                                      <span className="truncate text-xs text-muted-foreground">
-                                        - {group.projectRemark}
-                                      </span>
+                                      <span className="truncate text-xs text-muted-foreground">- {group.projectRemark}</span>
                                     ) : null}
                                   </div>
                                   <div className="mt-1 text-xs text-muted-foreground">
-                                    {group.projectCode} / 已选 {selectedPermissionCount} / 共{' '}
-                                    {group.allPermissions.length}
+                                    {group.projectCode} / 已选 {selectedPermissionCount} / 共 {group.allPermissions.length}
                                   </div>
                                 </div>
                               </AccordionTrigger>
@@ -965,9 +805,7 @@ export function RolesPage() {
                               {group.visiblePermissions.length > 0 ? (
                                 <div className="-mr-6 -mb-2 flex flex-wrap">
                                   {group.visiblePermissions.map((permission) => {
-                                    const isChecked = selectedPermissionIds.includes(
-                                      permission.id,
-                                    )
+                                    const isChecked = selectedPermissionIds.includes(permission.id)
 
                                     return (
                                       <label
@@ -978,15 +816,10 @@ export function RolesPage() {
                                           checked={isChecked}
                                           disabled={isSavingPermissionAssignments}
                                           onCheckedChange={(checked) =>
-                                            handlePermissionSelectionChange(
-                                              permission.id,
-                                              checked === true,
-                                            )
+                                            handlePermissionSelectionChange(permission.id, checked === true)
                                           }
                                         />
-                                        <span className="truncate text-sm font-medium">
-                                          {permission.name}
-                                        </span>
+                                        <span className="truncate text-sm font-medium">{permission.name}</span>
                                       </label>
                                     )
                                   })}
@@ -1005,28 +838,20 @@ export function RolesPage() {
                 </ScrollArea>
               ) : (
                 <div className="flex h-full min-h-[16rem] items-center justify-center px-4 text-center text-sm text-muted-foreground">
-                  {projectRecords.length > 0 || permissionRecords.length > 0
-                    ? '没有匹配的项目或权限数据。'
-                    : '当前暂无可分配权限。'}
+                  {projectRecords.length > 0 || permissionRecords.length > 0 ? '没有匹配的项目或权限数据。' : '当前暂无可分配权限。'}
                 </div>
               )}
             </div>
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClosePermissionAssignmentDialog}
-            >
+            <Button type="button" variant="outline" onClick={handleClosePermissionAssignmentDialog}>
               取消
             </Button>
             <Button
               type="button"
               onClick={() => void handleSavePermissionAssignments()}
-              disabled={
-                permissionLoadState !== 'success' || isSavingPermissionAssignments
-              }
+              disabled={permissionLoadState !== 'success' || isSavingPermissionAssignments}
             >
               {isSavingPermissionAssignments ? '保存中...' : '保存分配'}
             </Button>
@@ -1034,25 +859,17 @@ export function RolesPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={deletingRole !== null}
-        onOpenChange={(open) => (!open ? setDeletingRole(null) : null)}
-      >
+      <AlertDialog open={deletingRole !== null} onOpenChange={(open) => (!open ? setDeletingRole(null) : null)}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
             <AlertDialogTitle>删除角色</AlertDialogTitle>
             <AlertDialogDescription>
-              {deletingRole
-                ? `确认删除角色“${deletingRole.name}”吗？删除后当前列表将立即更新。`
-                : ''}
+              {deletingRole ? `确认删除角色“${deletingRole.name}”吗？删除后当前列表将立即更新。` : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeletingRole}>取消</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => void handleDeleteRole()}
-            >
+            <AlertDialogAction variant="destructive" onClick={() => void handleDeleteRole()}>
               {isDeletingRole ? '删除中...' : '删除'}
             </AlertDialogAction>
           </AlertDialogFooter>

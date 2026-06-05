@@ -43,21 +43,28 @@ export class AdminMenuBusinessError extends Error {
   }
 }
 
-function ensurePositiveInteger(value: number, field: string): number {
-  if (!Number.isInteger(value) || value <= 0) {
+function ensurePositiveInteger(value: unknown, field: string, label: string): number {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value.trim())
+        : Number.NaN;
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new AdminMenuBusinessError(
-      '菜单标识不合法',
+      `${label}不合法`,
       {
         nodePath: 'adminMenu',
         field,
-        reason: '菜单标识必须为正整数',
+        reason: `${label}必须为正整数`,
         value,
       },
       HttpStatus.BAD_REQUEST,
     );
   }
 
-  return value;
+  return parsed;
 }
 
 function ensureString(
@@ -72,7 +79,7 @@ function ensureString(
       {
         nodePath: 'adminMenu',
         field,
-        reason: `${label}必须是非空字符串`,
+        reason: `${label}必须为非空字符串`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -102,21 +109,17 @@ function normalizeOptionalString(
   label: string,
   maxLength: number,
 ): string {
-  if (value === undefined) {
-    return '';
-  }
-
-  if (value === null) {
+  if (value === undefined || value === null) {
     return '';
   }
 
   if (typeof value !== 'string') {
     throw new AdminMenuBusinessError(
-      `${label}必须是字符串`,
+      `${label}必须为字符串`,
       {
         nodePath: 'adminMenu',
         field,
-        reason: `${label}必须是字符串`,
+        reason: `${label}必须为字符串`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -196,6 +199,14 @@ function normalizeStatus(value: unknown, field: string, defaultValue: number): n
   return normalizedValue;
 }
 
+function normalizeOptionalStatus(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  return normalizeStatus(value, field, 1);
+}
+
 function normalizeSort(value: unknown, field: string): number | undefined {
   if (value === undefined || value === null || value === '') {
     return undefined;
@@ -230,7 +241,7 @@ function normalizeParentId(value: unknown, field: string): number | null {
       {
         nodePath: 'adminMenu',
         field,
-        reason: '父级菜单必须为正整数或空',
+        reason: '父级菜单必须为正整数或为空',
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -264,7 +275,7 @@ function ensureSlug(value: unknown, field: string, required: boolean): string | 
       {
         nodePath: 'adminMenu',
         field,
-        reason: '菜单路由标识必须是字符串',
+        reason: '菜单路由标识必须为字符串',
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -273,9 +284,7 @@ function ensureSlug(value: unknown, field: string, required: boolean): string | 
 
   const normalizedValue = value.trim();
   if (!normalizedValue) {
-    return required
-      ? ensureSlug(undefined, field, true)
-      : null;
+    return required ? ensureSlug(undefined, field, true) : null;
   }
 
   if (normalizedValue.length > MAX_SLUG_LENGTH) {
@@ -299,6 +308,76 @@ function ensureSlug(value: unknown, field: string, required: boolean): string | 
         field,
         reason: '菜单路由标识仅支持小写字母、数字和中划线',
         value: normalizedValue,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return normalizedValue;
+}
+
+function normalizeOptionalQueryString(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new AdminMenuBusinessError(
+      '查询参数不合法',
+      {
+        nodePath: 'adminMenu',
+        field,
+        reason: '查询参数必须为字符串',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue ? normalizedValue : undefined;
+}
+
+function normalizePaginationInteger(
+  value: unknown,
+  field: 'page' | 'pageSize',
+  defaultValue: number,
+  options?: {
+    min?: number;
+    max?: number;
+  },
+): number {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  const normalizedValue = typeof value === 'string' ? Number(value.trim()) : value;
+  if (!Number.isInteger(normalizedValue)) {
+    throw new AdminMenuBusinessError(
+      `${field} 不合法`,
+      {
+        nodePath: 'adminMenu',
+        field,
+        reason: `${field} 必须为整数`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const minValue = options?.min ?? 1;
+  const maxValue = options?.max;
+  if (normalizedValue < minValue || (maxValue !== undefined && normalizedValue > maxValue)) {
+    throw new AdminMenuBusinessError(
+      `${field} 不合法`,
+      {
+        nodePath: 'adminMenu',
+        field,
+        reason:
+          field === 'page'
+            ? 'page 必须大于等于 1'
+            : `pageSize 必须在 ${minValue} 到 ${maxValue ?? Number.MAX_SAFE_INTEGER} 之间`,
+        value,
       },
       HttpStatus.BAD_REQUEST,
     );
@@ -365,7 +444,7 @@ async function ensureParentConstraints(
         {
           nodePath: 'adminMenu',
           field: 'parentId',
-          reason: '分组菜单必须作为顶级节点',
+          reason: '分组菜单必须作为一级菜单',
           value: parentId,
         },
         HttpStatus.BAD_REQUEST,
@@ -423,12 +502,9 @@ function validateCreateInput(input: Record<string, unknown>): CreateAdminMenuReq
   return {
     parentId: normalizeParentId(input.parentId, 'parentId'),
     name,
-    shortTitle: normalizeOptionalString(
-      input.shortTitle,
-      'shortTitle',
-      '菜单简称',
-      MAX_SHORT_TITLE_LENGTH,
-    ) || name,
+    shortTitle:
+      normalizeOptionalString(input.shortTitle, 'shortTitle', '菜单简称', MAX_SHORT_TITLE_LENGTH) ||
+      name,
     slug: ensureSlug(input.slug, 'slug', menuType === 'item'),
     iconKey: ensureIconKey(input.iconKey, 'iconKey'),
     menuType,
@@ -437,7 +513,7 @@ function validateCreateInput(input: Record<string, unknown>): CreateAdminMenuReq
     description: normalizeOptionalString(
       input.description,
       'description',
-      '菜单说明',
+      '菜单描述',
       MAX_DESCRIPTION_LENGTH,
     ),
     badge: normalizeOptionalString(input.badge, 'badge', '角标文案', MAX_BADGE_LENGTH),
@@ -487,7 +563,7 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateAdminMenuReq
     payload.description = normalizeOptionalString(
       input.description,
       'description',
-      '菜单说明',
+      '菜单描述',
       MAX_DESCRIPTION_LENGTH,
     );
   }
@@ -508,7 +584,7 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateAdminMenuReq
 
   if (Object.keys(payload).length === 0) {
     throw new AdminMenuBusinessError(
-      '更新菜单参数不能为空',
+      '更新参数不能为空',
       {
         nodePath: 'adminMenu',
         field: 'payload',
@@ -519,6 +595,92 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateAdminMenuReq
   }
 
   return payload;
+}
+
+function validateAdminMenuListQuery(
+  input: AdminMenuTableListQueryDto | Record<string, unknown> = {},
+): AdminMenuTableListQueryDto {
+  const keyword = normalizeOptionalQueryString(input.keyword, 'keyword');
+  const menuType = input.menuType === undefined ? undefined : ensureMenuType(input.menuType, 'menuType');
+  const status = normalizeOptionalStatus(input.status, 'status');
+
+  return {
+    ...(keyword ? { keyword } : {}),
+    ...(menuType ? { menuType } : {}),
+    ...(status !== undefined ? { status } : {}),
+    page: normalizePaginationInteger(input.page, 'page', DEFAULT_ADMIN_MENU_LIST_PAGE),
+    pageSize: normalizePaginationInteger(
+      input.pageSize,
+      'pageSize',
+      DEFAULT_ADMIN_MENU_LIST_PAGE_SIZE,
+      {
+        min: 1,
+        max: MAX_ADMIN_MENU_LIST_PAGE_SIZE,
+      },
+    ),
+  };
+}
+
+function filterAdminMenuTreeByQuery(
+  node: AdminMenuResponseDto,
+  query: AdminMenuTableListQueryDto,
+  parentName = '',
+): AdminMenuResponseDto | null {
+  const keyword = query.keyword?.toLowerCase();
+  const filteredChildren = node.children
+    .map((child) => filterAdminMenuTreeByQuery(child, query, node.name))
+    .filter((child): child is AdminMenuResponseDto => child !== null);
+
+  const matchesKeyword =
+    !keyword ||
+    `${node.name} ${node.shortTitle} ${parentName} ${node.slug ?? ''} ${node.permissionCode} ${
+      node.description
+    } ${node.remark}`
+      .toLowerCase()
+      .includes(keyword);
+  const matchesMenuType = query.menuType === undefined || node.menuType === query.menuType;
+  const matchesStatus = query.status === undefined || node.status === query.status;
+  const selfMatches = matchesKeyword && matchesMenuType && matchesStatus;
+
+  if (!selfMatches && filteredChildren.length === 0) {
+    return null;
+  }
+
+  return {
+    ...node,
+    children: filteredChildren,
+  };
+}
+
+function flattenAdminMenuTree(
+  nodes: AdminMenuResponseDto[],
+  level = 0,
+  parentName = '',
+): AdminMenuTableListItemDto[] {
+  return [...nodes]
+    .sort((left, right) => left.sort - right.sort || left.id - right.id)
+    .flatMap((node) => {
+      const current: AdminMenuTableListItemDto = {
+        id: node.id,
+        parentId: node.parentId,
+        parentName,
+        level,
+        name: node.name,
+        shortTitle: node.shortTitle,
+        slug: node.slug ?? '',
+        iconKey: node.iconKey,
+        menuType: node.menuType,
+        status: node.status,
+        sort: node.sort,
+        description: node.description,
+        badge: node.badge,
+        permissionCode: node.permissionCode,
+        remark: node.remark,
+        updateTime: node.updateTime ?? node.createTime ?? '--',
+      };
+
+      return [current, ...flattenAdminMenuTree(node.children, level + 1, node.name)];
+    });
 }
 
 export class AdminMenuService {
@@ -541,8 +703,33 @@ export class AdminMenuService {
     }
   }
 
+  async getAdminMenuList(
+    input: AdminMenuTableListQueryDto | Record<string, unknown> = {},
+  ): Promise<AdminMenuTableListDto> {
+    const query = validateAdminMenuListQuery(input);
+    const menuTree = await this.getAdminMenuTree();
+    const filteredRoots = menuTree
+      .map((node) => filterAdminMenuTreeByQuery(node, query))
+      .filter((node): node is AdminMenuResponseDto => node !== null);
+
+    const total = filteredRoots.length;
+    const totalPages = Math.max(1, Math.ceil(total / query.pageSize));
+    const currentPage = Math.min(query.page ?? DEFAULT_ADMIN_MENU_LIST_PAGE, totalPages);
+    const pagedRoots =
+      total === 0
+        ? []
+        : filteredRoots.slice((currentPage - 1) * query.pageSize, currentPage * query.pageSize);
+
+    return {
+      items: flattenAdminMenuTree(pagedRoots),
+      total,
+      page: currentPage,
+      pageSize: query.pageSize ?? DEFAULT_ADMIN_MENU_LIST_PAGE_SIZE,
+    };
+  }
+
   async getAdminMenuDetail(id: number): Promise<AdminMenuResponseDto> {
-    const targetId = ensurePositiveInteger(id, 'id');
+    const targetId = ensurePositiveInteger(id, 'id', '菜单标识');
     const node = await this.repository.getNodeById(targetId);
 
     if (!node) {
@@ -594,7 +781,7 @@ export class AdminMenuService {
       sort: payload.sort,
       description: payload.description?.trim() || '',
       badge: payload.badge?.trim() || '',
-      permissionCode: payload.permissionCode?.trim() || '',
+      permissionCode: payload.menuType === 'item' ? payload.permissionCode?.trim() || '' : '',
       remark: payload.remark?.trim() || '',
     });
 
@@ -617,7 +804,7 @@ export class AdminMenuService {
     id: number,
     input: UpdateAdminMenuRequestDto | Record<string, unknown>,
   ): Promise<AdminMenuResponseDto> {
-    const targetId = ensurePositiveInteger(id, 'id');
+    const targetId = ensurePositiveInteger(id, 'id', '菜单标识');
     const current = await this.repository.getNodeById(targetId);
 
     if (!current) {
@@ -671,7 +858,7 @@ export class AdminMenuService {
 
     if (nextMenuType === 'item' && hasChildren(current)) {
       throw new AdminMenuBusinessError(
-        '存在子菜单的分组不能直接改成菜单项',
+        '存在子菜单的分组不能直接改为菜单项',
         {
           nodePath: 'adminMenu',
           field: 'menuType',
@@ -712,7 +899,10 @@ export class AdminMenuService {
       sort: payload.sort,
       description: payload.description,
       badge: payload.badge,
-      permissionCode: nextMenuType === 'item' ? payload.permissionCode : '',
+      permissionCode:
+        nextMenuType === 'item'
+          ? payload.permissionCode ?? current.permissionCode
+          : '',
       remark: payload.remark,
     });
 
@@ -733,7 +923,7 @@ export class AdminMenuService {
   }
 
   async deleteAdminMenu(id: number): Promise<AdminMenuResponseDto> {
-    const targetId = ensurePositiveInteger(id, 'id');
+    const targetId = ensurePositiveInteger(id, 'id', '菜单标识');
     const deleted = await this.repository.deleteNode(targetId);
 
     if (!deleted) {

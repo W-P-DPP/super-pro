@@ -22,6 +22,36 @@ export interface SiteMenuConfigResponseDto {
   appIcon: string
 }
 
+export interface SiteMenuListQueryDto {
+  keyword?: string
+  hide?: boolean
+  strict?: boolean
+  page?: number
+  pageSize?: number
+}
+
+export interface SiteMenuListItemDto {
+  id: number
+  parentId: number | null
+  parentName: string
+  level: number
+  name: string
+  path: string
+  icon: string
+  strict: boolean
+  hide: boolean
+  sort: number
+  remark: string
+  updateTime: string
+}
+
+export interface SiteMenuListDto {
+  items: SiteMenuListItemDto[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 interface ApiResponse<T> {
   code: number
   msg: string
@@ -66,7 +96,7 @@ async function fetchSiteMenuTree() {
   })
 
   if (response.code !== 200) {
-    throw new RequestError(response.msg || '获取目录失败，请稍后重试。', {
+    throw new RequestError(response.msg || '获取站点菜单失败，请稍后重试。', {
       status: response.code,
       details: response,
     })
@@ -122,6 +152,22 @@ export async function getSiteMenuTree(options?: { forceRefresh?: boolean }) {
   }
 
   return siteMenuTreeRequest
+}
+
+export async function getSiteMenuList(query: SiteMenuListQueryDto) {
+  const response = await request.get<ApiResponse<SiteMenuListDto>>('/site-menu/getMenuList', {
+    params: query,
+    requiresAuth: true,
+  })
+
+  if (response.code !== 200) {
+    throw new RequestError(response.msg || '加载站点菜单列表失败，请稍后重试。', {
+      status: response.code,
+      details: response,
+    })
+  }
+
+  return response.data ?? { items: [], total: 0, page: 1, pageSize: 0 }
 }
 
 export async function createSiteMenu(payload: CreateSiteMenuRequestDto) {

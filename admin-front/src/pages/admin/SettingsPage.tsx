@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
-import { PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
+import { TreeDataTable, type TreeDataTableColumn } from '@super-pro/shared-ui'
 import {
   createSiteMenu,
   deleteSiteMenu,
+  getSiteMenuList,
   getSiteMenuTree,
   type CreateSiteMenuRequestDto,
+  type SiteMenuListItemDto,
   type SiteMenuResponseDto,
   type UpdateSiteMenuRequestDto,
   updateSiteMenu,
@@ -31,12 +34,6 @@ import {
   Input,
   Spinner,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   Textarea,
   toast,
 } from '@/components/ui'
@@ -61,22 +58,7 @@ type SiteMenuFormState = {
   remark: string
 }
 
-type SiteMenuRowRecord = {
-  id: number
-  parentId: number | null
-  parentName: string
-  level: number
-  name: string
-  path: string
-  icon: string
-  strict: boolean
-  hide: boolean
-  sort: number
-  remark: string
-  updateTime: string
-}
-
-const TABLE_COLUMN_COUNT = 8
+type SiteMenuRowRecord = SiteMenuListItemDto
 
 function buildEmptyDraft(): SiteMenuFormState {
   return {
@@ -152,7 +134,7 @@ function normalizeParentId(parentId: string) {
   return parentId === 'root' ? null : Number(parentId)
 }
 
-function normalizeSiteMenuPayload(draft: SiteMenuFormState) {
+function normalizeSiteMenuPayload(draft: SiteMenuFormState): CreateSiteMenuRequestDto {
   const parentId = normalizeParentId(draft.parentId)
 
   return {
@@ -165,7 +147,113 @@ function normalizeSiteMenuPayload(draft: SiteMenuFormState) {
     hide: draft.hide,
     sort: parseOptionalNonNegativeInteger(draft.sort),
     remark: draft.remark.trim(),
-  } satisfies CreateSiteMenuRequestDto
+  }
+}
+
+function SiteMenuFormFields({
+  draft,
+  setDraft,
+  parentOptions,
+}: {
+  draft: SiteMenuFormState
+  setDraft: Dispatch<SetStateAction<SiteMenuFormState>>
+  parentOptions: Array<{ value: string; label: string }>
+}) {
+  const previewIcon = resolveSiteMenuIcon(draft.icon)
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <div className="text-sm font-medium">父级菜单</div>
+          <ModuleSelect
+            value={draft.parentId}
+            onValueChange={(value) => setDraft((currentDraft) => ({ ...currentDraft, parentId: value }))}
+            options={parentOptions}
+          />
+        </div>
+        <div className="grid gap-2">
+          <div className="text-sm font-medium">排序值</div>
+          <Input
+            value={draft.sort}
+            onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, sort: event.target.value }))}
+            placeholder="留空默认追加到末尾"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <div className="text-sm font-medium">菜单名称</div>
+          <Input
+            value={draft.name}
+            onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, name: event.target.value }))}
+            placeholder="请输入菜单名称"
+          />
+        </div>
+        <div className="grid gap-2">
+          <div className="text-sm font-medium">菜单路径</div>
+          <Input
+            value={draft.path}
+            onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, path: event.target.value }))}
+            placeholder="顶级菜单可留空，子菜单可填写链接或路由"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_5rem]">
+        <div className="grid gap-2">
+          <div className="text-sm font-medium">图标地址</div>
+          <Input
+            value={draft.icon}
+            onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, icon: event.target.value }))}
+            placeholder="支持 /public/icons/...、icons/... 或完整 http(s) 地址"
+          />
+        </div>
+        <div className="grid gap-2">
+          <div className="text-sm font-medium">预览</div>
+          <div className="flex h-10 items-center justify-center rounded-lg border border-border/70 bg-muted/20">
+            <img src={previewIcon} alt="" className="size-7 object-contain" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/15 px-3 py-3">
+          <div>
+            <div className="text-sm font-medium">严格跳转</div>
+            <div className="text-xs text-muted-foreground">启用后按严格菜单跳转逻辑处理。</div>
+          </div>
+          <Switch
+            checked={draft.strict}
+            onCheckedChange={(checked) => setDraft((currentDraft) => ({ ...currentDraft, strict: checked }))}
+            aria-label="严格跳转开关"
+          />
+        </div>
+        <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/15 px-3 py-3">
+          <div>
+            <div className="text-sm font-medium">隐藏菜单</div>
+            <div className="text-xs text-muted-foreground">隐藏后默认不在站点目录中展示。</div>
+          </div>
+          <Switch
+            checked={draft.hide}
+            onCheckedChange={(checked) => setDraft((currentDraft) => ({ ...currentDraft, hide: checked }))}
+            aria-label="隐藏菜单开关"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <div className="text-sm font-medium">备注</div>
+        <Textarea
+          value={draft.remark}
+          onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, remark: event.target.value }))}
+          placeholder="可填写菜单用途或备注"
+          rows={4}
+        />
+      </div>
+    </div>
+  )
 }
 
 export function SettingsPage() {
@@ -175,6 +263,8 @@ export function SettingsPage() {
   const [keyword, setKeyword] = useState('')
   const [visibilityFilter, setVisibilityFilter] = useState('all')
   const [strictFilter, setStrictFilter] = useState('all')
+  const [menuRows, setMenuRows] = useState<SiteMenuRowRecord[]>([])
+  const [totalMenus, setTotalMenus] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [reloadKey, setReloadKey] = useState(0)
@@ -187,23 +277,17 @@ export function SettingsPage() {
   const [createDraft, setCreateDraft] = useState<SiteMenuFormState>(buildEmptyDraft)
   const [editingDraft, setEditingDraft] = useState<SiteMenuFormState>(buildEmptyDraft)
 
-  async function loadSiteMenus() {
-    setLoadState('loading')
-    setErrorMessage('')
-
+  async function loadSiteMenuTree() {
     try {
       const data = await getSiteMenuTree({ forceRefresh: reloadKey > 0 })
       setMenuTree(data)
-      setLoadState('success')
-    } catch (error) {
+    } catch {
       setMenuTree([])
-      setLoadState('error')
-      setErrorMessage(error instanceof Error ? error.message : '加载站点菜单失败，请稍后重试。')
     }
   }
 
   useEffect(() => {
-    void loadSiteMenus()
+    void loadSiteMenuTree()
   }, [reloadKey])
 
   const flatMenuRecords = useMemo(() => flattenSiteMenuTree(menuTree), [menuTree])
@@ -226,7 +310,7 @@ export function SettingsPage() {
       { value: 'root', label: '顶级菜单' },
       ...flatMenuRecords.map((record) => ({
         value: String(record.id),
-        label: `${'— '.repeat(record.level)}${record.name}`,
+        label: `${'· '.repeat(record.level)}${record.name}`,
       })),
     ],
     [flatMenuRecords],
@@ -245,48 +329,153 @@ export function SettingsPage() {
         .filter((record) => !excludedIds.has(record.id))
         .map((record) => ({
           value: String(record.id),
-          label: `${'— '.repeat(record.level)}${record.name}`,
+          label: `${'· '.repeat(record.level)}${record.name}`,
         })),
     ]
   }, [editingMenu, flatMenuRecords, parentOptions])
 
-  const filteredMenuRecords = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase()
-
-    return flatMenuRecords.filter((record) => {
-      const matchesKeyword =
-        !normalizedKeyword ||
-        `${record.name} ${record.parentName} ${record.path} ${record.icon} ${record.remark}`
-          .toLowerCase()
-          .includes(normalizedKeyword)
-      const matchesVisibility =
-        visibilityFilter === 'all' ||
-        (visibilityFilter === 'visible' ? record.hide === false : record.hide === true)
-      const matchesStrict =
-        strictFilter === 'all' ||
-        (strictFilter === 'strict' ? record.strict === true : record.strict === false)
-
-      return matchesKeyword && matchesVisibility && matchesStrict
-    })
-  }, [flatMenuRecords, keyword, strictFilter, visibilityFilter])
-
-  const totalMenus = filteredMenuRecords.length
   const totalPages = Math.max(1, Math.ceil(totalMenus / pageSize))
-  const normalizedCurrentPage = Math.min(currentPage, totalPages)
-  const pagedMenuRecords =
-    totalMenus === 0
-      ? []
-      : filteredMenuRecords.slice((normalizedCurrentPage - 1) * pageSize, normalizedCurrentPage * pageSize)
   const canCreateMenu = createDraft.name.trim().length > 0
   const canSaveMenu = editingDraft.name.trim().length > 0
-  const createPreviewIcon = resolveSiteMenuIcon(createDraft.icon)
-  const editingPreviewIcon = resolveSiteMenuIcon(editingDraft.icon)
+
+  const tableColumns = useMemo<TreeDataTableColumn<SiteMenuRowRecord>[]>(
+    () => [
+      {
+        key: 'name',
+        header: '菜单名称',
+        cell: (row, context) => (
+          <div
+            className="flex min-w-[12rem] items-center gap-2"
+            style={{ paddingLeft: `${context.depth * 1.25}rem` }}
+          >
+            {context.canExpand ? (
+              <button
+                type="button"
+                onClick={context.toggle}
+                className="flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={`${context.isExpanded ? '收起' : '展开'} ${row.name}`}
+              >
+                {context.isExpanded ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />}
+              </button>
+            ) : (
+              <span className="block size-5 shrink-0" aria-hidden="true" />
+            )}
+            <span className="font-medium">{row.name}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'parentName',
+        header: '父级',
+        cell: (row) => row.parentName || '顶级菜单',
+      },
+      {
+        key: 'path',
+        header: '路径',
+        cell: (row) => <span className="font-mono text-sm">{row.path || '--'}</span>,
+      },
+      {
+        key: 'icon',
+        header: '图标',
+        cell: (row) => (
+          <div className="flex min-w-[4rem] items-center">
+            <img
+              src={resolveSiteMenuIcon(row.icon)}
+              alt=""
+              className="size-8 rounded-lg border border-border/70 bg-muted/30 object-contain p-1"
+            />
+          </div>
+        ),
+      },
+      {
+        key: 'mode',
+        header: '模式',
+        cell: (row) => (
+          <div className="flex flex-wrap gap-2">
+            {row.strict ? <Badge variant="secondary">严格跳转</Badge> : <Badge variant="outline">普通跳转</Badge>}
+            {row.hide ? <Badge variant="outline">隐藏</Badge> : <Badge variant="secondary">显示</Badge>}
+          </div>
+        ),
+      },
+      {
+        key: 'sort',
+        header: '排序',
+        cell: (row) => row.sort,
+      },
+      {
+        key: 'updateTime',
+        header: '更新时间',
+        cell: (row) => row.updateTime,
+      },
+      {
+        key: 'actions',
+        header: '操作',
+        headerClassName: 'w-[10rem]',
+        cell: (row) => (
+          <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const source = menuNodeMap.get(row.id)
+                if (!source) {
+                  return
+                }
+
+                setEditingMenu(source)
+                setEditingDraft(buildDraftFromRow(row))
+              }}
+            >
+              修改
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeletingMenu(row)}
+            >
+              删除
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [menuNodeMap],
+  )
 
   useEffect(() => {
-    if (normalizedCurrentPage !== currentPage) {
-      setCurrentPage(normalizedCurrentPage)
+    async function loadSiteMenuPage() {
+      setLoadState('loading')
+      setErrorMessage('')
+
+      try {
+        const result = await getSiteMenuList({
+          keyword: keyword.trim() || undefined,
+          hide: visibilityFilter === 'all' ? undefined : visibilityFilter === 'hidden',
+          strict: strictFilter === 'all' ? undefined : strictFilter === 'strict',
+          page: currentPage,
+          pageSize,
+        })
+
+        setMenuRows(result.items)
+        setTotalMenus(result.total)
+        setLoadState('success')
+
+        if (result.page !== currentPage) {
+          setCurrentPage(result.page)
+        }
+      } catch (error) {
+        setMenuRows([])
+        setTotalMenus(0)
+        setLoadState('error')
+        setErrorMessage(error instanceof Error ? error.message : '加载站点菜单列表失败，请稍后重试。')
+      }
     }
-  }, [currentPage, normalizedCurrentPage])
+
+    void loadSiteMenuPage()
+  }, [currentPage, keyword, pageSize, reloadKey, strictFilter, visibilityFilter])
 
   function reload() {
     setReloadKey((currentValue) => currentValue + 1)
@@ -332,7 +521,7 @@ export function SettingsPage() {
     try {
       await updateSiteMenu(
         editingMenu.id,
-        normalizeSiteMenuPayload(editingDraft) satisfies UpdateSiteMenuRequestDto,
+        normalizeSiteMenuPayload(editingDraft) as UpdateSiteMenuRequestDto,
       )
       toast.success('站点菜单已更新')
       handleCloseEditDialog()
@@ -355,11 +544,6 @@ export function SettingsPage() {
       await deleteSiteMenu(deletingMenu.id)
       toast.success('站点菜单已删除')
       setDeletingMenu(null)
-
-      if (currentPage > 1 && pagedMenuRecords.length === 1) {
-        setCurrentPage(currentPage - 1)
-      }
-
       reload()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '删除站点菜单失败，请稍后重试。')
@@ -423,111 +607,32 @@ export function SettingsPage() {
       <Card className={ADMIN_PAGE_FILL_CARD_CLASS}>
         <CardContent className="flex h-full min-h-0 flex-col gap-4">
           <div className="min-h-0 flex-1 overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>菜单名称</TableHead>
-                  <TableHead>父级</TableHead>
-                  <TableHead>路径</TableHead>
-                  <TableHead>图标</TableHead>
-                  <TableHead>模式</TableHead>
-                  <TableHead>排序</TableHead>
-                  <TableHead>更新时间</TableHead>
-                  <TableHead className="w-[10rem]">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadState === 'loading' ? (
-                  <TableRow>
-                    <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
-                      <div className="flex items-center justify-center gap-2">
-                        <Spinner className="size-4" />
-                        <span>正在加载站点菜单...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : loadState === 'error' ? (
-                  <TableRow>
-                    <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
-                      <div className="flex flex-col items-center justify-center gap-3">
-                        <span>{errorMessage || '加载站点菜单失败，请稍后重试。'}</span>
-                        <Button type="button" variant="outline" size="sm" onClick={() => void loadSiteMenus()}>
-                          重试
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : pagedMenuRecords.length > 0 ? (
-                  pagedMenuRecords.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>
-                        <div className="min-w-[12rem]" style={{ paddingLeft: `${row.level * 1.25}rem` }}>
-                          <div className="font-medium">{row.name}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{row.parentName || '顶级菜单'}</TableCell>
-                      <TableCell className="font-mono text-sm">{row.path || '--'}</TableCell>
-                      <TableCell>
-                        <div className="flex min-w-[4rem] items-center">
-                          <img
-                            src={resolveSiteMenuIcon(row.icon)}
-                            alt=""
-                            className="size-8 rounded-lg border border-border/70 bg-muted/30 object-contain p-1"
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2">
-                          {row.strict ? <Badge variant="secondary">严格跳转</Badge> : <Badge variant="outline">普通跳转</Badge>}
-                          {row.hide ? <Badge variant="outline">隐藏</Badge> : <Badge variant="secondary">显示</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell>{row.sort}</TableCell>
-                      <TableCell>{row.updateTime}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const source = menuNodeMap.get(row.id)
-                              if (!source) {
-                                return
-                              }
-
-                              setEditingMenu(source)
-                              setEditingDraft(buildDraftFromRow(row))
-                            }}
-                          >
-                            修改
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setDeletingMenu(row)}
-                          >
-                            删除
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
-                      没有匹配的站点菜单数据。
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+            {loadState === 'loading' ? (
+              <div className="flex h-24 items-center justify-center gap-2 text-muted-foreground">
+                <Spinner className="size-4" />
+                <span>正在加载站点菜单...</span>
+              </div>
+            ) : loadState === 'error' ? (
+              <div className="flex h-24 flex-col items-center justify-center gap-3 text-muted-foreground">
+                <span>{errorMessage || '加载站点菜单失败，请稍后重试。'}</span>
+                <Button type="button" variant="outline" size="sm" onClick={reload}>
+                  重试
+                </Button>
+              </div>
+            ) : (
+              <TreeDataTable
+                data={menuRows}
+                columns={tableColumns}
+                getRowId={(row) => row.id}
+                getParentId={(row) => row.parentId}
+                defaultExpanded
+                emptyMessage="没有匹配的站点菜单数据。"
+              />
+            )}
           </div>
 
           <ListPagination
-            currentPage={normalizedCurrentPage}
+            currentPage={currentPage}
             totalPages={totalPages}
             total={totalMenus}
             pageSize={pageSize}
@@ -540,103 +645,16 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => (!open ? handleCloseCreateDialog() : setIsCreateDialogOpen(true))}>
+      <Dialog
+        open={isCreateDialogOpen}
+        onOpenChange={(open) => (!open ? handleCloseCreateDialog() : setIsCreateDialogOpen(true))}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>新增站点菜单</DialogTitle>
-            <DialogDescription>维护 site-menu 的层级、路径、图标、显隐和严格跳转配置。</DialogDescription>
+            <DialogDescription>维护 site-menu，分页按一级菜单计算。</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">父级菜单</div>
-                <ModuleSelect
-                  value={createDraft.parentId}
-                  onValueChange={(value) => setCreateDraft((currentDraft) => ({ ...currentDraft, parentId: value }))}
-                  options={parentOptions}
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">排序值</div>
-                <Input
-                  value={createDraft.sort}
-                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, sort: event.target.value }))}
-                  placeholder="留空默认追加到末尾"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">菜单名称</div>
-                <Input
-                  value={createDraft.name}
-                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, name: event.target.value }))}
-                  placeholder="请输入菜单名称"
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">菜单路径</div>
-                <Input
-                  value={createDraft.path}
-                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, path: event.target.value }))}
-                  placeholder="顶级菜单可留空，子菜单可填写链接或路由"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_5rem]">
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">图标地址</div>
-                <Input
-                  value={createDraft.icon}
-                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, icon: event.target.value }))}
-                  placeholder="支持 /public/icons/...、/icons/... 或完整 http(s) 地址"
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">预览</div>
-                <div className="flex h-10 items-center justify-center rounded-lg border border-border/70 bg-muted/20">
-                  <img src={createPreviewIcon} alt="" className="size-7 object-contain" />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/15 px-3 py-3">
-                <div>
-                  <div className="text-sm font-medium">严格跳转</div>
-                  <div className="text-xs text-muted-foreground">启用后会按严格菜单跳转逻辑处理。</div>
-                </div>
-                <Switch
-                  checked={createDraft.strict}
-                  onCheckedChange={(checked) => setCreateDraft((currentDraft) => ({ ...currentDraft, strict: checked }))}
-                  aria-label="严格跳转开关"
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/15 px-3 py-3">
-                <div>
-                  <div className="text-sm font-medium">隐藏菜单</div>
-                  <div className="text-xs text-muted-foreground">隐藏后默认不在站点目录中展示。</div>
-                </div>
-                <Switch
-                  checked={createDraft.hide}
-                  onCheckedChange={(checked) => setCreateDraft((currentDraft) => ({ ...currentDraft, hide: checked }))}
-                  aria-label="隐藏菜单开关"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <div className="text-sm font-medium">备注</div>
-              <Textarea
-                value={createDraft.remark}
-                onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, remark: event.target.value }))}
-                placeholder="可填写菜单说明、用途或发布备注"
-                rows={4}
-              />
-            </div>
-          </div>
+          <SiteMenuFormFields draft={createDraft} setDraft={setCreateDraft} parentOptions={parentOptions} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleCloseCreateDialog}>
               取消
@@ -652,99 +670,13 @@ export function SettingsPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>修改站点菜单</DialogTitle>
-            <DialogDescription>支持调整层级、路径、图标、显隐和严格跳转配置。</DialogDescription>
+            <DialogDescription>支持调整层级、路径、图标、显隐和跳转模式。</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">父级菜单</div>
-                <ModuleSelect
-                  value={editingDraft.parentId}
-                  onValueChange={(value) => setEditingDraft((currentDraft) => ({ ...currentDraft, parentId: value }))}
-                  options={editingParentOptions}
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">排序值</div>
-                <Input
-                  value={editingDraft.sort}
-                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, sort: event.target.value }))}
-                  placeholder="请输入排序值"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">菜单名称</div>
-                <Input
-                  value={editingDraft.name}
-                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, name: event.target.value }))}
-                  placeholder="请输入菜单名称"
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">菜单路径</div>
-                <Input
-                  value={editingDraft.path}
-                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, path: event.target.value }))}
-                  placeholder="顶级菜单可留空，子菜单可填写链接或路由"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_5rem]">
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">图标地址</div>
-                <Input
-                  value={editingDraft.icon}
-                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, icon: event.target.value }))}
-                  placeholder="支持 /public/icons/...、/icons/... 或完整 http(s) 地址"
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">预览</div>
-                <div className="flex h-10 items-center justify-center rounded-lg border border-border/70 bg-muted/20">
-                  <img src={editingPreviewIcon} alt="" className="size-7 object-contain" />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/15 px-3 py-3">
-                <div>
-                  <div className="text-sm font-medium">严格跳转</div>
-                  <div className="text-xs text-muted-foreground">启用后会按严格菜单跳转逻辑处理。</div>
-                </div>
-                <Switch
-                  checked={editingDraft.strict}
-                  onCheckedChange={(checked) => setEditingDraft((currentDraft) => ({ ...currentDraft, strict: checked }))}
-                  aria-label="严格跳转开关"
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/15 px-3 py-3">
-                <div>
-                  <div className="text-sm font-medium">隐藏菜单</div>
-                  <div className="text-xs text-muted-foreground">隐藏后默认不在站点目录中展示。</div>
-                </div>
-                <Switch
-                  checked={editingDraft.hide}
-                  onCheckedChange={(checked) => setEditingDraft((currentDraft) => ({ ...currentDraft, hide: checked }))}
-                  aria-label="隐藏菜单开关"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <div className="text-sm font-medium">备注</div>
-              <Textarea
-                value={editingDraft.remark}
-                onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, remark: event.target.value }))}
-                placeholder="可填写菜单说明、用途或发布备注"
-                rows={4}
-              />
-            </div>
-          </div>
+          <SiteMenuFormFields
+            draft={editingDraft}
+            setDraft={setEditingDraft}
+            parentOptions={editingParentOptions}
+          />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleCloseEditDialog}>
               取消

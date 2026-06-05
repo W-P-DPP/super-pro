@@ -1,8 +1,8 @@
 import type {
   ApiEnvelope,
   AuthorizationPermissionSummary,
-  AuthorizationRoleSummary,
   AuthorizationRoleDetail,
+  AuthorizationRoleSummary,
   AuthorizationResourceType,
 } from '@super-pro/shared-types'
 import { RequestError, request } from '../request'
@@ -15,10 +15,16 @@ export interface AuthorizationRoleResponseDto extends AuthorizationRoleDetail {
 
 export interface AuthorizationPermissionListDto {
   items: AuthorizationPermissionResponseDto[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export interface AuthorizationRoleListDto {
   items: AuthorizationRoleResponseDto[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export interface AuthorizationUserProjectPermissionResponseDto {
@@ -35,10 +41,19 @@ export interface AuthorizationUserProjectPermissionListDto {
 
 export interface AuthorizationPermissionListQueryDto {
   appCode?: string
+  keyword?: string
+  resourceType?: AuthorizationResourceType
+  status?: number
+  page?: number
+  pageSize?: number
 }
 
 export interface AuthorizationRoleListQueryDto {
   appCode?: string
+  keyword?: string
+  status?: number
+  page?: number
+  pageSize?: number
 }
 
 export interface CreateAuthorizationRoleRequestDto {
@@ -103,7 +118,7 @@ export function getAuthorizationPermissions(query: AuthorizationPermissionListQu
       requiresAuth: true,
     }),
     '获取权限列表失败，请稍后重试。',
-  ).then((data) => data ?? { items: [] })
+  ).then((data) => data ?? { items: [], total: 0, page: 1, pageSize: 0 })
 }
 
 export function getAuthorizationRoles(query: AuthorizationRoleListQueryDto = {}) {
@@ -113,7 +128,7 @@ export function getAuthorizationRoles(query: AuthorizationRoleListQueryDto = {})
       requiresAuth: true,
     }),
     '获取角色列表失败，请稍后重试。',
-  ).then((data) => data ?? { items: [] })
+  ).then((data) => data ?? { items: [], total: 0, page: 1, pageSize: 0 })
 }
 
 export function getUserProjectPermissions(userId: number) {

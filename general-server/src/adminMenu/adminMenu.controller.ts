@@ -6,29 +6,29 @@ import type {
 } from './adminMenu.dto.ts';
 import { AdminMenuBusinessError, adminMenuService } from './adminMenu.service.ts';
 
+function handleAdminMenuError(error: unknown, res: Response, fallbackMessage: string) {
+  if (error instanceof AdminMenuBusinessError) {
+    return res.status(error.statusCode).sendFail(error.message, error.statusCode);
+  }
+
+  return res.status(HttpStatus.ERROR).sendFail(fallbackMessage, HttpStatus.ERROR);
+}
+
 const getMenu = async (req: Request, res: Response) => {
   try {
     const menus = await adminMenuService.getAdminMenuTree();
     res.sendSuccess(menus, '获取后台菜单成功');
   } catch (error) {
-    if (error instanceof AdminMenuBusinessError) {
-      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
-    }
-
-    return res.status(HttpStatus.ERROR).sendFail('获取后台菜单失败', HttpStatus.ERROR);
+    return handleAdminMenuError(error, res, '获取后台菜单失败');
   }
 };
 
 const getMenuList = async (req: Request, res: Response) => {
   try {
     const menus = await adminMenuService.getAdminMenuList(req.query as Record<string, unknown>);
-    res.sendSuccess(menus, '鑾峰彇鍚庡彴鑿滃崟鍒楄〃鎴愬姛');
+    res.sendSuccess(menus, '获取后台菜单列表成功');
   } catch (error) {
-    if (error instanceof AdminMenuBusinessError) {
-      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
-    }
-
-    return res.status(HttpStatus.ERROR).sendFail('鑾峰彇鍚庡彴鑿滃崟鍒楄〃澶辫触', HttpStatus.ERROR);
+    return handleAdminMenuError(error, res, '获取后台菜单列表失败');
   }
 };
 
@@ -37,11 +37,7 @@ const getMenuDetail = async (req: Request, res: Response) => {
     const menu = await adminMenuService.getAdminMenuDetail(Number(req.params.id));
     res.sendSuccess(menu, '获取后台菜单详情成功');
   } catch (error) {
-    if (error instanceof AdminMenuBusinessError) {
-      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
-    }
-
-    return res.status(HttpStatus.ERROR).sendFail('获取后台菜单详情失败', HttpStatus.ERROR);
+    return handleAdminMenuError(error, res, '获取后台菜单详情失败');
   }
 };
 
@@ -50,11 +46,7 @@ const createMenu = async (req: Request, res: Response) => {
     const created = await adminMenuService.createAdminMenu(req.body as CreateAdminMenuRequestDto);
     res.sendSuccess(created, '新增后台菜单成功');
   } catch (error) {
-    if (error instanceof AdminMenuBusinessError) {
-      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
-    }
-
-    return res.status(HttpStatus.ERROR).sendFail('新增后台菜单失败', HttpStatus.ERROR);
+    return handleAdminMenuError(error, res, '新增后台菜单失败');
   }
 };
 
@@ -66,11 +58,7 @@ const updateMenu = async (req: Request, res: Response) => {
     );
     res.sendSuccess(updated, '更新后台菜单成功');
   } catch (error) {
-    if (error instanceof AdminMenuBusinessError) {
-      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
-    }
-
-    return res.status(HttpStatus.ERROR).sendFail('更新后台菜单失败', HttpStatus.ERROR);
+    return handleAdminMenuError(error, res, '更新后台菜单失败');
   }
 };
 
@@ -79,11 +67,7 @@ const deleteMenu = async (req: Request, res: Response) => {
     const deleted = await adminMenuService.deleteAdminMenu(Number(req.params.id));
     res.sendSuccess(deleted, '删除后台菜单成功');
   } catch (error) {
-    if (error instanceof AdminMenuBusinessError) {
-      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
-    }
-
-    return res.status(HttpStatus.ERROR).sendFail('删除后台菜单失败', HttpStatus.ERROR);
+    return handleAdminMenuError(error, res, '删除后台菜单失败');
   }
 };
 

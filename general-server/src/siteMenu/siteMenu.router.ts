@@ -4,6 +4,7 @@ import {
   createMenu,
   deleteMenu,
   getMenu,
+  getMenuList,
   getMenuConfig,
   getMenuDetail,
   updateMenu,
@@ -16,6 +17,7 @@ const uploadSiteMenuFile = multer({
 });
 
 siteMenuRouter.get('/getMenu', getMenu);
+siteMenuRouter.get('/getMenuList', getMenuList);
 siteMenuRouter.get('/getMenuConfig', getMenuConfig);
 siteMenuRouter.get('/getMenu/:id', getMenuDetail);
 siteMenuRouter.post('/createMenu', createMenu);

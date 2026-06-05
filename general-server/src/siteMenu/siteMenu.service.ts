@@ -5,6 +5,9 @@ import type {
   SiteMenuImportSourceDto,
   SiteMenuListDto,
   SiteMenuResponseDto,
+  SiteMenuTableListDto,
+  SiteMenuTableListItemDto,
+  SiteMenuTableListQueryDto,
   SiteMenuValidationErrorContextDto,
   UpdateSiteMenuRequestDto,
   UploadedSiteMenuFileDto,
@@ -19,6 +22,9 @@ import {
 } from './siteMenu.repository.ts';
 
 const SITE_MENU_APP_ICON = '/public/icons/tools.png';
+const DEFAULT_SITE_MENU_LIST_PAGE = 1;
+const DEFAULT_SITE_MENU_LIST_PAGE_SIZE = 10;
+const MAX_SITE_MENU_LIST_PAGE_SIZE = 100;
 
 export class SiteMenuBusinessError extends Error {
   constructor(
@@ -37,31 +43,43 @@ const ALLOWED_MENU_FILE_MIME_TYPES = new Set([
   'application/octet-stream',
 ]);
 
-function ensurePositiveInteger(value: number, field: string): number {
-  if (!Number.isInteger(value) || value <= 0) {
+function ensurePositiveInteger(value: unknown, field: string, label: string): number {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value.trim())
+        : Number.NaN;
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new SiteMenuBusinessError(
-      '菜单标识不合法',
+      `${label}不合法`,
       {
         nodePath: 'siteMenu',
         field,
-        reason: '菜单标识必须为正整数',
+        reason: `${label}必须为正整数`,
         value,
       },
       HttpStatus.BAD_REQUEST,
     );
   }
 
-  return value;
+  return parsed;
 }
 
-function ensureString(value: unknown, field: string, allowEmpty = false): string {
+function ensureString(
+  value: unknown,
+  field: string,
+  label: string,
+  allowEmpty = false,
+): string {
   if (typeof value !== 'string' || (!allowEmpty && !value.trim())) {
     throw new SiteMenuBusinessError(
-      allowEmpty ? `菜单${field}必须是字符串` : `菜单${field}不能为空`,
+      allowEmpty ? `${label}必须为字符串` : `${label}不能为空`,
       {
         nodePath: 'siteMenu',
         field,
-        reason: allowEmpty ? '菜单字段必须是字符串' : '菜单字段不能为空',
+        reason: allowEmpty ? `${label}必须为字符串` : `${label}必须为非空字符串`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -72,24 +90,25 @@ function ensureString(value: unknown, field: string, allowEmpty = false): string
 }
 
 function normalizeOptionalParentId(value: unknown): number | null {
-  if (value === undefined || value === null) {
+  if (value === undefined || value === null || value === '') {
     return null;
   }
 
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+  const parsed = typeof value === 'string' ? Number(value.trim()) : value;
+  if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new SiteMenuBusinessError(
       '父级菜单标识不合法',
       {
         nodePath: 'siteMenu',
         field: 'parentId',
-        reason: '父级菜单标识必须为正整数或空',
+        reason: '父级菜单标识必须为正整数或为空',
         value,
       },
       HttpStatus.BAD_REQUEST,
     );
   }
 
-  return value;
+  return parsed;
 }
 
 function normalizeOptionalBoolean(
@@ -103,11 +122,11 @@ function normalizeOptionalBoolean(
 
   if (typeof value !== 'boolean') {
     throw new SiteMenuBusinessError(
-      `${label}必须是布尔值`,
+      `${label}必须为布尔值`,
       {
         nodePath: 'siteMenu',
         field,
-        reason: `${label}必须是布尔值`,
+        reason: `${label}必须为布尔值`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -125,6 +144,133 @@ function normalizeRequiredBoolean(
 ): boolean {
   const normalized = normalizeOptionalBoolean(value, field, label);
   return normalized === undefined ? defaultValue : normalized;
+}
+
+function normalizeOptionalQueryBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalizedValue = value.trim().toLowerCase();
+    if (normalizedValue === 'true') {
+      return true;
+    }
+    if (normalizedValue === 'false') {
+      return false;
+    }
+  }
+
+  throw new SiteMenuBusinessError(
+    '查询参数不合法',
+    {
+      nodePath: 'siteMenu',
+      field,
+      reason: '布尔查询参数仅支持 true 或 false',
+      value,
+    },
+    HttpStatus.BAD_REQUEST,
+  );
+}
+
+function normalizeOptionalNonNegativeInteger(
+  value: unknown,
+  field: string,
+  label: string,
+): number | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  const parsed = typeof value === 'string' ? Number(value.trim()) : value;
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new SiteMenuBusinessError(
+      `${label}不合法`,
+      {
+        nodePath: 'siteMenu',
+        field,
+        reason: `${label}必须为大于等于 0 的整数`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return parsed;
+}
+
+function normalizeOptionalQueryString(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new SiteMenuBusinessError(
+      '查询参数不合法',
+      {
+        nodePath: 'siteMenu',
+        field,
+        reason: '查询参数必须为字符串',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue ? normalizedValue : undefined;
+}
+
+function normalizePaginationInteger(
+  value: unknown,
+  field: 'page' | 'pageSize',
+  defaultValue: number,
+  options?: {
+    min?: number;
+    max?: number;
+  },
+): number {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  const normalizedValue = typeof value === 'string' ? Number(value.trim()) : value;
+  if (!Number.isInteger(normalizedValue)) {
+    throw new SiteMenuBusinessError(
+      `${field} 不合法`,
+      {
+        nodePath: 'siteMenu',
+        field,
+        reason: `${field} 必须为整数`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const minValue = options?.min ?? 1;
+  const maxValue = options?.max;
+  if (normalizedValue < minValue || (maxValue !== undefined && normalizedValue > maxValue)) {
+    throw new SiteMenuBusinessError(
+      `${field} 不合法`,
+      {
+        nodePath: 'siteMenu',
+        field,
+        reason:
+          field === 'page'
+            ? 'page 必须大于等于 1'
+            : `pageSize 必须在 ${minValue} 到 ${maxValue ?? Number.MAX_SAFE_INTEGER} 之间`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return normalizedValue;
 }
 
 function normalizeDateTime(value: unknown): string | undefined {
@@ -149,27 +295,6 @@ function containsNode(node: SiteMenuResponseDto, targetId: number): boolean {
 
 function normalizeImportValidationMessage(message: string): string {
   return message.replaceAll('菜单种子', '菜单文件');
-}
-
-function validateUniqueNodeIds(entities: SiteMenuEntity[]): void {
-  const visitedIds = new Set<number>();
-
-  for (const entity of entities) {
-    if (visitedIds.has(entity.id)) {
-      throw new SiteMenuBusinessError(
-        '菜单文件中的菜单标识不能重复',
-        {
-          nodePath: 'siteMenu',
-          field: 'id',
-          reason: '菜单文件中的菜单标识必须唯一',
-          value: entity.id,
-        },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    visitedIds.add(entity.id);
-  }
 }
 
 function validateUploadFile(file: UploadedSiteMenuFileDto | null | undefined): UploadedSiteMenuFileDto {
@@ -289,88 +414,145 @@ function toResponseDto(entity: SiteMenuEntity): SiteMenuResponseDto {
 }
 
 function validateCreateInput(input: Record<string, unknown>): CreateSiteMenuRequestDto {
+  const parentId = normalizeOptionalParentId(input.parentId);
+
   return {
-    parentId: normalizeOptionalParentId(input.parentId),
-    name: ensureString(input.name, '名称'),
-    path: ensureString(input.path, '路径', true),
-    icon: ensureString(input.icon, '图标', true),
-    isTop: input.parentId == null,
-    strict: normalizeRequiredBoolean(input.strict, 'strict', '菜单 strict 字段', false),
-    hide: normalizeRequiredBoolean(input.hide, 'hide', '菜单 hide 字段', false),
-    sort:
-      input.sort === undefined
-        ? undefined
-        : typeof input.sort === 'number' && Number.isInteger(input.sort) && input.sort >= 0
-          ? input.sort
-          : (() => {
-              throw new SiteMenuBusinessError(
-                '菜单排序值不合法',
-                {
-                  nodePath: 'siteMenu',
-                  field: 'sort',
-                  reason: '菜单排序值必须为非负整数',
-                  value: input.sort,
-                },
-                HttpStatus.BAD_REQUEST,
-              );
-            })(),
+    parentId,
+    name: ensureString(input.name, 'name', '菜单名称'),
+    path: ensureString(input.path, 'path', '菜单路径', true),
+    icon: ensureString(input.icon, 'icon', '菜单图标', true),
+    isTop: parentId == null,
+    strict: normalizeRequiredBoolean(input.strict, 'strict', 'strict', false),
+    hide: normalizeRequiredBoolean(input.hide, 'hide', 'hide', false),
+    sort: normalizeOptionalNonNegativeInteger(input.sort, 'sort', '排序值'),
     remark: typeof input.remark === 'string' ? input.remark.trim() : undefined,
   };
 }
 
 function validateUpdateInput(input: Record<string, unknown>): UpdateSiteMenuRequestDto {
-  const nextInput: UpdateSiteMenuRequestDto = {};
+  const payload: UpdateSiteMenuRequestDto = {};
 
   if (Object.prototype.hasOwnProperty.call(input, 'parentId')) {
-    nextInput.parentId = normalizeOptionalParentId(input.parentId);
+    payload.parentId = normalizeOptionalParentId(input.parentId);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'name') && input.name !== undefined) {
-    nextInput.name = ensureString(input.name, '名称');
+    payload.name = ensureString(input.name, 'name', '菜单名称');
   }
   if (Object.prototype.hasOwnProperty.call(input, 'path') && input.path !== undefined) {
-    nextInput.path = ensureString(input.path, '路径', true);
+    payload.path = ensureString(input.path, 'path', '菜单路径', true);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'icon') && input.icon !== undefined) {
-    nextInput.icon = ensureString(input.icon, '图标', true);
+    payload.icon = ensureString(input.icon, 'icon', '菜单图标', true);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'strict')) {
-    nextInput.strict = normalizeRequiredBoolean(input.strict, 'strict', '菜单 strict 字段', false);
+    payload.strict = normalizeRequiredBoolean(input.strict, 'strict', 'strict', false);
   }
   if (Object.prototype.hasOwnProperty.call(input, 'hide')) {
-    nextInput.hide = normalizeRequiredBoolean(input.hide, 'hide', '菜单 hide 字段', false);
+    payload.hide = normalizeRequiredBoolean(input.hide, 'hide', 'hide', false);
   }
-  if (Object.prototype.hasOwnProperty.call(input, 'sort') && input.sort !== undefined) {
-    if (typeof input.sort !== 'number' || !Number.isInteger(input.sort) || input.sort < 0) {
-      throw new SiteMenuBusinessError(
-        '菜单排序值不合法',
-        {
-          nodePath: 'siteMenu',
-          field: 'sort',
-          reason: '菜单排序值必须为非负整数',
-          value: input.sort,
-        },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    nextInput.sort = input.sort;
+  if (Object.prototype.hasOwnProperty.call(input, 'sort')) {
+    payload.sort = normalizeOptionalNonNegativeInteger(input.sort, 'sort', '排序值');
   }
-  if (Object.prototype.hasOwnProperty.call(input, 'remark') && input.remark !== undefined) {
+  if (Object.prototype.hasOwnProperty.call(input, 'remark')) {
     if (typeof input.remark !== 'string') {
       throw new SiteMenuBusinessError(
-        '菜单备注必须是字符串',
+        '备注必须为字符串',
         {
           nodePath: 'siteMenu',
           field: 'remark',
-          reason: '菜单备注必须是字符串',
+          reason: '备注必须为字符串',
           value: input.remark,
         },
         HttpStatus.BAD_REQUEST,
       );
     }
-    nextInput.remark = input.remark.trim();
+
+    payload.remark = input.remark.trim();
   }
 
-  return nextInput;
+  return payload;
+}
+
+function validateSiteMenuListQuery(
+  input: SiteMenuTableListQueryDto | Record<string, unknown> = {},
+): SiteMenuTableListQueryDto {
+  const keyword = normalizeOptionalQueryString(input.keyword, 'keyword');
+  const hide = normalizeOptionalQueryBoolean(input.hide, 'hide');
+  const strict = normalizeOptionalQueryBoolean(input.strict, 'strict');
+
+  return {
+    ...(keyword ? { keyword } : {}),
+    ...(hide !== undefined ? { hide } : {}),
+    ...(strict !== undefined ? { strict } : {}),
+    page: normalizePaginationInteger(input.page, 'page', DEFAULT_SITE_MENU_LIST_PAGE, {
+      min: 1,
+    }),
+    pageSize: normalizePaginationInteger(
+      input.pageSize,
+      'pageSize',
+      DEFAULT_SITE_MENU_LIST_PAGE_SIZE,
+      {
+        min: 1,
+        max: MAX_SITE_MENU_LIST_PAGE_SIZE,
+      },
+    ),
+  };
+}
+
+function filterSiteMenuTreeByQuery(
+  node: SiteMenuResponseDto,
+  query: SiteMenuTableListQueryDto,
+  parentName = '',
+): SiteMenuResponseDto | null {
+  const keyword = query.keyword?.toLowerCase();
+  const filteredChildren = node.children
+    .map((child) => filterSiteMenuTreeByQuery(child, query, node.name))
+    .filter((child): child is SiteMenuResponseDto => child !== null);
+
+  const matchesKeyword =
+    !keyword ||
+    `${node.name} ${parentName} ${node.path} ${node.icon} ${node.remark}`
+      .toLowerCase()
+      .includes(keyword);
+  const matchesHide = query.hide === undefined || node.hide === query.hide;
+  const matchesStrict = query.strict === undefined || node.strict === query.strict;
+  const selfMatches = matchesKeyword && matchesHide && matchesStrict;
+
+  if (!selfMatches && filteredChildren.length === 0) {
+    return null;
+  }
+
+  return {
+    ...node,
+    children: filteredChildren,
+  };
+}
+
+function flattenSiteMenuTableRows(
+  nodes: SiteMenuResponseDto[],
+  level = 0,
+  parentName = '',
+): SiteMenuTableListItemDto[] {
+  return [...nodes]
+    .sort((left, right) => left.sort - right.sort || left.id - right.id)
+    .flatMap((node) => {
+      const current: SiteMenuTableListItemDto = {
+        id: node.id,
+        parentId: node.parentId,
+        parentName,
+        level,
+        name: node.name,
+        path: node.path,
+        icon: node.icon,
+        strict: Boolean(node.strict),
+        hide: Boolean(node.hide),
+        sort: node.sort,
+        remark: node.remark?.trim() ?? '',
+        updateTime: node.updateTime || node.createTime || '--',
+      };
+
+      return [current, ...flattenSiteMenuTableRows(node.children, level + 1, node.name)];
+    });
 }
 
 export class SiteMenuService {
@@ -403,8 +585,33 @@ export class SiteMenuService {
     }
   }
 
+  async getSiteMenuList(
+    input: SiteMenuTableListQueryDto | Record<string, unknown> = {},
+  ): Promise<SiteMenuTableListDto> {
+    const query = validateSiteMenuListQuery(input);
+    const menuTree = await this.getSiteMenu();
+    const filteredRoots = menuTree
+      .map((node) => filterSiteMenuTreeByQuery(node, query))
+      .filter((node): node is SiteMenuResponseDto => node !== null);
+
+    const total = filteredRoots.length;
+    const totalPages = Math.max(1, Math.ceil(total / query.pageSize));
+    const currentPage = Math.min(query.page ?? DEFAULT_SITE_MENU_LIST_PAGE, totalPages);
+    const pagedRoots =
+      total === 0
+        ? []
+        : filteredRoots.slice((currentPage - 1) * query.pageSize, currentPage * query.pageSize);
+
+    return {
+      items: flattenSiteMenuTableRows(pagedRoots),
+      total,
+      page: currentPage,
+      pageSize: query.pageSize ?? DEFAULT_SITE_MENU_LIST_PAGE_SIZE,
+    };
+  }
+
   async getSiteMenuDetail(id: number): Promise<SiteMenuResponseDto> {
-    const targetId = ensurePositiveInteger(id, 'id');
+    const targetId = ensurePositiveInteger(id, 'id', '菜单标识');
     const entity = await this.repository.getNodeById(targetId);
 
     if (!entity) {
@@ -423,7 +630,9 @@ export class SiteMenuService {
     return toResponseDto(entity);
   }
 
-  async createSiteMenu(input: CreateSiteMenuRequestDto | Record<string, unknown>): Promise<SiteMenuResponseDto> {
+  async createSiteMenu(
+    input: CreateSiteMenuRequestDto | Record<string, unknown>,
+  ): Promise<SiteMenuResponseDto> {
     const payload = validateCreateInput(input as Record<string, unknown>);
 
     if (payload.parentId != null) {
@@ -468,7 +677,7 @@ export class SiteMenuService {
     id: number,
     input: UpdateSiteMenuRequestDto | Record<string, unknown>,
   ): Promise<SiteMenuResponseDto> {
-    const targetId = ensurePositiveInteger(id, 'id');
+    const targetId = ensurePositiveInteger(id, 'id', '菜单标识');
     const current = await this.repository.getNodeById(targetId);
 
     if (!current) {
@@ -551,7 +760,7 @@ export class SiteMenuService {
   }
 
   async deleteSiteMenu(id: number): Promise<SiteMenuResponseDto> {
-    const targetId = ensurePositiveInteger(id, 'id');
+    const targetId = ensurePositiveInteger(id, 'id', '菜单标识');
     const deleted = await this.repository.deleteNode(targetId);
 
     if (!deleted) {

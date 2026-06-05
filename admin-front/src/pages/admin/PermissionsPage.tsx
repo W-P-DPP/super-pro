@@ -7,7 +7,6 @@ import {
   deleteAuthorizationPermission,
   getAuthorizationPermissions,
   updateAuthorizationPermission,
-  type AuthorizationPermissionResponseDto,
   type CreateAuthorizationPermissionRequestDto,
   type UpdateAuthorizationPermissionRequestDto,
 } from '@/api/modules/authorization'
@@ -110,7 +109,7 @@ function buildPermissionFormState(projectId?: number | null): PermissionFormStat
   }
 }
 
-function mapPermissionRecord(permission: AuthorizationPermissionResponseDto): PermissionRecord {
+function mapPermissionRecord(permission: Awaited<ReturnType<typeof getAuthorizationPermissions>>['items'][number]): PermissionRecord {
   return {
     id: permission.id,
     code: permission.code,
@@ -132,7 +131,6 @@ export function PermissionsPage() {
   const [projectKeyword, setProjectKeyword] = useState('')
   const [projectReloadKey, setProjectReloadKey] = useState(0)
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
-  const [permissionRecords, setPermissionRecords] = useState<PermissionRecord[]>([])
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [keyword, setKeyword] = useState('')
@@ -191,21 +189,6 @@ export function PermissionsPage() {
     }
   }
 
-  async function loadPermissions(appCode: string) {
-    setLoadState('loading')
-    setErrorMessage('')
-
-    try {
-      const result = await getAuthorizationPermissions({ appCode })
-      setPermissionRecords(result.items.map(mapPermissionRecord))
-      setLoadState('success')
-    } catch (error) {
-      setPermissionRecords([])
-      setLoadState('error')
-      setErrorMessage(error instanceof Error ? error.message : '加载权限列表失败，请稍后重试。')
-    }
-  }
-
   useEffect(() => {
     void loadProjects()
   }, [projectReloadKey])
@@ -240,46 +223,53 @@ export function PermissionsPage() {
   }, [projectRecords.length, visibleProjectRecords])
 
   useEffect(() => {
-    const selectedProjectCode = selectedProject?.projectCode?.trim()
-
-    if (!selectedProjectCode) {
-      setPermissionRecords([])
-      setPermissionRows([])
-      setTotalPermissions(0)
-      setLoadState('idle')
-      return
-    }
-
     setCurrentPage(1)
-    void loadPermissions(selectedProjectCode)
-  }, [reloadKey, selectedProject?.projectCode])
+  }, [selectedProject?.projectCode])
 
   useEffect(() => {
-    const normalizedKeyword = appliedFilters.keyword.trim().toLowerCase()
-    const filteredRecords = permissionRecords.filter((record) => {
-      const matchesKeyword =
-        !normalizedKeyword ||
-        `${record.code} ${record.name} ${record.resourceCode} ${record.action} ${record.description}`
-          .toLowerCase()
-          .includes(normalizedKeyword)
-      const matchesType = appliedFilters.type === 'all' || record.type === appliedFilters.type
-      const matchesStatus = appliedFilters.status === 'all' || record.status === Number(appliedFilters.status)
+    async function loadPermissions() {
+      const selectedProjectCode = selectedProject?.projectCode?.trim()
 
-      return matchesKeyword && matchesType && matchesStatus
-    })
+      if (!selectedProjectCode) {
+        setPermissionRows([])
+        setTotalPermissions(0)
+        setLoadState('idle')
+        return
+      }
 
-    const total = filteredRecords.length
-    const totalPages = Math.max(1, Math.ceil(total / pageSize))
-    const nextPage = Math.min(currentPage, totalPages)
-    const startIndex = (nextPage - 1) * pageSize
+      setLoadState('loading')
+      setErrorMessage('')
 
-    setPermissionRows(total === 0 ? [] : filteredRecords.slice(startIndex, startIndex + pageSize))
-    setTotalPermissions(total)
+      try {
+        const result = await getAuthorizationPermissions({
+          appCode: selectedProjectCode,
+          keyword: appliedFilters.keyword.trim() || undefined,
+          resourceType:
+            appliedFilters.type === 'all'
+              ? undefined
+              : (appliedFilters.type as AuthorizationResourceType),
+          status: appliedFilters.status === 'all' ? undefined : Number(appliedFilters.status),
+          page: currentPage,
+          pageSize,
+        })
 
-    if (nextPage !== currentPage) {
-      setCurrentPage(nextPage)
+        setPermissionRows(result.items.map(mapPermissionRecord))
+        setTotalPermissions(result.total)
+        setLoadState('success')
+
+        if (result.page !== currentPage) {
+          setCurrentPage(result.page)
+        }
+      } catch (error) {
+        setPermissionRows([])
+        setTotalPermissions(0)
+        setLoadState('error')
+        setErrorMessage(error instanceof Error ? error.message : '加载权限列表失败，请稍后重试。')
+      }
     }
-  }, [appliedFilters, currentPage, pageSize, permissionRecords])
+
+    void loadPermissions()
+  }, [appliedFilters, currentPage, pageSize, reloadKey, selectedProject?.projectCode])
 
   const totalPages = Math.max(1, Math.ceil(totalPermissions / pageSize))
   const isEditDialogOpen = editingPermission !== null
@@ -422,12 +412,7 @@ export function PermissionsPage() {
       await deleteAuthorizationPermission(deletingPermission.id)
       toast.success('权限已删除')
       setDeletingPermission(null)
-
-      if (currentPage > 1 && permissionRows.length === 1) {
-        setCurrentPage(currentPage - 1)
-      } else {
-        setReloadKey((currentValue) => currentValue + 1)
-      }
+      setReloadKey((currentValue) => currentValue + 1)
       void loadProjects()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '删除权限失败，请稍后重试。')
@@ -769,12 +754,7 @@ export function PermissionsPage() {
                 <div className="text-sm font-medium">类型</div>
                 <ModuleSelect
                   value={createDraft.type}
-                  onValueChange={(value) =>
-                    setCreateDraft((currentDraft) => ({
-                      ...currentDraft,
-                      type: value as AuthorizationResourceType,
-                    }))
-                  }
+                  onValueChange={(value) => setCreateDraft((currentDraft) => ({ ...currentDraft, type: value as AuthorizationResourceType }))}
                   options={AUTHORIZATION_RESOURCE_TYPE_OPTIONS.map((type) => ({
                     value: type,
                     label: formatPermissionType(type),
@@ -823,12 +803,7 @@ export function PermissionsPage() {
                 <div className="text-sm font-medium">状态</div>
                 <ModuleSelect
                   value={String(createDraft.status)}
-                  onValueChange={(value) =>
-                    setCreateDraft((currentDraft) => ({
-                      ...currentDraft,
-                      status: Number(value),
-                    }))
-                  }
+                  onValueChange={(value) => setCreateDraft((currentDraft) => ({ ...currentDraft, status: Number(value) }))}
                   options={[1, 0].map((status) => ({
                     value: String(status),
                     label: formatStatus(status),
@@ -880,12 +855,7 @@ export function PermissionsPage() {
                 <div className="text-sm font-medium">类型</div>
                 <ModuleSelect
                   value={editingDraft.type}
-                  onValueChange={(value) =>
-                    setEditingDraft((currentDraft) => ({
-                      ...currentDraft,
-                      type: value as AuthorizationResourceType,
-                    }))
-                  }
+                  onValueChange={(value) => setEditingDraft((currentDraft) => ({ ...currentDraft, type: value as AuthorizationResourceType }))}
                   options={AUTHORIZATION_RESOURCE_TYPE_OPTIONS.map((type) => ({
                     value: type,
                     label: formatPermissionType(type),
@@ -934,12 +904,7 @@ export function PermissionsPage() {
                 <div className="text-sm font-medium">状态</div>
                 <ModuleSelect
                   value={String(editingDraft.status)}
-                  onValueChange={(value) =>
-                    setEditingDraft((currentDraft) => ({
-                      ...currentDraft,
-                      status: Number(value),
-                    }))
-                  }
+                  onValueChange={(value) => setEditingDraft((currentDraft) => ({ ...currentDraft, status: Number(value) }))}
                   options={[1, 0].map((status) => ({
                     value: String(status),
                     label: formatStatus(status),

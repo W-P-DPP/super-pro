@@ -1,4 +1,5 @@
 import type {
+  AdminMenuNodeType,
   AdminMenuResponseDto,
   ApiEnvelope,
   CreateAdminMenuRequestDto,
@@ -12,6 +13,40 @@ type ApiResponse<T> = ApiEnvelope<T> & {
 
 let cachedAdminMenuTree: AdminMenuResponseDto[] | null = null
 let adminMenuTreeRequest: Promise<AdminMenuResponseDto[]> | null = null
+
+export interface AdminMenuListQueryDto {
+  keyword?: string
+  menuType?: AdminMenuNodeType
+  status?: number
+  page?: number
+  pageSize?: number
+}
+
+export interface AdminMenuListItemDto {
+  id: number
+  parentId: number | null
+  parentName: string
+  level: number
+  name: string
+  shortTitle: string
+  slug: string
+  iconKey: string
+  menuType: AdminMenuNodeType
+  status: number
+  sort: number
+  description: string
+  badge: string
+  permissionCode: string
+  remark: string
+  updateTime: string
+}
+
+export interface AdminMenuListDto {
+  items: AdminMenuListItemDto[]
+  total: number
+  page: number
+  pageSize: number
+}
 
 async function unwrapResponse<T>(promise: Promise<ApiResponse<T>>, fallbackMessage: string) {
   const response = await promise
@@ -63,6 +98,18 @@ export async function getAdminMenuTree(options?: { forceRefresh?: boolean }) {
   }
 
   return adminMenuTreeRequest
+}
+
+export async function getAdminMenuList(query: AdminMenuListQueryDto) {
+  const data = await unwrapResponse(
+    request.get<ApiResponse<AdminMenuListDto>>('/admin-menu/getMenuList', {
+      params: query,
+      requiresAuth: true,
+    }),
+    '加载后台菜单列表失败，请稍后重试。',
+  )
+
+  return data ?? { items: [], total: 0, page: 1, pageSize: 0 }
 }
 
 export async function createAdminMenu(payload: CreateAdminMenuRequestDto) {
