@@ -404,6 +404,12 @@ function getGrantedPermissionCodes(
   );
 }
 
+function isEnabledPermission(
+  permission: AuthorizationPermissionSummary,
+): boolean {
+  return permission.status !== 0;
+}
+
 function sortRoles(
   roles: readonly AuthorizationRoleSummary[],
 ): AuthorizationRoleSummary[] {
@@ -550,6 +556,10 @@ export class AuthorizationService {
             continue;
           }
 
+          if (!isEnabledPermission(permission)) {
+            continue;
+          }
+
           if (!current.permissions.some((item) => item.id === permission.id)) {
             current.permissions.push(permission);
           }
@@ -630,6 +640,10 @@ export class AuthorizationService {
 
       for (const permission of rolePermissions) {
         if (permission.appCode !== projectCode) {
+          continue;
+        }
+
+        if (!isEnabledPermission(permission)) {
           continue;
         }
 

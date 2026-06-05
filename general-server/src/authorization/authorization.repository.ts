@@ -881,6 +881,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
         'permission.id AS id',
         'permission.code AS code',
         'permission.appCode AS appCode',
+        'permission.status AS status',
         'permission.resourceType AS resourceType',
         'permission.resourceCode AS resourceCode',
         'permission.action AS action',
@@ -893,6 +894,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
       id: number;
       code: string;
       appCode: string;
+      status: number;
       resourceType: AuthorizationPermissionSummary['resourceType'];
       resourceCode: string;
       action: string;
@@ -910,6 +912,7 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
         id: row.id,
         code: row.code,
         appCode: row.appCode,
+        status: row.status,
         resourceType: row.resourceType,
         resourceCode: row.resourceCode,
         action: row.action,

@@ -9,11 +9,8 @@ import type { ChangeEvent, DragEvent } from 'react'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import type { Sheet2JSONOpts, WorkBook, WorkSheet } from 'xlsx'
 import { createMovedPath, getPreviewKind, getPreviewTooLargeMessage } from './file-preview'
-import {
-  getAuthToken,
-  redirectToLoginPage,
-  shouldRedirectToLogin,
-} from './lib/auth-session'
+import { createProjectPermissionChecker, hasProjectPermission } from '@super-pro/shared-web'
+import { getAuthToken, redirectToLoginPage, shouldRedirectToLogin } from './lib/auth-session'
 import { renderMarkdownToHtml } from './markdown-preview'
 import type {
   ApiResponse,
@@ -284,23 +281,18 @@ export default function App() {
     [deferredSearchKeyword, expandedPaths, visibleTree],
   )
   const visibleNodeCount = useMemo(() => countVisibleNodes(visibleTree), [visibleTree])
-  const permissionCodes = useMemo(
-    () =>
-      new Set(
-        currentProjectPermission?.permissions
-          .filter((permission) => permission.status !== 0)
-          .map((permission) => permission.code) ?? [],
-      ),
+  const permissionChecker = useMemo(
+    () => createProjectPermissionChecker(currentProjectPermission),
     [currentProjectPermission],
   )
 
-  const canReadTree = permissionCodes.has(FILE_SERVER_PERMISSION_CODES.treeRead)
-  const canPreview = permissionCodes.has(FILE_SERVER_PERMISSION_CODES.previewRead)
-  const canDownload = permissionCodes.has(FILE_SERVER_PERMISSION_CODES.downloadRead)
-  const canCreateFolder = canReadTree && permissionCodes.has(FILE_SERVER_PERMISSION_CODES.folderCreate)
-  const canUploadFiles = canReadTree && permissionCodes.has(FILE_SERVER_PERMISSION_CODES.fileUpload)
-  const canDelete = canReadTree && permissionCodes.has(FILE_SERVER_PERMISSION_CODES.fileDelete)
-  const canMove = canReadTree && permissionCodes.has(FILE_SERVER_PERMISSION_CODES.fileMove)
+  const canReadTree = permissionChecker.has(FILE_SERVER_PERMISSION_CODES.treeRead)
+  const canPreview = permissionChecker.has(FILE_SERVER_PERMISSION_CODES.previewRead)
+  const canDownload = permissionChecker.has(FILE_SERVER_PERMISSION_CODES.downloadRead)
+  const canCreateFolder = canReadTree && permissionChecker.has(FILE_SERVER_PERMISSION_CODES.folderCreate)
+  const canUploadFiles = canReadTree && permissionChecker.has(FILE_SERVER_PERMISSION_CODES.fileUpload)
+  const canDelete = canReadTree && permissionChecker.has(FILE_SERVER_PERMISSION_CODES.fileDelete)
+  const canMove = canReadTree && permissionChecker.has(FILE_SERVER_PERMISSION_CODES.fileMove)
 
   function clearPreviewObjectUrl() {
     if (previewObjectUrlRef.current) {
@@ -350,13 +342,7 @@ export default function App() {
         }
 
         setCurrentProjectPermission(matchedProject)
-        if (
-          !matchedProject.permissions.some(
-            (permission) =>
-              permission.code === FILE_SERVER_PERMISSION_CODES.treeRead &&
-              permission.status !== 0,
-          )
-        ) {
+        if (!hasProjectPermission(matchedProject, FILE_SERVER_PERMISSION_CODES.treeRead)) {
           setTree([])
           setSelectedPath('/')
           setExpandedPaths(['/'])

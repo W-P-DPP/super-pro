@@ -228,6 +228,71 @@ describe('AuthorizationService', () => {
     )
   })
 
+  it('filters disabled permissions from user project permission lists', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () =>
+        new Map([[identity.userId, [editorRole]]]),
+      getProjectSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            editorRole.id,
+            [{ id: 101, projectCode: FILE_SERVER_APP_CODE, projectName: '文件服务' }],
+          ],
+        ]),
+      getPermissionSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            editorRole.id,
+            [treePermission, disabledPermission],
+          ],
+        ]),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.listUserProjectPermissions(identity.userId)
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        projectCode: FILE_SERVER_APP_CODE,
+        permissions: [treePermission],
+      }),
+    ])
+  })
+
+  it('filters disabled permissions from current project permission queries', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () =>
+        new Map([[identity.userId, [editorRole]]]),
+      getProjectSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            editorRole.id,
+            [{ id: 101, projectCode: FILE_SERVER_APP_CODE, projectName: '文件服务' }],
+          ],
+        ]),
+      getPermissionSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            editorRole.id,
+            [treePermission, disabledPermission],
+          ],
+        ]),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.getCurrentUserProjectPermission(
+      identity,
+      FILE_SERVER_APP_CODE,
+    )
+
+    expect(result.item).toEqual(
+      expect.objectContaining({
+        projectCode: FILE_SERVER_APP_CODE,
+        permissions: [treePermission],
+      }),
+    )
+  })
+
   it('ignores disabled permissions when calculating granted permission codes', async () => {
     const repository = createRepositoryMock({
       getAssignedRolesByUserIds: async () => new Map([[identity.userId, [editorRole]]]),
