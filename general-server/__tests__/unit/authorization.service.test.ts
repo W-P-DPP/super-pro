@@ -137,30 +137,6 @@ describe('AuthorizationService', () => {
     ])
   })
 
-  it('filters authorization snapshots to the requested app scope', async () => {
-    const repository = createRepositoryMock({
-      getAssignedRolesByUserIds: async () =>
-        new Map([[identity.userId, [platformRole, editorRole]]]),
-      getPermissionSummariesByRoleIds: async () => [
-        platformPermission,
-        movePermission,
-        treePermission,
-      ],
-    })
-    const service = new AuthorizationService(repository)
-
-    const snapshot = await service.getAuthorizationSnapshot(identity, {
-      appCode: FILE_SERVER_APP_CODE,
-    })
-
-    expect(snapshot.appCode).toBe(FILE_SERVER_APP_CODE)
-    expect(snapshot.permissions).toEqual([treePermission, movePermission])
-    expect(snapshot.principal.permissionCodes).toEqual([
-      FILE_SERVER_PERMISSION_CODES.treeRead,
-      FILE_SERVER_PERMISSION_CODES.fileMove,
-    ])
-  })
-
   it('aggregates user project permissions by assigned roles', async () => {
     const repository = createRepositoryMock({
       getAssignedRolesByUserIds: async () =>
@@ -215,6 +191,41 @@ describe('AuthorizationService', () => {
         ],
       }),
     ])
+  })
+
+  it('gets current user permission for a single project from the authenticated identity', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () =>
+        new Map([[identity.userId, [editorRole]]]),
+      getProjectSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            editorRole.id,
+            [{ id: 101, projectCode: FILE_SERVER_APP_CODE, projectName: '文件服务' }],
+          ],
+        ]),
+      getPermissionSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            editorRole.id,
+            [treePermission, movePermission],
+          ],
+        ]),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.getCurrentUserProjectPermission(
+      identity,
+      FILE_SERVER_APP_CODE,
+    )
+
+    expect(result.item).toEqual(
+      expect.objectContaining({
+        projectCode: FILE_SERVER_APP_CODE,
+        roles: [editorRole],
+        permissions: [treePermission, movePermission],
+      }),
+    )
   })
 
   it('ignores disabled permissions when calculating granted permission codes', async () => {

@@ -21,21 +21,6 @@ function handleAuthorizationError(
   return res.status(HttpStatus.ERROR).sendFail(fallbackMessage, HttpStatus.ERROR);
 }
 
-export const getAuthorizationSnapshot = async (req: Request, res: Response) => {
-  try {
-    const identity = authorizationService.resolveAuthenticatedIdentityFromJwtPayload(
-      req.jwtPayload,
-    );
-    const snapshot = await authorizationService.getAuthorizationSnapshot(
-      identity,
-      req.query as Record<string, unknown>,
-    );
-    res.sendSuccess(snapshot, '获取权限快照成功');
-  } catch (error) {
-    return handleAuthorizationError(error, res, '获取权限快照失败');
-  }
-};
-
 export const getPermissionList = async (req: Request, res: Response) => {
   try {
     const result = await authorizationService.listPermissions(
@@ -64,6 +49,21 @@ export const getUserProjectPermissionList = async (req: Request, res: Response) 
     res.sendSuccess(result, '获取用户项目权限成功');
   } catch (error) {
     return handleAuthorizationError(error, res, '获取用户项目权限失败');
+  }
+};
+
+export const getCurrentUserProjectPermission = async (req: Request, res: Response) => {
+  try {
+    const identity = authorizationService.resolveAuthenticatedIdentityFromJwtPayload(
+      req.jwtPayload,
+    );
+    const result = await authorizationService.getCurrentUserProjectPermission(
+      identity,
+      req.params.projectCode,
+    );
+    res.sendSuccess(result, '获取当前用户项目权限成功');
+  } catch (error) {
+    return handleAuthorizationError(error, res, '获取当前用户项目权限失败');
   }
 };
 

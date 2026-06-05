@@ -24,13 +24,21 @@ const initialRegisterState: RegisterFormState = {
   confirmPassword: '',
 }
 
+function getMessageFromLocation() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  return new URLSearchParams(window.location.search).get('message')?.trim() ?? ''
+}
+
 export function LoginPage() {
   const [mode, setMode] = useState<AuthMode>('login')
   const [loginForm, setLoginForm] = useState(initialLoginState)
   const [registerForm, setRegisterForm] = useState(initialRegisterState)
   const [errors, setErrors] = useState<AuthFormErrors>({})
   const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState('')
+  const [formError, setFormError] = useState(() => getMessageFromLocation())
   const [successMessage, setSuccessMessage] = useState('')
 
   const isLogin = mode === 'login'

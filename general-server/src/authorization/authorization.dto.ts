@@ -1,8 +1,8 @@
 import type {
-  AppAuthorizationSnapshot,
   AuthorizationPermissionSummary,
   AuthorizationRoleDetail,
   AuthorizationRoleSummary,
+  AuthorizationUserProjectPermission,
 } from '@super-pro/shared-types';
 
 export interface AuthorizationValidationErrorContextDto {
@@ -17,13 +17,6 @@ export interface AuthorizationPermissionResponseDto
 
 export interface AuthorizationRoleResponseDto extends AuthorizationRoleDetail {
   memberCount?: number;
-}
-
-export interface AuthorizationSnapshotResponseDto
-  extends AppAuthorizationSnapshot {}
-
-export interface AuthorizationSnapshotQueryDto {
-  appCode: string;
 }
 
 export interface CreateRoleRequestDto {
@@ -74,14 +67,13 @@ export interface AuthorizationPermissionListDto {
 
 export interface AssignedRoleResponseDto extends AuthorizationRoleSummary {}
 
-export interface AuthorizationUserProjectPermissionResponseDto {
-  id: number;
-  projectCode: string;
-  projectName: string;
-  roles: AuthorizationRoleSummary[];
-  permissions: AuthorizationPermissionSummary[];
-}
+export interface AuthorizationUserProjectPermissionResponseDto
+  extends AuthorizationUserProjectPermission {}
 
 export interface AuthorizationUserProjectPermissionListDto {
   items: AuthorizationUserProjectPermissionResponseDto[];
+}
+
+export interface AuthorizationCurrentUserProjectPermissionResponseDto {
+  item: AuthorizationUserProjectPermissionResponseDto | null;
 }

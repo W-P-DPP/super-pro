@@ -29,22 +29,33 @@ export function getLoginUrl() {
   )
 }
 
-export function buildLoginRedirectUrl(target: string) {
-  return buildSharedLoginRedirectUrl(getLoginUrl(), target)
+function appendLoginMessage(target: string, message?: string) {
+  const trimmedMessage = message?.trim()
+  if (!trimmedMessage) {
+    return target
+  }
+
+  const url = new URL(target)
+  url.searchParams.set('message', trimmedMessage)
+  return url.toString()
 }
 
-export function redirectToLoginPage(target?: string) {
+export function buildLoginRedirectUrl(target: string, message?: string) {
+  return appendLoginMessage(buildSharedLoginRedirectUrl(getLoginUrl(), target), message)
+}
+
+export function redirectToLoginPage(target?: string, message?: string) {
   const redirectTarget =
     target ??
     (typeof window !== 'undefined' ? window.location.href : '')
 
   return redirectToUrl(
-    buildSharedLoginRedirectUrl(getLoginUrl(), redirectTarget, {
+    appendLoginMessage(buildSharedLoginRedirectUrl(getLoginUrl(), redirectTarget, {
       developmentRedirectHandoff:
         target === undefined && import.meta.env.DEV
           ? import.meta.env.VITE_DEV_PROJECT_URL
           : undefined,
-    }),
+    }), message),
   )
 }
 

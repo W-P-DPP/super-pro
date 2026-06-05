@@ -4,7 +4,7 @@ import {
   createRole,
   deletePermission,
   deleteRole,
-  getAuthorizationSnapshot,
+  getCurrentUserProjectPermission,
   getPermissionList,
   getRoleList,
   getUserProjectPermissionList,
@@ -14,9 +14,9 @@ import {
 
 const authorizationRouter: Router = express.Router();
 
-authorizationRouter.get('/snapshot', getAuthorizationSnapshot);
 authorizationRouter.get('/permissions', getPermissionList);
 authorizationRouter.get('/roles', getRoleList);
+authorizationRouter.get('/me/projects/:projectCode', getCurrentUserProjectPermission);
 authorizationRouter.get('/users/:id/projects', getUserProjectPermissionList);
 authorizationRouter.post('/permissions', createPermission);
 authorizationRouter.post('/roles', createRole);

@@ -105,6 +105,14 @@ export interface AuthorizationRoleDetail extends AuthorizationRoleSummary {
   permissions: AuthorizationPermissionSummary[];
 }
 
+export interface AuthorizationUserProjectPermission {
+  id: number;
+  projectCode: string;
+  projectName: string;
+  roles: AuthorizationRoleSummary[];
+  permissions: AuthorizationPermissionSummary[];
+}
+
 export interface AppAuthorizationSnapshot {
   appCode: string;
   principal: AuthenticatedPrincipal;

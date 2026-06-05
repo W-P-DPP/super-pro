@@ -7,7 +7,6 @@ import {
 import { HttpStatus } from '@super-pro/shared-constants';
 import {
   AUTHORIZATION_RESOURCE_TYPES,
-  type AppAuthorizationSnapshot,
   type AuthenticatedIdentity,
   type AuthenticatedPrincipal,
   type AuthorizationPermissionSummary,
@@ -16,10 +15,9 @@ import {
   type PermissionCode,
 } from '@super-pro/shared-types';
 import type {
+  AuthorizationCurrentUserProjectPermissionResponseDto,
   AuthorizationPermissionListDto,
   AuthorizationRoleListDto,
-  AuthorizationSnapshotQueryDto,
-  AuthorizationSnapshotResponseDto,
   AuthorizationUserProjectPermissionListDto,
   AuthorizationUserProjectPermissionResponseDto,
   AuthorizationValidationErrorContextDto,
@@ -222,12 +220,8 @@ function normalizeIdList(value: unknown, field: string, label: string): number[]
   );
 }
 
-function validateSnapshotQuery(
-  input: AuthorizationSnapshotQueryDto | Record<string, unknown>,
-): AuthorizationSnapshotQueryDto {
-  return {
-    appCode: ensureNonEmptyString(input.appCode, 'appCode', 'appCode'),
-  };
+function ensureProjectCode(value: unknown, field: string): string {
+  return ensureNonEmptyString(value, field, 'projectCode');
 }
 
 function validateCreateRoleInput(
@@ -478,32 +472,6 @@ export class AuthorizationService {
     };
   }
 
-  async getAuthorizationSnapshot(
-    identity: AuthenticatedIdentity,
-    queryInput: AuthorizationSnapshotQueryDto | Record<string, unknown>,
-  ): Promise<AuthorizationSnapshotResponseDto> {
-    await this.ensureSeedData();
-
-    const query = validateSnapshotQuery(queryInput);
-    const principal = await this.getAuthenticatedPrincipal(identity);
-    const permissions = sortPermissions(
-      (await this.repository.getPermissionSummariesByRoleIds(
-        principal.roles.map((role) => role.id),
-      )).filter((permission) => permission.appCode === query.appCode),
-    );
-
-    const snapshot: AppAuthorizationSnapshot = {
-      appCode: query.appCode,
-      principal: {
-        ...principal,
-        permissionCodes: getGrantedPermissionCodes(permissions),
-      },
-      permissions,
-    };
-
-    return snapshot;
-  }
-
   async listPermissions(appCode?: string): Promise<AuthorizationPermissionListDto> {
     await this.ensureSeedData();
 
@@ -605,6 +573,84 @@ export class AuthorizationService {
             left.id - right.id
           );
         }),
+    };
+  }
+
+  async getCurrentUserProjectPermission(
+    identity: AuthenticatedIdentity,
+    projectCodeInput: unknown,
+  ): Promise<AuthorizationCurrentUserProjectPermissionResponseDto> {
+    await this.ensureSeedData();
+
+    const projectCode = ensureProjectCode(projectCodeInput, 'projectCode');
+    const assignedRolesMap = await this.repository.getAssignedRolesByUserIds([identity.userId]);
+    const assignedRoles = assignedRolesMap.get(identity.userId) ?? [];
+
+    if (assignedRoles.length === 0) {
+      return { item: null };
+    }
+
+    const roleIds = assignedRoles.map((role) => role.id);
+    const [projectsByRoleId, permissionsByRoleId] = await Promise.all([
+      this.repository.getProjectSummariesByRoleIdsMap(roleIds),
+      this.repository.getPermissionSummariesByRoleIdsMap(roleIds),
+    ]);
+
+    const roleById = new Map(assignedRoles.map((role) => [role.id, role]));
+    let currentItem: AuthorizationUserProjectPermissionResponseDto | null = null;
+
+    for (const roleId of roleIds) {
+      const role = roleById.get(roleId);
+      if (!role) {
+        continue;
+      }
+
+      const project = (projectsByRoleId.get(roleId) ?? []).find(
+        (item) => item.projectCode === projectCode,
+      );
+
+      if (!project) {
+        continue;
+      }
+
+      const rolePermissions = permissionsByRoleId.get(roleId) ?? [];
+      const nextItem =
+        currentItem ??
+        {
+          id: project.id,
+          projectCode: project.projectCode,
+          projectName: project.projectName,
+          roles: [],
+          permissions: [],
+        };
+
+      if (!nextItem.roles.some((item) => item.id === role.id)) {
+        nextItem.roles.push(role);
+      }
+
+      for (const permission of rolePermissions) {
+        if (permission.appCode !== projectCode) {
+          continue;
+        }
+
+        if (!nextItem.permissions.some((item) => item.id === permission.id)) {
+          nextItem.permissions.push(permission);
+        }
+      }
+
+      currentItem = nextItem;
+    }
+
+    if (!currentItem) {
+      return { item: null };
+    }
+
+    return {
+      item: {
+        ...currentItem,
+        roles: sortRoles(currentItem.roles),
+        permissions: sortPermissions(currentItem.permissions),
+      },
     };
   }
 

@@ -1,7 +1,7 @@
 import {
   FILE_SERVER_APP_CODE,
   FILE_SERVER_PERMISSION_CODES,
-  type AppAuthorizationSnapshot,
+  type AuthorizationUserProjectPermission,
 } from '@super-pro/shared-types'
 import { MoonStar, RefreshCw, Search, SunMedium } from 'lucide-react'
 import { useTheme } from 'next-themes'
@@ -44,6 +44,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, ''
 const CHUNK_UPLOAD_THRESHOLD = 8 * 1024 * 1024
 const CHUNK_UPLOAD_SIZE = 2 * 1024 * 1024
 const PREVIEW_TOKEN_COOKIE_NAME = 'file_preview_token'
+const DEFAULT_PROJECT_ACCESS_DENIED_MESSAGE = '用户无权限进入该项目'
 const DEFAULT_TREE_PERMISSION_DENIED_MESSAGE = '当前账号没有文件树查看权限'
 const DEFAULT_PREVIEW_PERMISSION_DENIED_MESSAGE = '当前账号没有文件预览权限'
 const DEFAULT_DOWNLOAD_PERMISSION_DENIED_MESSAGE = '当前账号没有文件下载权限'
@@ -82,8 +83,8 @@ function buildDownloadUrl(relativePath: string): string {
   return `${API_BASE_URL}/file/download?targetPath=${encodeURIComponent(relativePath)}`
 }
 
-function buildAuthorizationSnapshotUrl(): string {
-  return `${API_BASE_URL}/authorization/snapshot?appCode=${encodeURIComponent(FILE_SERVER_APP_CODE)}`
+function buildCurrentUserProjectPermissionUrl(projectCode: string): string {
+  return `${API_BASE_URL}/authorization/me/projects/${encodeURIComponent(projectCode)}`
 }
 
 function setPreviewAuthCookie(token?: string | null) {
@@ -153,9 +154,11 @@ async function requestJson<T>(pathName: string, init?: RequestInit): Promise<Api
   return payload
 }
 
-async function requestAuthorizationSnapshot(): Promise<AppAuthorizationSnapshot> {
+async function requestCurrentUserProjectPermission(
+  projectCode: string,
+): Promise<AuthorizationUserProjectPermission | null> {
   const headers = getAuthHeaders()
-  const response = await fetch(buildAuthorizationSnapshotUrl(), {
+  const response = await fetch(buildCurrentUserProjectPermissionUrl(projectCode), {
     headers,
     cache: 'no-store',
   })
@@ -164,12 +167,14 @@ async function requestAuthorizationSnapshot(): Promise<AppAuthorizationSnapshot>
     throw new Error('登录状态已失效，请重新登录')
   }
 
-  const payload = (await response.json()) as ApiResponse<AppAuthorizationSnapshot>
+  const payload = (await response.json()) as ApiResponse<{
+    item?: AuthorizationUserProjectPermission | null
+  }>
   if (!response.ok || payload.code !== 200) {
     throw new Error(payload.msg || '加载权限快照失败')
   }
 
-  return payload.data
+  return payload.data?.item ?? null
 }
 
 async function requestPreview(relativePath: string, signal?: AbortSignal): Promise<Response> {
@@ -262,7 +267,8 @@ export default function App() {
     dropTargetPath: null,
   })
   const [previewState, setPreviewState] = useState<PreviewState>({ status: 'idle' })
-  const [authorizationSnapshot, setAuthorizationSnapshot] = useState<AppAuthorizationSnapshot | null>(null)
+  const [currentProjectPermission, setCurrentProjectPermission] =
+    useState<AuthorizationUserProjectPermission | null>(null)
 
   const deferredSearchKeyword = useDeferredValue(searchKeyword.trim())
   const rootNode = useMemo<FileNode>(() => ({ name: 'file', relativePath: '/', type: 'folder', children: tree }), [tree])
@@ -279,8 +285,13 @@ export default function App() {
   )
   const visibleNodeCount = useMemo(() => countVisibleNodes(visibleTree), [visibleTree])
   const permissionCodes = useMemo(
-    () => new Set(authorizationSnapshot?.principal.permissionCodes ?? []),
-    [authorizationSnapshot],
+    () =>
+      new Set(
+        currentProjectPermission?.permissions
+          .filter((permission) => permission.status !== 0)
+          .map((permission) => permission.code) ?? [],
+      ),
+    [currentProjectPermission],
   )
 
   const canReadTree = permissionCodes.has(FILE_SERVER_PERMISSION_CODES.treeRead)
@@ -328,13 +339,24 @@ export default function App() {
     async function bootstrap() {
       setLoading(true)
       try {
-        const snapshot = await requestAuthorizationSnapshot()
+        const matchedProject = await requestCurrentUserProjectPermission(FILE_SERVER_APP_CODE)
         if (cancelled) {
           return
         }
 
-        setAuthorizationSnapshot(snapshot)
-        if (!snapshot.principal.permissionCodes.includes(FILE_SERVER_PERMISSION_CODES.treeRead)) {
+        if (!matchedProject) {
+          redirectToLoginPage(undefined, DEFAULT_PROJECT_ACCESS_DENIED_MESSAGE)
+          return
+        }
+
+        setCurrentProjectPermission(matchedProject)
+        if (
+          !matchedProject.permissions.some(
+            (permission) =>
+              permission.code === FILE_SERVER_PERMISSION_CODES.treeRead &&
+              permission.status !== 0,
+          )
+        ) {
           setTree([])
           setSelectedPath('/')
           setExpandedPaths(['/'])

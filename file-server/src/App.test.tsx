@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   FILE_SERVER_APP_CODE,
   FILE_SERVER_PERMISSION_CODES,
-  type AppAuthorizationSnapshot,
+  type AuthorizationUserProjectPermission,
 } from '@super-pro/shared-types'
 
 const { redirectToLoginPageMock } = vi.hoisted(() => ({
@@ -57,27 +57,25 @@ function textResponse(text: string, contentType = 'text/plain; charset=utf-8') {
   })
 }
 
-function createSnapshot(permissionCodes: string[]): AppAuthorizationSnapshot {
+function createProjectPermission(
+  permissionCodes: string[],
+  projectCode: string = FILE_SERVER_APP_CODE,
+): AuthorizationUserProjectPermission {
   return {
-    appCode: FILE_SERVER_APP_CODE,
-    principal: {
-      userId: 1,
-      username: 'zhangsan',
-      compatibilityRole: 'admin',
-      roles: [
-        {
-          id: 1,
-          code: 'platform.admin',
-          name: '平台管理员',
-          appCode: 'platform',
-        },
-      ],
-      permissionCodes,
-    },
+    id: 1,
+    projectCode,
+    projectName: projectCode === FILE_SERVER_APP_CODE ? '文件服务' : projectCode,
+    roles: [
+      {
+        id: 1,
+        code: 'platform.admin',
+        name: '平台管理员',
+      },
+    ],
     permissions: permissionCodes.map((code, index) => ({
       id: index + 1,
       code,
-      appCode: FILE_SERVER_APP_CODE,
+      appCode: projectCode,
       resourceType: 'api',
       resourceCode: code.split('.').slice(1, -1).join('.'),
       action: code.split('.').at(-1) ?? 'read',
@@ -132,9 +130,11 @@ describe('App', () => {
     document.cookie = 'file_preview_token=; Max-Age=0; Path=/'
   })
 
-  it('loads authorization snapshot before tree and previews files', async () => {
+  it('loads current project permissions before tree and previews files', async () => {
     const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(jsonResponse(createSnapshot(fullPermissions)))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ item: createProjectPermission(fullPermissions) }),
+    )
     fetchMock.mockResolvedValueOnce(
       jsonResponse([
         {
@@ -165,21 +165,21 @@ describe('App', () => {
     expect(await screen.findByText('guide')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/authorization/snapshot?appCode=file-server',
+      '/api/authorization/me/projects/file-server',
       expect.objectContaining({
         headers: expect.any(Headers),
       }),
     )
   })
 
-  it('hides workspace and download actions when snapshot lacks permissions', async () => {
+  it('hides workspace and download actions when current project lacks permissions', async () => {
     const fetchMock = vi.fn()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
-        createSnapshot([
+        { item: createProjectPermission([
           FILE_SERVER_PERMISSION_CODES.treeRead,
           FILE_SERVER_PERMISSION_CODES.previewRead,
-        ]),
+        ]) },
       ),
     )
     fetchMock.mockResolvedValueOnce(
@@ -214,7 +214,7 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /下载/ })).not.toBeInTheDocument()
   })
 
-  it('redirects to login when snapshot request returns 401', async () => {
+  it('redirects to login when project permission request returns 401', async () => {
     const fetchMock = vi.fn()
     fetchMock.mockResolvedValueOnce(jsonResponse(null, 'unauthorized', 401))
     vi.stubGlobal('fetch', fetchMock)
@@ -227,9 +227,30 @@ describe('App', () => {
     expect(await screen.findByText(/登录状态已失效/)).toBeInTheDocument()
   })
 
+  it('redirects to login with a message when the user cannot access the current project', async () => {
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        item: null,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(redirectToLoginPageMock).toHaveBeenCalledWith(
+        undefined,
+        '用户无权限进入该项目',
+      )
+    })
+  })
+
   it('shows controlled feedback instead of redirecting on initial tree 403', async () => {
     const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(jsonResponse(createSnapshot(fullPermissions)))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ item: createProjectPermission(fullPermissions) }),
+    )
     fetchMock.mockResolvedValueOnce(jsonResponse(null, 'tree denied', 403))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -242,7 +263,7 @@ describe('App', () => {
   it('does not request preview content when preview permission is missing', async () => {
     const fetchMock = vi.fn()
     fetchMock.mockResolvedValueOnce(
-      jsonResponse(createSnapshot([FILE_SERVER_PERMISSION_CODES.treeRead])),
+      jsonResponse({ item: createProjectPermission([FILE_SERVER_PERMISSION_CODES.treeRead]) }),
     )
     fetchMock.mockResolvedValueOnce(
       jsonResponse([
@@ -276,7 +297,9 @@ describe('App', () => {
 
   it('keeps the user on page when preview returns 403', async () => {
     const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce(jsonResponse(createSnapshot(fullPermissions)))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ item: createProjectPermission(fullPermissions) }),
+    )
     fetchMock.mockResolvedValueOnce(
       jsonResponse([
         {
@@ -314,11 +337,11 @@ describe('App', () => {
     const fetchMock = vi.fn()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
-        createSnapshot([
+        { item: createProjectPermission([
           FILE_SERVER_PERMISSION_CODES.treeRead,
           FILE_SERVER_PERMISSION_CODES.previewRead,
           FILE_SERVER_PERMISSION_CODES.downloadRead,
-        ]),
+        ]) },
       ),
     )
     fetchMock.mockResolvedValueOnce(
@@ -425,11 +448,11 @@ describe('App', () => {
     const fetchMock = vi.fn()
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
-        createSnapshot([
+        { item: createProjectPermission([
           FILE_SERVER_PERMISSION_CODES.treeRead,
           FILE_SERVER_PERMISSION_CODES.fileMove,
           FILE_SERVER_PERMISSION_CODES.previewRead,
-        ]),
+        ]) },
       ),
     )
     fetchMock.mockResolvedValueOnce(jsonResponse(initialTree))
