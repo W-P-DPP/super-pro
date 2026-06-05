@@ -109,13 +109,13 @@ function normalizeOptionalString(value: unknown, field: string, label: string): 
 function normalizeRoleCode(value: unknown, field: string): string {
   const roleCode = ensureNonEmptyString(value, field, 'roleCode');
 
-  if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/i.test(roleCode)) {
+  if (!/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/i.test(roleCode)) {
     throw new AuthorizationBusinessError(
       'invalid role code',
       {
         nodePath: 'authorization',
         field,
-        reason: 'role code may contain letters, numbers, dots, and hyphens',
+        reason: 'role code may contain letters, numbers, dots, underscores, and hyphens',
         value,
       },
       HttpStatus.BAD_REQUEST,

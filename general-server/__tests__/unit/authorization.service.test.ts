@@ -263,6 +263,42 @@ describe('AuthorizationService', () => {
     )
   })
 
+  it('accepts role codes with underscores', async () => {
+    const createdRole = {
+      id: 66,
+      code: 'fs_full_permission',
+      name: '文件服务全权限',
+      description: '文件服务全权限',
+      status: 1,
+      updateTime: '2026-06-05 09:00:00',
+    }
+    const repository = createRepositoryMock({
+      createRole: async (input) => ({
+        id: createdRole.id,
+        ...input,
+        updateTime: createdRole.updateTime,
+      }),
+      getRolesByIds: async () => [createdRole],
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.createRole({
+      name: '文件服务全权限',
+      code: 'fs_full_permission',
+      description: '文件服务全权限',
+      status: 1,
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 66,
+        code: 'fs_full_permission',
+        name: '文件服务全权限',
+        status: 1,
+      }),
+    )
+  })
+
   it('converts invalid JWT payloads into authorization business errors', () => {
     const service = new AuthorizationService(createRepositoryMock())
 
