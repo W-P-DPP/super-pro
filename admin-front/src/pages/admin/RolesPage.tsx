@@ -1,12 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
 import {
+  createAuthorizationRole,
+  deleteAuthorizationRole,
+  getAuthorizationPermissions,
   getAuthorizationRoles,
   updateAuthorizationRole,
+  type AuthorizationPermissionResponseDto,
   type AuthorizationRoleResponseDto,
   type UpdateAuthorizationRoleRequestDto,
 } from '@/api/modules/authorization'
+import { getProjects, type ProjectResponseDto } from '@/api/modules/projects'
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -18,13 +27,14 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   Input,
+  ScrollArea,
   Spinner,
   Switch,
   Table,
@@ -40,9 +50,7 @@ import {
   ListPagination,
   type LoadState,
   ModuleSelect,
-  formatDateTimeLabel,
   formatStatus,
-  parseIntegerInput,
 } from './module-page-shared'
 
 type RoleFilters = {
@@ -55,8 +63,8 @@ type RoleRecord = {
   name: string
   code: string
   memberCount: number
-  scope: string
   description: string
+  permissions: AuthorizationPermissionResponseDto[]
   status: number
   updatedAt: string
 }
@@ -64,26 +72,55 @@ type RoleRecord = {
 type RoleFormState = {
   name: string
   code: string
-  memberCount: string
-  scope: string
   description: string
   status: number
 }
 
-function mapRoleRecord(role: AuthorizationRoleResponseDto): RoleRecord {
+type PermissionProjectGroup = {
+  projectCode: string
+  projectName: string
+  projectRemark: string
+  allPermissions: AuthorizationPermissionResponseDto[]
+  visiblePermissions: AuthorizationPermissionResponseDto[]
+  projectMatches: boolean
+}
+
+const TABLE_COLUMN_COUNT = 6
+const PROJECT_LIST_PAGE_SIZE = 100
+
+function buildRoleFormState(): RoleFormState {
+  return {
+    name: '',
+    code: '',
+    description: '',
+    status: 1,
+  }
+}
+
+function mapRoleRecord(
+  role: AuthorizationRoleResponseDto,
+  current?: RoleRecord | null,
+): RoleRecord {
   return {
     id: role.id,
     name: role.name,
     code: role.code,
-    memberCount: 0,
-    scope: role.appCode,
+    memberCount: role.memberCount ?? current?.memberCount ?? 0,
     description: role.description ?? '',
+    permissions: role.permissions ?? [],
     status: role.status ?? 1,
     updatedAt: role.updateTime ?? '--',
   }
 }
 
-const TABLE_COLUMN_COUNT = 7
+function matchesPermissionKeyword(
+  permission: AuthorizationPermissionResponseDto,
+  normalizedKeyword: string,
+) {
+  return `${permission.name} ${permission.code} ${permission.resourceCode} ${permission.action} ${permission.description ?? ''}`
+    .toLowerCase()
+    .includes(normalizedKeyword)
+}
 
 export function RolesPage() {
   const [roleRecords, setRoleRecords] = useState<RoleRecord[]>([])
@@ -100,6 +137,7 @@ export function RolesPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [reloadKey, setReloadKey] = useState(0)
   const [errorMessage, setErrorMessage] = useState('')
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isCreatingRole, setIsCreatingRole] = useState(false)
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null)
@@ -107,22 +145,24 @@ export function RolesPage() {
   const [deletingRole, setDeletingRole] = useState<RoleRecord | null>(null)
   const [isDeletingRole, setIsDeletingRole] = useState(false)
   const [togglingRoleId, setTogglingRoleId] = useState<number | null>(null)
-  const [createDraft, setCreateDraft] = useState<RoleFormState>({
-    name: '',
-    code: '',
-    memberCount: '0',
-    scope: '',
-    description: '',
-    status: 1,
-  })
-  const [editingDraft, setEditingDraft] = useState<RoleFormState>({
-    name: '',
-    code: '',
-    memberCount: '0',
-    scope: '',
-    description: '',
-    status: 1,
-  })
+  const [assigningRole, setAssigningRole] = useState<RoleRecord | null>(null)
+  const [projectRecords, setProjectRecords] = useState<ProjectResponseDto[]>([])
+  const [permissionRecords, setPermissionRecords] = useState<
+    AuthorizationPermissionResponseDto[]
+  >([])
+  const [permissionLoadState, setPermissionLoadState] =
+    useState<LoadState>('idle')
+  const [permissionErrorMessage, setPermissionErrorMessage] = useState('')
+  const [permissionKeyword, setPermissionKeyword] = useState('')
+  const [selectedPermissionIds, setSelectedPermissionIds] = useState<number[]>([])
+  const [isSavingPermissionAssignments, setIsSavingPermissionAssignments] =
+    useState(false)
+  const [createDraft, setCreateDraft] = useState<RoleFormState>(
+    buildRoleFormState(),
+  )
+  const [editingDraft, setEditingDraft] = useState<RoleFormState>(
+    buildRoleFormState(),
+  )
 
   useEffect(() => {
     async function syncRoles() {
@@ -131,13 +171,22 @@ export function RolesPage() {
 
       try {
         const result = await getAuthorizationRoles()
-        setRoleRecords(result.items.map(mapRoleRecord))
+        setRoleRecords((currentRecords) =>
+          result.items.map((role) =>
+            mapRoleRecord(
+              role,
+              currentRecords.find((record) => record.id === role.id),
+            ),
+          ),
+        )
       } catch (error) {
         setRoleRecords([])
         setRoleRows([])
         setTotalRoles(0)
         setLoadState('error')
-        setErrorMessage(error instanceof Error ? error.message : '加载角色列表失败，请稍后重试。')
+        setErrorMessage(
+          error instanceof Error ? error.message : '加载角色列表失败，请稍后重试。',
+        )
       }
     }
 
@@ -145,61 +194,84 @@ export function RolesPage() {
   }, [reloadKey])
 
   useEffect(() => {
-    async function loadRoles() {
-      setLoadState('loading')
-      setErrorMessage('')
+    const normalizedKeyword = appliedFilters.keyword.trim().toLowerCase()
+    const filteredRecords = roleRecords.filter((record) => {
+      const matchesKeyword =
+        !normalizedKeyword ||
+        `${record.name} ${record.code}`.toLowerCase().includes(normalizedKeyword)
+      const matchesStatus =
+        appliedFilters.status === 'all' || record.status === Number(appliedFilters.status)
 
-      try {
-        const normalizedKeyword = appliedFilters.keyword.trim().toLowerCase()
-        const filteredRecords = roleRecords.filter((record) => {
-          const matchesKeyword =
-            !normalizedKeyword ||
-            `${record.name} ${record.code} ${record.scope}`.toLowerCase().includes(normalizedKeyword)
-          const matchesStatus =
-            appliedFilters.status === 'all' || record.status === Number(appliedFilters.status)
+      return matchesKeyword && matchesStatus
+    })
 
-          return matchesKeyword && matchesStatus
-        })
+    const total = filteredRecords.length
+    const totalPagesForFilter = Math.max(1, Math.ceil(total / pageSize))
+    const nextPage = Math.min(currentPage, totalPagesForFilter)
+    const startIndex = (nextPage - 1) * pageSize
 
-        const total = filteredRecords.length
-        const totalPages = Math.max(1, Math.ceil(total / pageSize))
-        const nextPage = Math.min(currentPage, totalPages)
-        const startIndex = (nextPage - 1) * pageSize
+    setRoleRows(total === 0 ? [] : filteredRecords.slice(startIndex, startIndex + pageSize))
+    setTotalRoles(total)
 
-        setRoleRows(total === 0 ? [] : filteredRecords.slice(startIndex, startIndex + pageSize))
-        setTotalRoles(total)
-
-        if (nextPage !== currentPage) {
-          setCurrentPage(nextPage)
-        }
-
-        setLoadState('success')
-      } catch (error) {
-        setRoleRows([])
-        setTotalRoles(0)
-        setLoadState('error')
-        setErrorMessage(error instanceof Error ? error.message : '加载角色列表失败，请稍后重试。')
-      }
+    if (nextPage !== currentPage) {
+      setCurrentPage(nextPage)
     }
 
-    void loadRoles()
-  }, [appliedFilters, currentPage, pageSize, roleRecords])
+    if (loadState !== 'error') {
+      setLoadState('success')
+    }
+  }, [appliedFilters, currentPage, loadState, pageSize, roleRecords])
 
   const totalPages = Math.max(1, Math.ceil(totalRoles / pageSize))
   const isEditDialogOpen = editingRoleId !== null
   const canCreateRole = createDraft.name.trim().length > 0 && createDraft.code.trim().length > 0
   const canSaveRole = editingDraft.name.trim().length > 0 && editingDraft.code.trim().length > 0
 
+  const permissionProjectGroups = useMemo<PermissionProjectGroup[]>(() => {
+    const normalizedKeyword = permissionKeyword.trim().toLowerCase()
+    const permissionsByProjectCode = new Map<string, AuthorizationPermissionResponseDto[]>()
+
+    for (const permission of permissionRecords) {
+      const currentPermissions = permissionsByProjectCode.get(permission.appCode) ?? []
+      currentPermissions.push(permission)
+      permissionsByProjectCode.set(permission.appCode, currentPermissions)
+    }
+
+    return projectRecords
+      .map((project) => {
+        const allPermissions = permissionsByProjectCode.get(project.projectCode) ?? []
+        const projectMatches =
+          !normalizedKeyword ||
+          `${project.projectName} ${project.projectCode}`
+            .toLowerCase()
+            .includes(normalizedKeyword)
+        const visiblePermissions =
+          !normalizedKeyword || projectMatches
+            ? allPermissions
+            : allPermissions.filter((permission) =>
+                matchesPermissionKeyword(permission, normalizedKeyword),
+              )
+
+        return {
+          projectCode: project.projectCode,
+          projectName: project.projectName,
+          projectRemark: project.remark?.trim() ?? '',
+          allPermissions,
+          visiblePermissions,
+          projectMatches,
+        }
+      })
+      .filter(
+        (group) =>
+          !normalizedKeyword ||
+          group.projectMatches ||
+          group.visiblePermissions.length > 0,
+      )
+  }, [permissionKeyword, permissionRecords, projectRecords])
+
   function handleCloseCreateDialog() {
     setIsCreateDialogOpen(false)
-    setCreateDraft({
-      name: '',
-      code: '',
-      memberCount: '0',
-      scope: '',
-      description: '',
-      status: 1,
-    })
+    setCreateDraft(buildRoleFormState())
   }
 
   function handleEditRole(role: RoleRecord) {
@@ -207,8 +279,6 @@ export function RolesPage() {
     setEditingDraft({
       name: role.name,
       code: role.code,
-      memberCount: String(role.memberCount),
-      scope: role.scope,
       description: role.description,
       status: role.status,
     })
@@ -216,19 +286,84 @@ export function RolesPage() {
 
   function handleCloseEditDialog() {
     setEditingRoleId(null)
-    setEditingDraft({
-      name: '',
-      code: '',
-      memberCount: '0',
-      scope: '',
-      description: '',
-      status: 1,
-    })
+    setEditingDraft(buildRoleFormState())
+  }
+
+  function handleClosePermissionAssignmentDialog() {
+    setAssigningRole(null)
+    setProjectRecords([])
+    setPermissionRecords([])
+    setPermissionLoadState('idle')
+    setPermissionErrorMessage('')
+    setPermissionKeyword('')
+    setSelectedPermissionIds([])
+    setIsSavingPermissionAssignments(false)
   }
 
   function hasDuplicateRoleCode(code: string, currentId?: number) {
     const normalizedCode = code.trim().toLowerCase()
-    return roleRecords.some((record) => record.code.trim().toLowerCase() === normalizedCode && record.id !== currentId)
+
+    return roleRecords.some(
+      (record) =>
+        record.code.trim().toLowerCase() === normalizedCode && record.id !== currentId,
+    )
+  }
+
+  async function loadPermissionCandidates() {
+    setPermissionLoadState('loading')
+    setPermissionErrorMessage('')
+
+    try {
+      const [projectResult, permissionResult] = await Promise.all([
+        getProjects({
+          page: 1,
+          pageSize: PROJECT_LIST_PAGE_SIZE,
+        }),
+        getAuthorizationPermissions(),
+      ])
+
+      setProjectRecords(projectResult.items)
+      setPermissionRecords(permissionResult.items)
+      setPermissionLoadState('success')
+    } catch (error) {
+      setProjectRecords([])
+      setPermissionRecords([])
+      setPermissionLoadState('error')
+      setPermissionErrorMessage(
+        error instanceof Error ? error.message : '加载权限列表失败，请稍后重试。',
+      )
+    }
+  }
+
+  function handleOpenPermissionAssignment(role: RoleRecord) {
+    setAssigningRole(role)
+    setPermissionKeyword('')
+    setSelectedPermissionIds(role.permissions.map((permission) => permission.id))
+    void loadPermissionCandidates()
+  }
+
+  function handlePermissionSelectionChange(permissionId: number, checked: boolean) {
+    setSelectedPermissionIds((currentIds) => {
+      if (checked) {
+        return currentIds.includes(permissionId) ? currentIds : [...currentIds, permissionId]
+      }
+
+      return currentIds.filter((id) => id !== permissionId)
+    })
+  }
+
+  function handleProjectPermissionSelectionChange(
+    permissionIds: number[],
+    checked: boolean,
+  ) {
+    setSelectedPermissionIds((currentIds) => {
+      if (checked) {
+        return Array.from(new Set([...currentIds, ...permissionIds]))
+      }
+
+      const permissionIdSet = new Set(permissionIds)
+      return currentIds.filter((id) => !permissionIdSet.has(id))
+    })
   }
 
   async function handleCreateRole() {
@@ -244,22 +379,18 @@ export function RolesPage() {
     setIsCreatingRole(true)
 
     try {
-      const nextRole: RoleRecord = {
-        id: Math.max(0, ...roleRecords.map((record) => record.id)) + 1,
+      await createAuthorizationRole({
         name: createDraft.name.trim(),
         code: createDraft.code.trim(),
-        memberCount: parseIntegerInput(createDraft.memberCount),
-        scope: createDraft.scope.trim() || '未配置',
         description: createDraft.description.trim(),
         status: createDraft.status,
-        updatedAt: formatDateTimeLabel(),
-      }
-
-      setRoleRecords((currentRecords) => [nextRole, ...currentRecords])
+      })
       toast.success('角色已新增')
       handleCloseCreateDialog()
       setCurrentPage(1)
       setReloadKey((currentValue) => currentValue + 1)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '创建角色失败，请稍后重试。')
     } finally {
       setIsCreatingRole(false)
     }
@@ -278,26 +409,17 @@ export function RolesPage() {
     setIsSavingRole(true)
 
     try {
-      setRoleRecords((currentRecords) =>
-        currentRecords.map((record) =>
-          record.id === editingRoleId
-            ? {
-                ...record,
-                name: editingDraft.name.trim(),
-                code: editingDraft.code.trim(),
-                memberCount: parseIntegerInput(editingDraft.memberCount),
-                scope: editingDraft.scope.trim() || '未配置',
-                description: editingDraft.description.trim(),
-                status: editingDraft.status,
-                updatedAt: formatDateTimeLabel(),
-              }
-            : record,
-        ),
-      )
-
+      await updateAuthorizationRole(editingRoleId, {
+        name: editingDraft.name.trim(),
+        code: editingDraft.code.trim(),
+        description: editingDraft.description.trim(),
+        status: editingDraft.status,
+      } satisfies UpdateAuthorizationRoleRequestDto)
       toast.success('角色信息已更新')
       handleCloseEditDialog()
       setReloadKey((currentValue) => currentValue + 1)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '更新角色失败，请稍后重试。')
     } finally {
       setIsSavingRole(false)
     }
@@ -308,18 +430,21 @@ export function RolesPage() {
       return
     }
 
+    const targetRole = deletingRole
     setIsDeletingRole(true)
 
     try {
-      setRoleRecords((currentRecords) => currentRecords.filter((record) => record.id !== deletingRole.id))
+      await deleteAuthorizationRole(targetRole.id)
       toast.success('角色已删除')
       setDeletingRole(null)
 
       if (currentPage > 1 && roleRows.length === 1) {
         setCurrentPage(currentPage - 1)
-      } else {
-        setReloadKey((currentValue) => currentValue + 1)
       }
+
+      setReloadKey((currentValue) => currentValue + 1)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '删除角色失败，请稍后重试。')
     } finally {
       setIsDeletingRole(false)
     }
@@ -337,12 +462,38 @@ export function RolesPage() {
       await updateAuthorizationRole(role.id, {
         status: nextStatus,
       } satisfies UpdateAuthorizationRoleRequestDto)
-      toast.success(`角色状态已切换为${formatStatus(nextStatus)}`)
+      toast.success(`角色状态已切换为 ${formatStatus(nextStatus)}`)
       setReloadKey((currentValue) => currentValue + 1)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '切换角色状态失败，请稍后重试。')
     } finally {
       setTogglingRoleId(null)
+    }
+  }
+
+  async function handleSavePermissionAssignments() {
+    if (!assigningRole || isSavingPermissionAssignments) {
+      return
+    }
+
+    setIsSavingPermissionAssignments(true)
+
+    try {
+      const updatedRole = await updateAuthorizationRole(assigningRole.id, {
+        permissionIds: selectedPermissionIds,
+      } satisfies UpdateAuthorizationRoleRequestDto)
+
+      setRoleRecords((currentRecords) =>
+        currentRecords.map((record) =>
+          record.id === updatedRole.id ? mapRoleRecord(updatedRole, record) : record,
+        ),
+      )
+      toast.success('角色权限已更新')
+      handleClosePermissionAssignmentDialog()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '更新角色权限失败，请稍后重试。')
+    } finally {
+      setIsSavingPermissionAssignments(false)
     }
   }
 
@@ -355,7 +506,7 @@ export function RolesPage() {
             <Input
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜索角色名称、角色编码或覆盖岗位"
+              placeholder="搜索角色名称或角色编码"
               className="h-9 pl-9"
             />
           </div>
@@ -377,7 +528,6 @@ export function RolesPage() {
                 keyword,
                 status: statusFilter,
               })
-              setReloadKey((currentValue) => currentValue + 1)
             }}
           >
             <SearchIcon data-icon="inline-start" />
@@ -395,7 +545,6 @@ export function RolesPage() {
                 keyword: '',
                 status: 'all',
               })
-              setReloadKey((currentValue) => currentValue + 1)
             }}
           >
             <RotateCcwIcon data-icon="inline-start" />
@@ -410,91 +559,119 @@ export function RolesPage() {
 
       <Card className="border border-border/70 bg-card/95 shadow-sm">
         <CardContent className="space-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>角色名称</TableHead>
-                <TableHead>角色编码</TableHead>
-                <TableHead>成员数</TableHead>
-                <TableHead>覆盖岗位</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>更新时间</TableHead>
-                <TableHead className="w-[12rem]">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loadState === 'loading' ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
-                    <div className="flex items-center justify-center gap-2">
-                      <Spinner className="size-4" />
-                      <span>正在加载角色列表...</span>
-                    </div>
-                  </TableCell>
+                  <TableHead>角色名称</TableHead>
+                  <TableHead>角色编码</TableHead>
+                  <TableHead>成员数</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>更新时间</TableHead>
+                  <TableHead className="w-[16rem]">操作</TableHead>
                 </TableRow>
-              ) : loadState === 'error' ? (
-                <TableRow>
-                  <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <span>{errorMessage || '加载角色列表失败，请稍后重试。'}</span>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setReloadKey((value) => value + 1)}>
-                        重试
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : roleRows.length > 0 ? (
-                roleRows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <div className="min-w-0">
-                        <div className="font-medium">{row.name}</div>
-                        {row.description ? <div className="truncate text-xs text-muted-foreground">{row.description}</div> : null}
+              </TableHeader>
+              <TableBody>
+                {loadState === 'loading' ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={TABLE_COLUMN_COUNT}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <Spinner className="size-4" />
+                        <span>正在加载角色列表...</span>
                       </div>
                     </TableCell>
-                    <TableCell>{row.code}</TableCell>
-                    <TableCell>{row.memberCount}</TableCell>
-                    <TableCell>{row.scope}</TableCell>
-                    <TableCell>
-                      <div className="flex min-w-[7rem] items-center gap-2">
-                        <Switch
-                          checked={row.status === 1}
-                          disabled={togglingRoleId === row.id}
-                          onCheckedChange={(checked) => void handleRoleStatusSwitchChange(row, checked)}
-                          aria-label={`${row.name}状态开关`}
-                        />
-                        <span className="text-sm text-muted-foreground">{formatStatus(row.status)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{row.updatedAt}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-                        <Button type="button" variant="ghost" size="sm" disabled={togglingRoleId === row.id} onClick={() => handleEditRole(row)}>
-                          修改
-                        </Button>
+                  </TableRow>
+                ) : loadState === 'error' ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={TABLE_COLUMN_COUNT}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <span>{errorMessage || '加载角色列表失败，请稍后重试。'}</span>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          disabled={togglingRoleId === row.id}
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => setDeletingRole(row)}
+                          onClick={() => setReloadKey((value) => value + 1)}
                         >
-                          删除
+                          重试
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">
-                    没有匹配的角色数据。
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ) : roleRows.length > 0 ? (
+                  roleRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell>{row.code}</TableCell>
+                      <TableCell>{row.memberCount}</TableCell>
+                      <TableCell>
+                        <div className="flex min-w-[7rem] items-center gap-2">
+                          <Switch
+                            checked={row.status === 1}
+                            disabled={togglingRoleId === row.id}
+                            onCheckedChange={(checked) =>
+                              void handleRoleStatusSwitchChange(row, checked)
+                            }
+                            aria-label={`${row.name}状态开关`}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {formatStatus(row.status)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{row.updatedAt}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={togglingRoleId === row.id}
+                            onClick={() => handleOpenPermissionAssignment(row)}
+                          >
+                            权限分配
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={togglingRoleId === row.id}
+                            onClick={() => handleEditRole(row)}
+                          >
+                            修改
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={togglingRoleId === row.id}
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeletingRole(row)}
+                          >
+                            删除
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={TABLE_COLUMN_COUNT}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      没有匹配的角色数据。
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
           <ListPagination
             currentPage={currentPage}
@@ -505,17 +682,20 @@ export function RolesPage() {
             onPageSizeChange={(nextPageSize) => {
               setPageSize(nextPageSize)
               setCurrentPage(1)
-              setReloadKey((currentValue) => currentValue + 1)
             }}
           />
         </CardContent>
       </Card>
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => (!open ? handleCloseCreateDialog() : setIsCreateDialogOpen(true))}>
+      <Dialog
+        open={isCreateDialogOpen}
+        onOpenChange={(open) =>
+          !open ? handleCloseCreateDialog() : setIsCreateDialogOpen(true)
+        }
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>新增角色</DialogTitle>
-            <DialogDescription>沿用用户管理页的交互结构，补齐角色基础信息。</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-2 sm:grid-cols-2">
@@ -523,7 +703,12 @@ export function RolesPage() {
                 <div className="text-sm font-medium">角色名称</div>
                 <Input
                   value={createDraft.name}
-                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, name: event.target.value }))}
+                  onChange={(event) =>
+                    setCreateDraft((currentDraft) => ({
+                      ...currentDraft,
+                      name: event.target.value,
+                    }))
+                  }
                   placeholder="请输入角色名称"
                 />
               </div>
@@ -531,52 +716,42 @@ export function RolesPage() {
                 <div className="text-sm font-medium">角色编码</div>
                 <Input
                   value={createDraft.code}
-                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, code: event.target.value }))}
+                  onChange={(event) =>
+                    setCreateDraft((currentDraft) => ({
+                      ...currentDraft,
+                      code: event.target.value,
+                    }))
+                  }
                   placeholder="请输入角色编码"
                 />
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">成员数</div>
-                <Input
-                  type="number"
-                  min={0}
-                  value={createDraft.memberCount}
-                  onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, memberCount: event.target.value }))}
-                  placeholder="请输入成员数"
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">状态</div>
-                <ModuleSelect
-                  value={String(createDraft.status)}
-                  onValueChange={(value) =>
-                    setCreateDraft((currentDraft) => ({
-                      ...currentDraft,
-                      status: Number(value),
-                    }))
-                  }
-                  options={[1, 0].map((status) => ({
-                    value: String(status),
-                    label: formatStatus(status),
-                  }))}
-                />
-              </div>
-            </div>
             <div className="grid gap-2">
-              <div className="text-sm font-medium">覆盖岗位</div>
-              <Input
-                value={createDraft.scope}
-                onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, scope: event.target.value }))}
-                placeholder="请输入覆盖岗位"
+              <div className="text-sm font-medium">状态</div>
+              <ModuleSelect
+                value={String(createDraft.status)}
+                onValueChange={(value) =>
+                  setCreateDraft((currentDraft) => ({
+                    ...currentDraft,
+                    status: Number(value),
+                  }))
+                }
+                options={[1, 0].map((status) => ({
+                  value: String(status),
+                  label: formatStatus(status),
+                }))}
               />
             </div>
             <div className="grid gap-2">
               <div className="text-sm font-medium">角色说明</div>
               <Input
                 value={createDraft.description}
-                onChange={(event) => setCreateDraft((currentDraft) => ({ ...currentDraft, description: event.target.value }))}
+                onChange={(event) =>
+                  setCreateDraft((currentDraft) => ({
+                    ...currentDraft,
+                    description: event.target.value,
+                  }))
+                }
                 placeholder="请输入角色说明"
               />
             </div>
@@ -585,18 +760,24 @@ export function RolesPage() {
             <Button type="button" variant="outline" onClick={handleCloseCreateDialog}>
               取消
             </Button>
-            <Button type="button" onClick={() => void handleCreateRole()} disabled={!canCreateRole || isCreatingRole}>
+            <Button
+              type="button"
+              onClick={() => void handleCreateRole()}
+              disabled={!canCreateRole || isCreatingRole}
+            >
               {isCreatingRole ? '创建中...' : '创建'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={(open) => (!open ? handleCloseEditDialog() : null)}>
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => (!open ? handleCloseEditDialog() : null)}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>修改角色</DialogTitle>
-            <DialogDescription>支持调整角色编码、成员数、岗位覆盖和状态。</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-2 sm:grid-cols-2">
@@ -604,7 +785,12 @@ export function RolesPage() {
                 <div className="text-sm font-medium">角色名称</div>
                 <Input
                   value={editingDraft.name}
-                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, name: event.target.value }))}
+                  onChange={(event) =>
+                    setEditingDraft((currentDraft) => ({
+                      ...currentDraft,
+                      name: event.target.value,
+                    }))
+                  }
                   placeholder="请输入角色名称"
                 />
               </div>
@@ -612,52 +798,42 @@ export function RolesPage() {
                 <div className="text-sm font-medium">角色编码</div>
                 <Input
                   value={editingDraft.code}
-                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, code: event.target.value }))}
+                  onChange={(event) =>
+                    setEditingDraft((currentDraft) => ({
+                      ...currentDraft,
+                      code: event.target.value,
+                    }))
+                  }
                   placeholder="请输入角色编码"
                 />
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">成员数</div>
-                <Input
-                  type="number"
-                  min={0}
-                  value={editingDraft.memberCount}
-                  onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, memberCount: event.target.value }))}
-                  placeholder="请输入成员数"
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="text-sm font-medium">状态</div>
-                <ModuleSelect
-                  value={String(editingDraft.status)}
-                  onValueChange={(value) =>
-                    setEditingDraft((currentDraft) => ({
-                      ...currentDraft,
-                      status: Number(value),
-                    }))
-                  }
-                  options={[1, 0].map((status) => ({
-                    value: String(status),
-                    label: formatStatus(status),
-                  }))}
-                />
-              </div>
-            </div>
             <div className="grid gap-2">
-              <div className="text-sm font-medium">覆盖岗位</div>
-              <Input
-                value={editingDraft.scope}
-                onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, scope: event.target.value }))}
-                placeholder="请输入覆盖岗位"
+              <div className="text-sm font-medium">状态</div>
+              <ModuleSelect
+                value={String(editingDraft.status)}
+                onValueChange={(value) =>
+                  setEditingDraft((currentDraft) => ({
+                    ...currentDraft,
+                    status: Number(value),
+                  }))
+                }
+                options={[1, 0].map((status) => ({
+                  value: String(status),
+                  label: formatStatus(status),
+                }))}
               />
             </div>
             <div className="grid gap-2">
               <div className="text-sm font-medium">角色说明</div>
               <Input
                 value={editingDraft.description}
-                onChange={(event) => setEditingDraft((currentDraft) => ({ ...currentDraft, description: event.target.value }))}
+                onChange={(event) =>
+                  setEditingDraft((currentDraft) => ({
+                    ...currentDraft,
+                    description: event.target.value,
+                  }))
+                }
                 placeholder="请输入角色说明"
               />
             </div>
@@ -666,24 +842,215 @@ export function RolesPage() {
             <Button type="button" variant="outline" onClick={handleCloseEditDialog}>
               取消
             </Button>
-            <Button type="button" onClick={() => void handleSaveRole()} disabled={!canSaveRole || isSavingRole}>
+            <Button
+              type="button"
+              onClick={() => void handleSaveRole()}
+              disabled={!canSaveRole || isSavingRole}
+            >
               {isSavingRole ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deletingRole !== null} onOpenChange={(open) => (!open ? setDeletingRole(null) : null)}>
+      <Dialog
+        open={assigningRole !== null}
+        onOpenChange={(open) =>
+          !open ? handleClosePermissionAssignmentDialog() : null
+        }
+      >
+        <DialogContent
+          className="flex flex-col"
+          style={{
+            minWidth: '90vw',
+            width: '90vw',
+            maxWidth: '96vw',
+            minHeight: '90vh',
+            height: '90vh',
+            maxHeight: '96vh',
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>权限分配</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={permissionKeyword}
+                onChange={(event) => setPermissionKeyword(event.target.value)}
+                placeholder="搜索权限名称、编码、资源或动作"
+                className="h-9 pl-9"
+              />
+            </div>
+
+            <div className="min-h-0 flex-1 rounded-xl border border-border/70">
+              {permissionLoadState === 'loading' ? (
+                <div className="flex h-full min-h-[16rem] items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Spinner className="size-4" />
+                  <span>正在加载权限列表...</span>
+                </div>
+              ) : permissionLoadState === 'error' ? (
+                <div className="flex h-full min-h-[16rem] flex-col items-center justify-center gap-3 px-4 text-center text-sm text-muted-foreground">
+                  <span>{permissionErrorMessage || '加载权限列表失败，请稍后重试。'}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void loadPermissionCandidates()}
+                  >
+                    重试
+                  </Button>
+                </div>
+              ) : permissionProjectGroups.length > 0 ? (
+                <ScrollArea className="h-full">
+                  <div className="p-3">
+                    <Accordion type="multiple" className="gap-2">
+                      {permissionProjectGroups.map((group) => {
+                        const selectedPermissionCount = group.allPermissions.filter(
+                          (permission) => selectedPermissionIds.includes(permission.id),
+                        ).length
+                        const projectCheckboxState =
+                          selectedPermissionCount === 0
+                            ? false
+                            : selectedPermissionCount === group.allPermissions.length
+                              ? true
+                              : 'indeterminate'
+
+                        return (
+                          <AccordionItem
+                            key={group.projectCode}
+                            value={group.projectCode}
+                            className="rounded-xl border border-border/70 bg-background px-3"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="pt-3.5">
+                                <Checkbox
+                                  checked={projectCheckboxState}
+                                  disabled={
+                                    isSavingPermissionAssignments ||
+                                    group.allPermissions.length === 0
+                                  }
+                                  onCheckedChange={(checked) =>
+                                    handleProjectPermissionSelectionChange(
+                                      group.allPermissions.map(
+                                        (permission) => permission.id,
+                                      ),
+                                      checked === true,
+                                    )
+                                  }
+                                />
+                              </div>
+                              <AccordionTrigger className="py-3 hover:no-underline">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-medium">{group.projectName}</span>
+                                    {group.projectRemark ? (
+                                      <span className="truncate text-xs text-muted-foreground">
+                                        - {group.projectRemark}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    {group.projectCode} / 已选 {selectedPermissionCount} / 共{' '}
+                                    {group.allPermissions.length}
+                                  </div>
+                                </div>
+                              </AccordionTrigger>
+                            </div>
+                            <AccordionContent className="pt-1 pb-1 pl-7">
+                              {group.visiblePermissions.length > 0 ? (
+                                <div className="-mr-6 -mb-2 flex flex-wrap">
+                                  {group.visiblePermissions.map((permission) => {
+                                    const isChecked = selectedPermissionIds.includes(
+                                      permission.id,
+                                    )
+
+                                    return (
+                                      <label
+                                        key={permission.id}
+                                        className="mr-6 mb-2 flex max-w-full cursor-pointer items-center gap-2"
+                                      >
+                                        <Checkbox
+                                          checked={isChecked}
+                                          disabled={isSavingPermissionAssignments}
+                                          onCheckedChange={(checked) =>
+                                            handlePermissionSelectionChange(
+                                              permission.id,
+                                              checked === true,
+                                            )
+                                          }
+                                        />
+                                        <span className="truncate text-sm font-medium">
+                                          {permission.name}
+                                        </span>
+                                      </label>
+                                    )
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="rounded-xl border border-dashed border-border/70 px-3 py-4 text-sm text-muted-foreground">
+                                  当前项目下暂无可展示权限。
+                                </div>
+                              )}
+                            </AccordionContent>
+                          </AccordionItem>
+                        )
+                      })}
+                    </Accordion>
+                  </div>
+                </ScrollArea>
+              ) : (
+                <div className="flex h-full min-h-[16rem] items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                  {projectRecords.length > 0 || permissionRecords.length > 0
+                    ? '没有匹配的项目或权限数据。'
+                    : '当前暂无可分配权限。'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClosePermissionAssignmentDialog}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSavePermissionAssignments()}
+              disabled={
+                permissionLoadState !== 'success' || isSavingPermissionAssignments
+              }
+            >
+              {isSavingPermissionAssignments ? '保存中...' : '保存分配'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={deletingRole !== null}
+        onOpenChange={(open) => (!open ? setDeletingRole(null) : null)}
+      >
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
             <AlertDialogTitle>删除角色</AlertDialogTitle>
             <AlertDialogDescription>
-              {deletingRole ? `确认删除角色“${deletingRole.name}”吗？删除后当前列表将立即更新。` : ''}
+              {deletingRole
+                ? `确认删除角色“${deletingRole.name}”吗？删除后当前列表将立即更新。`
+                : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeletingRole}>取消</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void handleDeleteRole()}>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void handleDeleteRole()}
+            >
               {isDeletingRole ? '删除中...' : '删除'}
             </AlertDialogAction>
           </AlertDialogFooter>

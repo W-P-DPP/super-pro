@@ -1,4 +1,4 @@
-import { In, type EntityManager, type Repository } from 'typeorm';
+import type { EntityManager, Repository } from 'typeorm';
 import type {
   AuthenticatedIdentity,
   AuthorizationPermissionSummary,
@@ -15,13 +15,14 @@ import {
   PermissionEntity,
   RoleEntity,
   RolePermissionAssignmentEntity,
+  RoleProjectAssignmentEntity,
   UserRoleAssignmentEntity,
 } from './authorization.entity.ts';
+import { ProjectEntity } from '../project/project.entity.ts';
 
 export interface CreateRoleEntityInput {
   code: string;
   name: string;
-  appCode: string;
   status: number;
   description: string;
 }
@@ -40,7 +41,6 @@ export interface CreatePermissionEntityInput {
 export interface UpdateRoleEntityInput {
   code?: string;
   name?: string;
-  appCode?: string;
   status?: number;
   description?: string;
 }
@@ -64,6 +64,7 @@ export interface AuthorizationRepositoryPort {
   listRoles(appCode?: string): Promise<AuthorizationRoleSummary[]>;
   getRolesByIds(ids: number[]): Promise<AuthorizationRoleSummary[]>;
   getRolesByCodes(codes: readonly string[]): Promise<AuthorizationRoleSummary[]>;
+  getRoleMemberCounts(roleIds: number[]): Promise<Map<number, number>>;
   createPermission(input: CreatePermissionEntityInput): Promise<AuthorizationPermissionSummary>;
   updatePermission(
     id: number,
@@ -72,6 +73,7 @@ export interface AuthorizationRepositoryPort {
   deletePermission(id: number): Promise<AuthorizationPermissionSummary | null>;
   createRole(input: CreateRoleEntityInput): Promise<AuthorizationRoleSummary>;
   updateRole(id: number, input: UpdateRoleEntityInput): Promise<AuthorizationRoleSummary | null>;
+  deleteRole(id: number): Promise<AuthorizationRoleSummary | null>;
   replaceRolePermissionAssignments(roleId: number, permissionIds: number[]): Promise<void>;
   replaceUserRoleAssignments(userId: number, roleIds: number[]): Promise<void>;
   clearUserRoleAssignments(userId: number): Promise<void>;
@@ -97,7 +99,6 @@ function toRoleSummary(entity: RoleEntity): AuthorizationRoleSummary {
     id: entity.id,
     code: entity.code,
     name: entity.name,
-    appCode: entity.appCode,
     status: entity.status,
     ...(entity.updateTime ? { updateTime: String(entity.updateTime) } : {}),
     ...(entity.description ? { description: entity.description } : {}),
@@ -128,6 +129,20 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     return manager ? manager.getRepository(RoleEntity) : dataSource.getRepository(RoleEntity);
   }
 
+  private createRoleDetailQueryBuilder(repository: Repository<RoleEntity>) {
+    return repository
+      .createQueryBuilder('role')
+      .select([
+        'role.id',
+        'role.code',
+        'role.name',
+        'role.status',
+        'role.description',
+        'role.updateTime',
+      ])
+      .where('role.deleteFlag = :deleteFlag', { deleteFlag: 0 });
+  }
+
   private async getPermissionRepository(
     manager?: EntityManager,
   ): Promise<Repository<PermissionEntity>> {
@@ -135,6 +150,24 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     return manager
       ? manager.getRepository(PermissionEntity)
       : dataSource.getRepository(PermissionEntity);
+  }
+
+  private createPermissionDetailQueryBuilder(repository: Repository<PermissionEntity>) {
+    return repository
+      .createQueryBuilder('permission')
+      .select([
+        'permission.id',
+        'permission.code',
+        'permission.appCode',
+        'permission.status',
+        'permission.resourceType',
+        'permission.resourceCode',
+        'permission.action',
+        'permission.name',
+        'permission.description',
+        'permission.updateTime',
+      ])
+      .where('permission.deleteFlag = :deleteFlag', { deleteFlag: 0 });
   }
 
   private async getUserRoleRepository(
@@ -153,6 +186,76 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     return manager
       ? manager.getRepository(RolePermissionAssignmentEntity)
       : dataSource.getRepository(RolePermissionAssignmentEntity);
+  }
+
+  private async getRoleProjectRepository(
+    manager?: EntityManager,
+  ): Promise<Repository<RoleProjectAssignmentEntity>> {
+    const dataSource = await ensureDataSource();
+    return manager
+      ? manager.getRepository(RoleProjectAssignmentEntity)
+      : dataSource.getRepository(RoleProjectAssignmentEntity);
+  }
+
+  private async syncRoleProjectAssignments(
+    roleIds: number[],
+    manager?: EntityManager,
+  ): Promise<void> {
+    if (roleIds.length === 0) {
+      return;
+    }
+
+    const dataSource = await ensureDataSource();
+    const roleProjectRepository = await this.getRoleProjectRepository(manager);
+    const rolePermissionRepository = manager
+      ? manager.getRepository(RolePermissionAssignmentEntity)
+      : dataSource.getRepository(RolePermissionAssignmentEntity);
+
+    await roleProjectRepository
+      .createQueryBuilder()
+      .delete()
+      .from(RoleProjectAssignmentEntity)
+      .where('role_id IN (:...roleIds)', { roleIds })
+      .execute();
+
+    const rows = await rolePermissionRepository
+      .createQueryBuilder('rolePermission')
+      .innerJoin(
+        PermissionEntity,
+        'permission',
+        'permission.id = rolePermission.permission_id AND permission.delete_flag = :permissionDeleteFlag',
+        { permissionDeleteFlag: 0 },
+      )
+      .innerJoin(
+        ProjectEntity,
+        'project',
+        'project.project_code = permission.app_code AND project.delete_flag = :projectDeleteFlag',
+        { projectDeleteFlag: 0 },
+      )
+      .where('rolePermission.role_id IN (:...roleIds)', { roleIds })
+      .andWhere('rolePermission.delete_flag = :rolePermissionDeleteFlag', {
+        rolePermissionDeleteFlag: 0,
+      })
+      .select('rolePermission.roleId', 'roleId')
+      .addSelect('project.id', 'projectId')
+      .distinct(true)
+      .orderBy('rolePermission.roleId', 'ASC')
+      .addOrderBy('project.id', 'ASC')
+      .getRawMany<{ roleId: number; projectId: number }>();
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    const entities = rows.map((row) =>
+      roleProjectRepository.create({
+        roleId: Number(row.roleId),
+        projectId: Number(row.projectId),
+        createBy: 'system',
+        updateBy: 'system',
+      }),
+    );
+    await roleProjectRepository.save(entities);
   }
 
   async ensureSeedData(): Promise<void> {
@@ -212,7 +315,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
           const created = roleRepository.create({
             code: seed.code,
             name: seed.name,
-            appCode: seed.appCode,
             status: 1,
             description: seed.description,
             createBy: 'system',
@@ -257,6 +359,11 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
             await rolePermissionRepository.save(created);
           }
         }
+
+        await this.syncRoleProjectAssignments(
+          latestRoles.map((item) => item.id),
+          manager,
+        );
       });
 
       this.seedInitialized = true;
@@ -269,15 +376,17 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
 
   async listPermissions(appCode?: string): Promise<AuthorizationPermissionSummary[]> {
     const repository = await this.getPermissionRepository();
-    const entities = await repository.find({
-      where: appCode ? { appCode, deleteFlag: 0 } : { deleteFlag: 0 },
-      order: {
-        appCode: 'ASC',
-        resourceCode: 'ASC',
-        action: 'ASC',
-        id: 'ASC',
-      },
-    });
+    const queryBuilder = this.createPermissionDetailQueryBuilder(repository)
+      .orderBy('permission.appCode', 'ASC')
+      .addOrderBy('permission.resourceCode', 'ASC')
+      .addOrderBy('permission.action', 'ASC')
+      .addOrderBy('permission.id', 'ASC');
+
+    if (appCode) {
+      queryBuilder.andWhere('permission.appCode = :appCode', { appCode });
+    }
+
+    const entities = await queryBuilder.getMany();
 
     return entities.map(toPermissionSummary);
   }
@@ -288,33 +397,47 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     }
 
     const repository = await this.getPermissionRepository();
-    const entities = await repository.find({
-      where: {
-        id: In(ids),
-        deleteFlag: 0,
-      },
-    });
+    const entities = await this.createPermissionDetailQueryBuilder(repository)
+      .andWhere('permission.id IN (:...ids)', { ids })
+      .orderBy('permission.id', 'ASC')
+      .getMany();
     return entities.map(toPermissionSummary);
   }
 
   async getPermissionByCode(code: string): Promise<AuthorizationPermissionSummary | null> {
     const repository = await this.getPermissionRepository();
-    const entity = await repository.findOne({
-      where: { code, deleteFlag: 0 },
-    });
+    const entity = await this.createPermissionDetailQueryBuilder(repository)
+      .andWhere('permission.code = :code', { code })
+      .getOne();
 
     return entity ? toPermissionSummary(entity) : null;
   }
 
   async listRoles(appCode?: string): Promise<AuthorizationRoleSummary[]> {
     const repository = await this.getRoleRepository();
-    const entities = await repository.find({
-      where: appCode ? { appCode, deleteFlag: 0 } : { deleteFlag: 0 },
-      order: {
-        appCode: 'ASC',
-        id: 'ASC',
-      },
-    });
+    const queryBuilder = this.createRoleDetailQueryBuilder(repository)
+      .orderBy('role.code', 'ASC')
+      .addOrderBy('role.id', 'ASC');
+
+    if (appCode) {
+      queryBuilder
+        .innerJoin(
+          RolePermissionAssignmentEntity,
+          'rolePermission',
+          'rolePermission.role_id = role.id AND rolePermission.delete_flag = :rolePermissionDeleteFlag',
+          { rolePermissionDeleteFlag: 0 },
+        )
+        .innerJoin(
+          PermissionEntity,
+          'permission',
+          'permission.id = rolePermission.permission_id AND permission.delete_flag = :permissionDeleteFlag',
+          { permissionDeleteFlag: 0 },
+        )
+        .andWhere('permission.app_code = :appCode', { appCode })
+        .distinct(true);
+    }
+
+    const entities = await queryBuilder.getMany();
 
     return entities.map(toRoleSummary);
   }
@@ -325,12 +448,10 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     }
 
     const repository = await this.getRoleRepository();
-    const entities = await repository.find({
-      where: {
-        id: In(ids),
-        deleteFlag: 0,
-      },
-    });
+    const entities = await this.createRoleDetailQueryBuilder(repository)
+      .andWhere('role.id IN (:...ids)', { ids })
+      .orderBy('role.id', 'ASC')
+      .getMany();
     return entities.map(toRoleSummary);
   }
 
@@ -340,13 +461,33 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     }
 
     const repository = await this.getRoleRepository();
-    const entities = await repository.find({
-      where: codes.map((code) => ({ code, deleteFlag: 0 })),
-      order: {
-        id: 'ASC',
-      },
-    });
+    const entities = await this.createRoleDetailQueryBuilder(repository)
+      .andWhere('role.code IN (:...codes)', { codes })
+      .orderBy('role.id', 'ASC')
+      .getMany();
     return entities.map(toRoleSummary);
+  }
+
+  async getRoleMemberCounts(roleIds: number[]): Promise<Map<number, number>> {
+    const result = new Map<number, number>();
+    if (roleIds.length === 0) {
+      return result;
+    }
+
+    const repository = await this.getUserRoleRepository();
+    const rows = await repository
+      .createQueryBuilder('userRole')
+      .select('userRole.roleId', 'roleId')
+      .addSelect('COUNT(1)', 'memberCount')
+      .where('userRole.roleId IN (:...roleIds)', { roleIds })
+      .groupBy('userRole.roleId')
+      .getRawMany<{ roleId: number; memberCount: string }>();
+
+    for (const row of rows) {
+      result.set(Number(row.roleId), Number(row.memberCount));
+    }
+
+    return result;
   }
 
   async createRole(input: CreateRoleEntityInput): Promise<AuthorizationRoleSummary> {
@@ -354,14 +495,16 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     const entity = repository.create({
       code: input.code,
       name: input.name,
-      appCode: input.appCode,
       status: input.status,
       description: input.description,
       createBy: 'system',
       updateBy: 'system',
     });
     const saved = await repository.save(entity);
-    return toRoleSummary(saved);
+    const detail = await this.createRoleDetailQueryBuilder(repository)
+      .andWhere('role.id = :id', { id: saved.id })
+      .getOne();
+    return toRoleSummary(detail ?? saved);
   }
 
   async createPermission(
@@ -381,7 +524,10 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
       updateBy: 'system',
     });
     const saved = await repository.save(entity);
-    return toPermissionSummary(saved);
+    const detail = await this.createPermissionDetailQueryBuilder(repository)
+      .andWhere('permission.id = :id', { id: saved.id })
+      .getOne();
+    return toPermissionSummary(detail ?? saved);
   }
 
   async updateRole(
@@ -403,9 +549,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     if (input.name !== undefined) {
       current.name = input.name;
     }
-    if (input.appCode !== undefined) {
-      current.appCode = input.appCode;
-    }
     if (input.status !== undefined) {
       current.status = input.status;
     }
@@ -414,91 +557,164 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     }
     current.updateBy = 'system';
 
-    const saved = await repository.save(current);
-    return toRoleSummary(saved);
+    await repository.save(current);
+    const detail = await this.createRoleDetailQueryBuilder(repository)
+      .andWhere('role.id = :id', { id })
+      .getOne();
+    return detail ? toRoleSummary(detail) : null;
+  }
+
+  async deleteRole(id: number): Promise<AuthorizationRoleSummary | null> {
+    const dataSource = await ensureDataSource();
+
+    return dataSource.transaction(async (manager) => {
+      const roleRepository = await this.getRoleRepository(manager);
+      const rolePermissionRepository = await this.getRolePermissionRepository(manager);
+      const roleProjectRepository = await this.getRoleProjectRepository(manager);
+      const userRoleRepository = await this.getUserRoleRepository(manager);
+      const current = await roleRepository.findOne({
+        where: { id, deleteFlag: 0 },
+      });
+
+      if (!current) {
+        return null;
+      }
+
+      await rolePermissionRepository.delete({ roleId: id });
+      await roleProjectRepository.delete({ roleId: id });
+      await userRoleRepository.delete({ roleId: id });
+      current.deleteFlag = 1;
+      current.updateBy = 'system';
+      const saved = await roleRepository.save(current);
+      return toRoleSummary(saved);
+    });
   }
 
   async updatePermission(
     id: number,
     input: UpdatePermissionEntityInput,
   ): Promise<AuthorizationPermissionSummary | null> {
-    const repository = await this.getPermissionRepository();
-    const current = await repository.findOne({
-      where: { id, deleteFlag: 0 },
+    const dataSource = await ensureDataSource();
+
+    return dataSource.transaction(async (manager) => {
+      const repository = await this.getPermissionRepository(manager);
+      const rolePermissionRepository = await this.getRolePermissionRepository(manager);
+      const current = await repository.findOne({
+        where: { id, deleteFlag: 0 },
+      });
+
+      if (!current) {
+        return null;
+      }
+
+      const affectedRoleRows = await rolePermissionRepository
+        .createQueryBuilder('rolePermission')
+        .select('rolePermission.roleId', 'roleId')
+        .where('rolePermission.permission_id = :permissionId', { permissionId: id })
+        .andWhere('rolePermission.delete_flag = :rolePermissionDeleteFlag', {
+          rolePermissionDeleteFlag: 0,
+        })
+        .distinct(true)
+        .getRawMany<{ roleId: number }>();
+
+      if (input.code !== undefined) {
+        current.code = input.code;
+      }
+      if (input.appCode !== undefined) {
+        current.appCode = input.appCode;
+      }
+      if (input.status !== undefined) {
+        current.status = input.status;
+      }
+      if (input.resourceType !== undefined) {
+        current.resourceType = input.resourceType;
+      }
+      if (input.resourceCode !== undefined) {
+        current.resourceCode = input.resourceCode;
+      }
+      if (input.action !== undefined) {
+        current.action = input.action;
+      }
+      if (input.name !== undefined) {
+        current.name = input.name;
+      }
+      if (input.description !== undefined) {
+        current.description = input.description;
+      }
+      current.updateBy = 'system';
+
+      await repository.save(current);
+      await this.syncRoleProjectAssignments(
+        affectedRoleRows.map((row) => Number(row.roleId)),
+        manager,
+      );
+      const detail = await this.createPermissionDetailQueryBuilder(repository)
+        .andWhere('permission.id = :id', { id })
+        .getOne();
+      return detail ? toPermissionSummary(detail) : null;
     });
-
-    if (!current) {
-      return null;
-    }
-
-    if (input.code !== undefined) {
-      current.code = input.code;
-    }
-    if (input.appCode !== undefined) {
-      current.appCode = input.appCode;
-    }
-    if (input.status !== undefined) {
-      current.status = input.status;
-    }
-    if (input.resourceType !== undefined) {
-      current.resourceType = input.resourceType;
-    }
-    if (input.resourceCode !== undefined) {
-      current.resourceCode = input.resourceCode;
-    }
-    if (input.action !== undefined) {
-      current.action = input.action;
-    }
-    if (input.name !== undefined) {
-      current.name = input.name;
-    }
-    if (input.description !== undefined) {
-      current.description = input.description;
-    }
-    current.updateBy = 'system';
-
-    const saved = await repository.save(current);
-    return toPermissionSummary(saved);
   }
 
   async deletePermission(id: number): Promise<AuthorizationPermissionSummary | null> {
-    const permissionRepository = await this.getPermissionRepository();
-    const rolePermissionRepository = await this.getRolePermissionRepository();
-    const current = await permissionRepository.findOne({
-      where: { id, deleteFlag: 0 },
+    const dataSource = await ensureDataSource();
+
+    return dataSource.transaction(async (manager) => {
+      const permissionRepository = await this.getPermissionRepository(manager);
+      const rolePermissionRepository = await this.getRolePermissionRepository(manager);
+      const current = await permissionRepository.findOne({
+        where: { id, deleteFlag: 0 },
+      });
+
+      if (!current) {
+        return null;
+      }
+
+      const affectedRoleRows = await rolePermissionRepository
+        .createQueryBuilder('rolePermission')
+        .select('rolePermission.roleId', 'roleId')
+        .where('rolePermission.permission_id = :permissionId', { permissionId: id })
+        .andWhere('rolePermission.delete_flag = :rolePermissionDeleteFlag', {
+          rolePermissionDeleteFlag: 0,
+        })
+        .distinct(true)
+        .getRawMany<{ roleId: number }>();
+
+      await rolePermissionRepository.delete({ permissionId: id });
+      current.deleteFlag = 1;
+      current.updateBy = 'system';
+      const saved = await permissionRepository.save(current);
+      await this.syncRoleProjectAssignments(
+        affectedRoleRows.map((row) => Number(row.roleId)),
+        manager,
+      );
+      return toPermissionSummary(saved);
     });
-
-    if (!current) {
-      return null;
-    }
-
-    await rolePermissionRepository.delete({ permissionId: id });
-    current.deleteFlag = 1;
-    current.updateBy = 'system';
-    const saved = await permissionRepository.save(current);
-    return toPermissionSummary(saved);
   }
 
   async replaceRolePermissionAssignments(
     roleId: number,
     permissionIds: number[],
   ): Promise<void> {
-    const repository = await this.getRolePermissionRepository();
-    await repository.delete({ roleId });
+    const dataSource = await ensureDataSource();
 
-    if (permissionIds.length === 0) {
-      return;
-    }
+    await dataSource.transaction(async (manager) => {
+      const repository = await this.getRolePermissionRepository(manager);
+      await repository.delete({ roleId });
 
-    const entities = permissionIds.map((permissionId) =>
-      repository.create({
-        roleId,
-        permissionId,
-        createBy: 'system',
-        updateBy: 'system',
-      }),
-    );
-    await repository.save(entities);
+      if (permissionIds.length > 0) {
+        const entities = permissionIds.map((permissionId) =>
+          repository.create({
+            roleId,
+            permissionId,
+            createBy: 'system',
+            updateBy: 'system',
+          }),
+        );
+        await repository.save(entities);
+      }
+
+      await this.syncRoleProjectAssignments([roleId], manager);
+    });
   }
 
   async replaceUserRoleAssignments(userId: number, roleIds: number[]): Promise<void> {
@@ -550,7 +766,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
         'role.id AS id',
         'role.code AS code',
         'role.name AS name',
-        'role.appCode AS appCode',
         'role.description AS description',
       ])
       .orderBy('role.id', 'ASC')
@@ -559,7 +774,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
       id: number;
       code: string;
       name: string;
-      appCode: string;
       description: string;
     }>;
 
@@ -569,7 +783,6 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
         id: row.id,
         code: row.code,
         name: row.name,
-        appCode: row.appCode,
         ...(row.description ? { description: row.description } : {}),
       });
       result.set(row.userId, current);

@@ -3,6 +3,7 @@ import {
   createPermission,
   createRole,
   deletePermission,
+  deleteRole,
   getAuthorizationSnapshot,
   getPermissionList,
   getRoleList,
@@ -20,5 +21,6 @@ authorizationRouter.post('/roles', createRole);
 authorizationRouter.put('/permissions/:id', updatePermission);
 authorizationRouter.put('/roles/:id', updateRole);
 authorizationRouter.delete('/permissions/:id', deletePermission);
+authorizationRouter.delete('/roles/:id', deleteRole);
 
 export default authorizationRouter;

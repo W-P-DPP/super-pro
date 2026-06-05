@@ -91,7 +91,7 @@ function createAuthorizationServiceMock() {
       return new Map(
         userIds.map((userId) => [
           userId,
-          [] as Array<{ id: number; code: string; name: string; appCode: string }>,
+          [] as Array<{ id: number; code: string; name: string }>,
         ]),
       );
     },

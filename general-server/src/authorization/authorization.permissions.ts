@@ -22,7 +22,6 @@ export interface SeedPermissionDefinition {
 export interface SeedRoleDefinition {
   code: string;
   name: string;
-  appCode: string;
   description: string;
 }
 
@@ -249,43 +248,36 @@ export const SEEDED_ROLES: readonly SeedRoleDefinition[] = [
   {
     code: 'platform.admin',
     name: '平台管理员',
-    appCode: 'platform',
     description: '平台权限试点管理员，默认拥有 file-server、project 与 admin-console 的全部权限。',
   },
   {
     code: 'file-server.viewer',
     name: '文件服务只读',
-    appCode: FILE_SERVER_APP_CODE,
     description: '允许查看 file-server 文件树、预览和下载内容。',
   },
   {
     code: 'file-server.editor',
     name: '文件服务编辑',
-    appCode: FILE_SERVER_APP_CODE,
     description: '允许执行 file-server 试点中的全部文件操作。',
   },
   {
     code: 'project.viewer',
     name: '项目管理只读',
-    appCode: PROJECT_APP_CODE,
     description: '允许查看 project 模块的项目列表与详情。',
   },
   {
     code: 'project.editor',
     name: '项目管理编辑',
-    appCode: PROJECT_APP_CODE,
     description: '允许执行 project 模块的项目新增、修改和删除。',
   },
   {
     code: 'admin-console.viewer',
     name: '管理后台只读',
-    appCode: ADMIN_CONSOLE_APP_CODE,
     description: '允许查看管理后台的导航和基础页面。',
   },
   {
     code: 'admin-console.editor',
     name: '管理后台编辑',
-    appCode: ADMIN_CONSOLE_APP_CODE,
     description: '允许执行管理后台中和权限、项目相关的编辑操作。',
   },
 ] as const;

@@ -58,7 +58,6 @@ function createPrincipal(): AuthenticatedPrincipal {
         id: 1,
         code: 'file-server.viewer',
         name: 'viewer',
-        appCode: 'file-server',
       },
     ],
     permissionCodes: [FILE_SERVER_PERMISSION_CODES.treeRead],

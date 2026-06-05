@@ -1,7 +1,13 @@
 import type { Request, Response } from 'express';
 import { HttpStatus } from '@super-pro/shared-constants';
-import type { CreatePermissionRequestDto, UpdatePermissionRequestDto } from './authorization.dto.ts';
-import { AuthorizationBusinessError, authorizationService } from './authorization.service.ts';
+import type {
+  CreatePermissionRequestDto,
+  UpdatePermissionRequestDto,
+} from './authorization.dto.ts';
+import {
+  AuthorizationBusinessError,
+  authorizationService,
+} from './authorization.service.ts';
 
 function handleAuthorizationError(
   error: unknown,
@@ -93,6 +99,15 @@ export const updatePermission = async (req: Request, res: Response) => {
     res.sendSuccess(result, '更新权限成功');
   } catch (error) {
     return handleAuthorizationError(error, res, '更新权限失败');
+  }
+};
+
+export const deleteRole = async (req: Request, res: Response) => {
+  try {
+    const result = await authorizationService.removeRole(Number(req.params.id));
+    res.sendSuccess(result, '删除角色成功');
+  } catch (error) {
+    return handleAuthorizationError(error, res, '删除角色失败');
   }
 };
 

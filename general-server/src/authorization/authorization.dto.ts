@@ -15,7 +15,9 @@ export interface AuthorizationValidationErrorContextDto {
 export interface AuthorizationPermissionResponseDto
   extends AuthorizationPermissionSummary {}
 
-export interface AuthorizationRoleResponseDto extends AuthorizationRoleDetail {}
+export interface AuthorizationRoleResponseDto extends AuthorizationRoleDetail {
+  memberCount?: number;
+}
 
 export interface AuthorizationSnapshotResponseDto
   extends AppAuthorizationSnapshot {}
@@ -27,7 +29,6 @@ export interface AuthorizationSnapshotQueryDto {
 export interface CreateRoleRequestDto {
   code: string;
   name: string;
-  appCode: string;
   description?: string;
   status?: number;
   permissionIds?: number[];
@@ -47,7 +48,6 @@ export interface CreatePermissionRequestDto {
 export interface UpdateRoleRequestDto {
   code?: string;
   name?: string;
-  appCode?: string;
   description?: string;
   status?: number;
   permissionIds?: number[];

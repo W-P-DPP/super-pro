@@ -7,7 +7,10 @@ import type {
 import { RequestError, request } from '../request'
 
 export interface AuthorizationPermissionResponseDto extends AuthorizationPermissionSummary {}
-export interface AuthorizationRoleResponseDto extends AuthorizationRoleDetail {}
+
+export interface AuthorizationRoleResponseDto extends AuthorizationRoleDetail {
+  memberCount?: number
+}
 
 export interface AuthorizationPermissionListDto {
   items: AuthorizationPermissionResponseDto[]
@@ -23,6 +26,14 @@ export interface AuthorizationPermissionListQueryDto {
 
 export interface AuthorizationRoleListQueryDto {
   appCode?: string
+}
+
+export interface CreateAuthorizationRoleRequestDto {
+  code: string
+  name: string
+  description?: string
+  status?: number
+  permissionIds?: number[]
 }
 
 export interface CreateAuthorizationPermissionRequestDto {
@@ -50,7 +61,6 @@ export interface UpdateAuthorizationPermissionRequestDto {
 export interface UpdateAuthorizationRoleRequestDto {
   code?: string
   name?: string
-  appCode?: string
   description?: string
   status?: number
   permissionIds?: number[]
@@ -91,6 +101,19 @@ export function getAuthorizationRoles(query: AuthorizationRoleListQueryDto = {})
     }),
     '获取角色列表失败，请稍后重试。',
   ).then((data) => data ?? { items: [] })
+}
+
+export function createAuthorizationRole(payload: CreateAuthorizationRoleRequestDto) {
+  return unwrapResponse(
+    request.post<ApiResponse<AuthorizationRoleResponseDto>, CreateAuthorizationRoleRequestDto>(
+      '/authorization/roles',
+      payload,
+      {
+        requiresAuth: true,
+      },
+    ),
+    '创建角色失败，请稍后重试。',
+  )
 }
 
 export function createAuthorizationPermission(payload: CreateAuthorizationPermissionRequestDto) {
@@ -137,6 +160,15 @@ export function updateAuthorizationRole(id: number, payload: UpdateAuthorization
       requiresAuth: true,
     }),
     '更新角色失败，请稍后重试。',
+  )
+}
+
+export function deleteAuthorizationRole(id: number) {
+  return unwrapResponse(
+    request.delete<ApiResponse<AuthorizationRoleResponseDto>>(`/authorization/roles/${id}`, {
+      requiresAuth: true,
+    }),
+    '删除角色失败，请稍后重试。',
   )
 }
 

@@ -18,21 +18,18 @@ const viewerRole: AuthorizationRoleSummary = {
   id: 1,
   code: 'file-server.viewer',
   name: 'viewer',
-  appCode: FILE_SERVER_APP_CODE,
 }
 
 const editorRole: AuthorizationRoleSummary = {
   id: 2,
   code: 'file-server.editor',
   name: 'editor',
-  appCode: FILE_SERVER_APP_CODE,
 }
 
 const platformRole: AuthorizationRoleSummary = {
   id: 3,
   code: 'platform.admin',
   name: 'platform-admin',
-  appCode: 'platform',
 }
 
 const treePermission: AuthorizationPermissionSummary = {
@@ -90,6 +87,7 @@ function createRepositoryMock(
     listRoles: async () => [],
     getRolesByIds: async () => [],
     getRolesByCodes: async () => [],
+    getRoleMemberCounts: async () => new Map(),
     createPermission: async () => {
       throw new Error('not implemented')
     },
@@ -99,6 +97,7 @@ function createRepositoryMock(
       throw new Error('not implemented')
     },
     updateRole: async () => null,
+    deleteRole: async () => null,
     replaceRolePermissionAssignments: async () => {},
     replaceUserRoleAssignments: async () => {},
     clearUserRoleAssignments: async () => {},

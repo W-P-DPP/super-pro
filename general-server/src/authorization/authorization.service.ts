@@ -1,22 +1,20 @@
 import {
+  AuthenticationRequiredError,
   ensurePermission,
   hasPermission,
   resolveAuthenticatedIdentityFromJwtPayload,
-  type AuthenticationRequiredError,
 } from '@super-pro/shared-server';
+import { HttpStatus } from '@super-pro/shared-constants';
 import {
   AUTHORIZATION_RESOURCE_TYPES,
+  type AppAuthorizationSnapshot,
+  type AuthenticatedIdentity,
+  type AuthenticatedPrincipal,
+  type AuthorizationPermissionSummary,
+  type AuthorizationRoleDetail,
+  type AuthorizationRoleSummary,
+  type PermissionCode,
 } from '@super-pro/shared-types';
-import type {
-  AppAuthorizationSnapshot,
-  AuthenticatedIdentity,
-  AuthenticatedPrincipal,
-  AuthorizationPermissionSummary,
-  AuthorizationRoleDetail,
-  AuthorizationRoleSummary,
-  PermissionCode,
-} from '@super-pro/shared-types';
-import { HttpStatus } from '@super-pro/shared-constants';
 import type {
   AuthorizationPermissionListDto,
   AuthorizationRoleListDto,
@@ -54,11 +52,11 @@ function ensurePositiveInteger(value: unknown, field: string, label: string): nu
 
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new AuthorizationBusinessError(
-      `${label}不合法`,
+      `${label} is invalid`,
       {
         nodePath: 'authorization',
         field,
-        reason: `${label}必须是正整数`,
+        reason: `${label} must be a positive integer`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -71,11 +69,11 @@ function ensurePositiveInteger(value: unknown, field: string, label: string): nu
 function ensureNonEmptyString(value: unknown, field: string, label: string): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new AuthorizationBusinessError(
-      `${label}不能为空`,
+      `${label} is required`,
       {
         nodePath: 'authorization',
         field,
-        reason: `${label}必须是非空字符串`,
+        reason: `${label} must be a non-empty string`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -92,11 +90,11 @@ function normalizeOptionalString(value: unknown, field: string, label: string): 
 
   if (typeof value !== 'string') {
     throw new AuthorizationBusinessError(
-      `${label}必须是字符串`,
+      `${label} is invalid`,
       {
         nodePath: 'authorization',
         field,
-        reason: `${label}必须是字符串`,
+        reason: `${label} must be a string`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -107,15 +105,15 @@ function normalizeOptionalString(value: unknown, field: string, label: string): 
 }
 
 function normalizeRoleCode(value: unknown, field: string): string {
-  const roleCode = ensureNonEmptyString(value, field, '角色编码');
+  const roleCode = ensureNonEmptyString(value, field, 'roleCode');
 
   if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/i.test(roleCode)) {
     throw new AuthorizationBusinessError(
-      '角色编码不合法',
+      'invalid role code',
       {
         nodePath: 'authorization',
         field,
-        reason: '角色编码只能包含字母、数字、点号和中划线',
+        reason: 'role code may contain letters, numbers, dots, and hyphens',
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -126,15 +124,16 @@ function normalizeRoleCode(value: unknown, field: string): string {
 }
 
 function normalizePermissionCode(value: unknown, field: string): string {
-  const permissionCode = ensureNonEmptyString(value, field, '权限编码');
+  const permissionCode = ensureNonEmptyString(value, field, 'permissionCode');
 
   if (!/^[a-z0-9]+(?:[._:-][a-z0-9]+)*$/i.test(permissionCode)) {
     throw new AuthorizationBusinessError(
-      '权限编码不合法',
+      'invalid permission code',
       {
         nodePath: 'authorization',
         field,
-        reason: '权限编码只能包含字母、数字、点号、下划线、中划线和冒号',
+        reason:
+          'permission code may contain letters, numbers, dots, underscores, hyphens, and colons',
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -154,11 +153,11 @@ function normalizePermissionStatus(value: unknown, field: string): number {
 
   if (parsed !== 0 && parsed !== 1) {
     throw new AuthorizationBusinessError(
-      '权限状态不合法',
+      'invalid status',
       {
         nodePath: 'authorization',
         field,
-        reason: '权限状态仅支持 0 或 1',
+        reason: 'status only supports 0 or 1',
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -172,15 +171,19 @@ function normalizeResourceType(
   value: unknown,
   field: string,
 ): AuthorizationPermissionSummary['resourceType'] {
-  const resourceType = ensureNonEmptyString(value, field, '权限类型');
+  const resourceType = ensureNonEmptyString(value, field, 'resourceType');
 
-  if (!AUTHORIZATION_RESOURCE_TYPES.includes(resourceType as AuthorizationPermissionSummary['resourceType'])) {
+  if (
+    !AUTHORIZATION_RESOURCE_TYPES.includes(
+      resourceType as AuthorizationPermissionSummary['resourceType'],
+    )
+  ) {
     throw new AuthorizationBusinessError(
-      '权限类型不合法',
+      'invalid resource type',
       {
         nodePath: 'authorization',
         field,
-        reason: `权限类型仅支持 ${AUTHORIZATION_RESOURCE_TYPES.join('、')}`,
+        reason: `resource type only supports ${AUTHORIZATION_RESOURCE_TYPES.join(', ')}`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -197,11 +200,11 @@ function normalizeIdList(value: unknown, field: string, label: string): number[]
 
   if (!Array.isArray(value)) {
     throw new AuthorizationBusinessError(
-      `${label}不合法`,
+      `${label} is invalid`,
       {
         nodePath: 'authorization',
         field,
-        reason: `${label}必须是数组`,
+        reason: `${label} must be an array`,
         value,
       },
       HttpStatus.BAD_REQUEST,
@@ -209,7 +212,11 @@ function normalizeIdList(value: unknown, field: string, label: string): number[]
   }
 
   return Array.from(
-    new Set(value.map((item, index) => ensurePositiveInteger(item, `${field}.${index}`, label))),
+    new Set(
+      value.map((item, index) =>
+        ensurePositiveInteger(item, `${field}.${index}`, label),
+      ),
+    ),
   );
 }
 
@@ -217,7 +224,7 @@ function validateSnapshotQuery(
   input: AuthorizationSnapshotQueryDto | Record<string, unknown>,
 ): AuthorizationSnapshotQueryDto {
   return {
-    appCode: ensureNonEmptyString(input.appCode, 'appCode', '应用编码'),
+    appCode: ensureNonEmptyString(input.appCode, 'appCode', 'appCode'),
   };
 }
 
@@ -226,14 +233,17 @@ function validateCreateRoleInput(
 ): CreateRoleRequestDto {
   return {
     code: normalizeRoleCode(input.code, 'code'),
-    name: ensureNonEmptyString(input.name, 'name', '角色名称'),
-    appCode: ensureNonEmptyString(input.appCode, 'appCode', '应用编码'),
-    description: normalizeOptionalString(input.description, 'description', '角色说明'),
+    name: ensureNonEmptyString(input.name, 'name', 'roleName'),
+    description: normalizeOptionalString(
+      input.description,
+      'description',
+      'roleDescription',
+    ),
     status:
       input.status === undefined
         ? 1
         : normalizePermissionStatus(input.status, 'status'),
-    permissionIds: normalizeIdList(input.permissionIds, 'permissionIds', '权限标识'),
+    permissionIds: normalizeIdList(input.permissionIds, 'permissionIds', 'permissionIds'),
   };
 }
 
@@ -242,12 +252,20 @@ function validateCreatePermissionInput(
 ): CreatePermissionRequestDto {
   return {
     code: normalizePermissionCode(input.code, 'code'),
-    appCode: ensureNonEmptyString(input.appCode, 'appCode', '应用编码'),
+    appCode: ensureNonEmptyString(input.appCode, 'appCode', 'appCode'),
     resourceType: normalizeResourceType(input.resourceType, 'resourceType'),
-    resourceCode: ensureNonEmptyString(input.resourceCode, 'resourceCode', '资源标识'),
-    action: ensureNonEmptyString(input.action, 'action', '动作标识'),
-    name: ensureNonEmptyString(input.name, 'name', '权限名称'),
-    description: normalizeOptionalString(input.description, 'description', '权限说明'),
+    resourceCode: ensureNonEmptyString(
+      input.resourceCode,
+      'resourceCode',
+      'resourceCode',
+    ),
+    action: ensureNonEmptyString(input.action, 'action', 'action'),
+    name: ensureNonEmptyString(input.name, 'name', 'permissionName'),
+    description: normalizeOptionalString(
+      input.description,
+      'description',
+      'permissionDescription',
+    ),
     status:
       input.status === undefined
         ? 1
@@ -263,37 +281,38 @@ function validateUpdateRoleInput(
   if (Object.prototype.hasOwnProperty.call(input, 'code')) {
     payload.code = normalizeRoleCode(input.code, 'code');
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'name')) {
-    payload.name = ensureNonEmptyString(input.name, 'name', '角色名称');
+    payload.name = ensureNonEmptyString(input.name, 'name', 'roleName');
   }
-  if (Object.prototype.hasOwnProperty.call(input, 'appCode')) {
-    payload.appCode = ensureNonEmptyString(input.appCode, 'appCode', '应用编码');
-  }
+
   if (Object.prototype.hasOwnProperty.call(input, 'description')) {
     payload.description = normalizeOptionalString(
       input.description,
       'description',
-      '角色说明',
+      'roleDescription',
     );
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'status')) {
     payload.status = normalizePermissionStatus(input.status, 'status');
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'permissionIds')) {
     payload.permissionIds = normalizeIdList(
       input.permissionIds,
       'permissionIds',
-      '权限标识',
+      'permissionIds',
     );
   }
 
   if (Object.keys(payload).length === 0) {
     throw new AuthorizationBusinessError(
-      '更新角色参数不能为空',
+      'update role payload is empty',
       {
         nodePath: 'authorization',
         field: 'payload',
-        reason: '至少需要提供一个可更新字段',
+        reason: 'at least one role field must be provided',
       },
       HttpStatus.BAD_REQUEST,
     );
@@ -310,35 +329,50 @@ function validateUpdatePermissionInput(
   if (Object.prototype.hasOwnProperty.call(input, 'code')) {
     payload.code = normalizePermissionCode(input.code, 'code');
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'appCode')) {
-    payload.appCode = ensureNonEmptyString(input.appCode, 'appCode', '应用编码');
+    payload.appCode = ensureNonEmptyString(input.appCode, 'appCode', 'appCode');
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'resourceType')) {
     payload.resourceType = normalizeResourceType(input.resourceType, 'resourceType');
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'resourceCode')) {
-    payload.resourceCode = ensureNonEmptyString(input.resourceCode, 'resourceCode', '资源标识');
+    payload.resourceCode = ensureNonEmptyString(
+      input.resourceCode,
+      'resourceCode',
+      'resourceCode',
+    );
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'action')) {
-    payload.action = ensureNonEmptyString(input.action, 'action', '动作标识');
+    payload.action = ensureNonEmptyString(input.action, 'action', 'action');
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'name')) {
-    payload.name = ensureNonEmptyString(input.name, 'name', '权限名称');
+    payload.name = ensureNonEmptyString(input.name, 'name', 'permissionName');
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'description')) {
-    payload.description = normalizeOptionalString(input.description, 'description', '权限说明');
+    payload.description = normalizeOptionalString(
+      input.description,
+      'description',
+      'permissionDescription',
+    );
   }
+
   if (Object.prototype.hasOwnProperty.call(input, 'status')) {
     payload.status = normalizePermissionStatus(input.status, 'status');
   }
 
   if (Object.keys(payload).length === 0) {
     throw new AuthorizationBusinessError(
-      '更新权限参数不能为空',
+      'update permission payload is empty',
       {
         nodePath: 'authorization',
         field: 'payload',
-        reason: '至少需要提供一个可更新字段',
+        reason: 'at least one permission field must be provided',
       },
       HttpStatus.BAD_REQUEST,
     );
@@ -347,24 +381,31 @@ function validateUpdatePermissionInput(
   return payload;
 }
 
-function uniquePermissionCodes(permissions: AuthorizationPermissionSummary[]): string[] {
-  return Array.from(new Set(permissions.map((item) => item.code)));
-}
-
-function filterActivePermissions(
-  permissions: AuthorizationPermissionSummary[],
-): AuthorizationPermissionSummary[] {
-  return permissions.filter((item) => item.status !== 0);
-}
-
-function sortRoles(roles: AuthorizationRoleSummary[]): AuthorizationRoleSummary[] {
-  return [...roles].sort((left, right) => left.id - right.id);
-}
-
 function sortPermissions(
-  permissions: AuthorizationPermissionSummary[],
+  permissions: readonly AuthorizationPermissionSummary[],
 ): AuthorizationPermissionSummary[] {
-  return [...permissions].sort((left, right) => left.id - right.id);
+  return [...permissions].sort((left, right) => {
+    return (
+      left.appCode.localeCompare(right.appCode) ||
+      left.resourceType.localeCompare(right.resourceType) ||
+      left.resourceCode.localeCompare(right.resourceCode) ||
+      left.action.localeCompare(right.action) ||
+      left.code.localeCompare(right.code) ||
+      left.id - right.id
+    );
+  });
+}
+
+function getGrantedPermissionCodes(
+  permissions: readonly AuthorizationPermissionSummary[],
+): PermissionCode[] {
+  return Array.from(
+    new Set(
+      sortPermissions(permissions)
+        .filter((permission) => permission.status !== 0)
+        .map((permission) => permission.code),
+    ),
+  );
 }
 
 export class AuthorizationService {
@@ -372,27 +413,8 @@ export class AuthorizationService {
     private readonly repository: AuthorizationRepositoryPort = authorizationRepository,
   ) {}
 
-  async getAuthenticatedPrincipal(
-    identity: AuthenticatedIdentity,
-  ): Promise<AuthenticatedPrincipal> {
-    const explicitRoleMap = await this.repository.getAssignedRolesByUserIds([identity.userId]);
-    const explicitRoles = explicitRoleMap.get(identity.userId) ?? [];
-    const roles =
-      explicitRoles.length > 0
-        ? explicitRoles
-        : await this.repository.getRolesByCodes(
-            this.repository.getFallbackRoleCodes(identity),
-          );
-    const permissions = await this.repository.getPermissionSummariesByRoleIds(
-      roles.map((item) => item.id),
-    );
-    const activePermissions = filterActivePermissions(sortPermissions(permissions));
-
-    return {
-      ...identity,
-      roles: sortRoles(roles),
-      permissionCodes: uniquePermissionCodes(activePermissions),
-    };
+  private async ensureSeedData(): Promise<void> {
+    await this.repository.ensureSeedData();
   }
 
   resolveAuthenticatedIdentityFromJwtPayload(
@@ -401,59 +423,95 @@ export class AuthorizationService {
     try {
       return resolveAuthenticatedIdentityFromJwtPayload(payload);
     } catch (error) {
-      const authError = error as AuthenticationRequiredError;
-      throw new AuthorizationBusinessError(
-        authError.message || '当前登录状态无效',
-        {
-          nodePath: 'authorization',
-          field: 'jwtPayload',
-          reason: '当前请求缺少有效的用户身份',
-        },
-        HttpStatus.UNAUTHORIZED,
-      );
+      if (error instanceof AuthenticationRequiredError) {
+        throw new AuthorizationBusinessError(
+          error.message,
+          {
+            nodePath: 'authorization',
+            field: 'jwtPayload',
+            reason: 'missing or invalid authenticated identity',
+            value: payload,
+          },
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      throw error;
     }
+  }
+
+  async getAuthenticatedPrincipal(
+    identity: AuthenticatedIdentity,
+  ): Promise<AuthenticatedPrincipal> {
+    await this.ensureSeedData();
+
+    const assignedRolesMap = await this.repository.getAssignedRolesByUserIds([
+      identity.userId,
+    ]);
+    const assignedRoles = assignedRolesMap.get(identity.userId) ?? [];
+    const roles =
+      assignedRoles.length > 0
+        ? assignedRoles
+        : await this.repository.getRolesByCodes(this.repository.getFallbackRoleCodes(identity));
+    const permissions = await this.repository.getPermissionSummariesByRoleIds(
+      roles.map((role) => role.id),
+    );
+
+    return {
+      ...identity,
+      roles,
+      permissionCodes: getGrantedPermissionCodes(permissions),
+    };
   }
 
   async getAuthorizationSnapshot(
     identity: AuthenticatedIdentity,
-    input: AuthorizationSnapshotQueryDto | Record<string, unknown>,
+    queryInput: AuthorizationSnapshotQueryDto | Record<string, unknown>,
   ): Promise<AuthorizationSnapshotResponseDto> {
-    const query = validateSnapshotQuery(input);
+    await this.ensureSeedData();
+
+    const query = validateSnapshotQuery(queryInput);
     const principal = await this.getAuthenticatedPrincipal(identity);
-    const rolePermissions = await this.repository.getPermissionSummariesByRoleIds(
-      principal.roles.map((item) => item.id),
+    const permissions = sortPermissions(
+      (await this.repository.getPermissionSummariesByRoleIds(
+        principal.roles.map((role) => role.id),
+      )).filter((permission) => permission.appCode === query.appCode),
     );
-    const appPermissions = sortPermissions(filterActivePermissions(
-      rolePermissions.filter((item) => item.appCode === query.appCode),
-    ));
 
     const snapshot: AppAuthorizationSnapshot = {
       appCode: query.appCode,
       principal: {
         ...principal,
-        permissionCodes: uniquePermissionCodes(appPermissions),
+        permissionCodes: getGrantedPermissionCodes(permissions),
       },
-      permissions: appPermissions,
+      permissions,
     };
 
     return snapshot;
   }
 
   async listPermissions(appCode?: string): Promise<AuthorizationPermissionListDto> {
+    await this.ensureSeedData();
+
     return {
       items: sortPermissions(await this.repository.listPermissions(appCode)),
     };
   }
 
   async listRoles(appCode?: string): Promise<AuthorizationRoleListDto> {
+    await this.ensureSeedData();
+
     const roles = await this.repository.listRoles(appCode);
+    const roleIds = roles.map((role) => role.id);
+    const memberCounts = await this.repository.getRoleMemberCounts(roleIds);
     const permissionsByRoleId = await this.repository.getPermissionSummariesByRoleIdsMap(
-      roles.map((item) => item.id),
+      roleIds,
     );
 
     return {
       items: roles.map((role) => ({
         ...role,
+        memberCount: memberCounts.get(role.id) ?? 0,
         permissions: sortPermissions(permissionsByRoleId.get(role.id) ?? []),
       })),
     };
@@ -462,15 +520,18 @@ export class AuthorizationService {
   async createRole(
     input: CreateRoleRequestDto | Record<string, unknown>,
   ): Promise<AuthorizationRoleDetail> {
+    await this.ensureSeedData();
+
     const payload = validateCreateRoleInput(input);
     const roles = await this.repository.listRoles();
-    if (roles.some((item) => item.code === payload.code)) {
+
+    if (roles.some((role) => role.code === payload.code)) {
       throw new AuthorizationBusinessError(
-        '角色编码已存在',
+        'role code already exists',
         {
           nodePath: 'authorization',
           field: 'code',
-          reason: '角色编码不能重复',
+          reason: 'role code must be unique',
           value: payload.code,
         },
         HttpStatus.CONFLICT,
@@ -478,13 +539,14 @@ export class AuthorizationService {
     }
 
     await this.ensurePermissionIdsExist(payload.permissionIds ?? []);
+
     const created = await this.repository.createRole({
       code: payload.code,
       name: payload.name,
-      appCode: payload.appCode,
       status: payload.status ?? 1,
       description: payload.description ?? '',
     });
+
     await this.repository.replaceRolePermissionAssignments(
       created.id,
       payload.permissionIds ?? [],
@@ -496,16 +558,18 @@ export class AuthorizationService {
   async createPermission(
     input: CreatePermissionRequestDto | Record<string, unknown>,
   ): Promise<AuthorizationPermissionSummary> {
+    await this.ensureSeedData();
+
     const payload = validateCreatePermissionInput(input);
     const existing = await this.repository.getPermissionByCode(payload.code);
 
     if (existing) {
       throw new AuthorizationBusinessError(
-        '权限编码已存在',
+        'permission code already exists',
         {
           nodePath: 'authorization',
           field: 'code',
-          reason: '权限编码不能重复',
+          reason: 'permission code must be unique',
           value: payload.code,
         },
         HttpStatus.CONFLICT,
@@ -528,33 +592,32 @@ export class AuthorizationService {
     id: number,
     input: UpdateRoleRequestDto | Record<string, unknown>,
   ): Promise<AuthorizationRoleDetail> {
-    const roleId = ensurePositiveInteger(id, 'id', '角色标识');
+    await this.ensureSeedData();
+
+    const roleId = ensurePositiveInteger(id, 'id', 'roleId');
     const payload = validateUpdateRoleInput(input);
     const roles = await this.repository.listRoles();
-    if (
-      payload.code &&
-      roles.some((item) => item.code === payload.code && item.id !== roleId)
-    ) {
+
+    if (payload.code && roles.some((role) => role.code === payload.code && role.id !== roleId)) {
       throw new AuthorizationBusinessError(
-        '角色编码已存在',
+        'role code already exists',
         {
           nodePath: 'authorization',
           field: 'code',
-          reason: '角色编码不能重复',
+          reason: 'role code must be unique',
           value: payload.code,
         },
         HttpStatus.CONFLICT,
       );
     }
 
-    if (payload.permissionIds) {
+    if (payload.permissionIds !== undefined) {
       await this.ensurePermissionIdsExist(payload.permissionIds);
     }
 
     const updated = await this.repository.updateRole(roleId, {
       ...(payload.code !== undefined ? { code: payload.code } : {}),
       ...(payload.name !== undefined ? { name: payload.name } : {}),
-      ...(payload.appCode !== undefined ? { appCode: payload.appCode } : {}),
       ...(payload.status !== undefined ? { status: payload.status } : {}),
       ...(payload.description !== undefined
         ? { description: payload.description }
@@ -563,22 +626,19 @@ export class AuthorizationService {
 
     if (!updated) {
       throw new AuthorizationBusinessError(
-        '角色不存在',
+        'role not found',
         {
           nodePath: 'authorization',
           field: 'id',
-          reason: '未找到对应角色',
+          reason: 'role does not exist',
           value: roleId,
         },
         HttpStatus.NOT_FOUND,
       );
     }
 
-    if (payload.permissionIds) {
-      await this.repository.replaceRolePermissionAssignments(
-        roleId,
-        payload.permissionIds,
-      );
+    if (payload.permissionIds !== undefined) {
+      await this.repository.replaceRolePermissionAssignments(roleId, payload.permissionIds);
     }
 
     return this.getRoleDetailById(roleId);
@@ -588,18 +648,21 @@ export class AuthorizationService {
     id: number,
     input: UpdatePermissionRequestDto | Record<string, unknown>,
   ): Promise<AuthorizationPermissionSummary> {
-    const permissionId = ensurePositiveInteger(id, 'id', '权限标识');
+    await this.ensureSeedData();
+
+    const permissionId = ensurePositiveInteger(id, 'id', 'permissionId');
     const payload = validateUpdatePermissionInput(input);
 
     if (payload.code) {
       const existing = await this.repository.getPermissionByCode(payload.code);
+
       if (existing && existing.id !== permissionId) {
         throw new AuthorizationBusinessError(
-          '权限编码已存在',
+          'permission code already exists',
           {
             nodePath: 'authorization',
             field: 'code',
-            reason: '权限编码不能重复',
+            reason: 'permission code must be unique',
             value: payload.code,
           },
           HttpStatus.CONFLICT,
@@ -615,16 +678,18 @@ export class AuthorizationService {
       ...(payload.resourceCode !== undefined ? { resourceCode: payload.resourceCode } : {}),
       ...(payload.action !== undefined ? { action: payload.action } : {}),
       ...(payload.name !== undefined ? { name: payload.name } : {}),
-      ...(payload.description !== undefined ? { description: payload.description } : {}),
+      ...(payload.description !== undefined
+        ? { description: payload.description }
+        : {}),
     });
 
     if (!updated) {
       throw new AuthorizationBusinessError(
-        '权限不存在',
+        'permission not found',
         {
           nodePath: 'authorization',
           field: 'id',
-          reason: '未找到对应权限',
+          reason: 'permission does not exist',
           value: permissionId,
         },
         HttpStatus.NOT_FOUND,
@@ -634,17 +699,41 @@ export class AuthorizationService {
     return updated;
   }
 
+  async removeRole(id: number): Promise<AuthorizationRoleSummary> {
+    await this.ensureSeedData();
+
+    const roleId = ensurePositiveInteger(id, 'id', 'roleId');
+    const deleted = await this.repository.deleteRole(roleId);
+
+    if (!deleted) {
+      throw new AuthorizationBusinessError(
+        'role not found',
+        {
+          nodePath: 'authorization',
+          field: 'id',
+          reason: 'role does not exist',
+          value: roleId,
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return deleted;
+  }
+
   async deletePermission(id: number): Promise<AuthorizationPermissionSummary> {
-    const permissionId = ensurePositiveInteger(id, 'id', '权限标识');
+    await this.ensureSeedData();
+
+    const permissionId = ensurePositiveInteger(id, 'id', 'permissionId');
     const deleted = await this.repository.deletePermission(permissionId);
 
     if (!deleted) {
       throw new AuthorizationBusinessError(
-        '权限不存在',
+        'permission not found',
         {
           nodePath: 'authorization',
           field: 'id',
-          reason: '未找到对应权限',
+          reason: 'permission does not exist',
           value: permissionId,
         },
         HttpStatus.NOT_FOUND,
@@ -667,7 +756,7 @@ export class AuthorizationService {
         {
           nodePath: 'authorization',
           field: 'permissionCode',
-          reason: '当前用户缺少所需权限',
+          reason: 'missing required permission',
           value: permissionCode,
         },
         HttpStatus.FORBIDDEN,
@@ -724,33 +813,40 @@ export class AuthorizationService {
   async getAssignedRolesByUserIds(
     userIds: number[],
   ): Promise<Map<number, AuthorizationRoleSummary[]>> {
+    await this.ensureSeedData();
     return this.repository.getAssignedRolesByUserIds(userIds);
   }
 
   async replaceUserRoleAssignments(userId: number, roleIds: number[]): Promise<void> {
+    await this.ensureSeedData();
     await this.ensureRoleIdsExist(roleIds);
     await this.repository.replaceUserRoleAssignments(userId, roleIds);
   }
 
   async clearUserRoleAssignments(userId: number): Promise<void> {
+    await this.ensureSeedData();
     await this.repository.clearUserRoleAssignments(userId);
   }
 
   async ensureRoleIdsExist(roleIds: number[]): Promise<void> {
+    await this.ensureSeedData();
+
     if (roleIds.length === 0) {
       return;
     }
 
     const roles = await this.repository.getRolesByIds(roleIds);
+
     if (roles.length !== roleIds.length) {
-      const roleIdSet = new Set(roles.map((item) => item.id));
-      const missingRoleId = roleIds.find((item) => !roleIdSet.has(item));
+      const roleIdSet = new Set(roles.map((role) => role.id));
+      const missingRoleId = roleIds.find((roleId) => !roleIdSet.has(roleId));
+
       throw new AuthorizationBusinessError(
-        '指定的角色不存在',
+        'role ids are invalid',
         {
           nodePath: 'authorization',
-          field: 'assignedRoleIds',
-          reason: '用户角色分配中包含未知角色标识',
+          field: 'roleIds',
+          reason: 'one or more roles do not exist',
           value: missingRoleId,
         },
         HttpStatus.BAD_REQUEST,
@@ -764,17 +860,19 @@ export class AuthorizationService {
     }
 
     const permissions = await this.repository.getPermissionsByIds(permissionIds);
+
     if (permissions.length !== permissionIds.length) {
-      const permissionIdSet = new Set(permissions.map((item) => item.id));
+      const permissionIdSet = new Set(permissions.map((permission) => permission.id));
       const missingPermissionId = permissionIds.find(
-        (item) => !permissionIdSet.has(item),
+        (permissionId) => !permissionIdSet.has(permissionId),
       );
+
       throw new AuthorizationBusinessError(
-        '指定的权限不存在',
+        'permission ids are invalid',
         {
           nodePath: 'authorization',
           field: 'permissionIds',
-          reason: '角色权限分配中包含未知权限标识',
+          reason: 'one or more permissions do not exist',
           value: missingPermissionId,
         },
         HttpStatus.BAD_REQUEST,
@@ -788,11 +886,11 @@ export class AuthorizationService {
 
     if (!role) {
       throw new AuthorizationBusinessError(
-        '角色不存在',
+        'role not found',
         {
           nodePath: 'authorization',
           field: 'id',
-          reason: '未找到对应角色',
+          reason: 'role does not exist',
           value: id,
         },
         HttpStatus.NOT_FOUND,
@@ -800,8 +898,11 @@ export class AuthorizationService {
     }
 
     const permissions = await this.repository.getPermissionSummariesByRoleIds([id]);
+    const memberCounts = await this.repository.getRoleMemberCounts([id]);
+
     return {
       ...role,
+      memberCount: memberCounts.get(id) ?? 0,
       permissions: sortPermissions(permissions),
     };
   }

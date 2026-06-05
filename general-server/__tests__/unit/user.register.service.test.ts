@@ -66,6 +66,22 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
   };
 }
 
+function createAuthorizationServiceMock() {
+  return {
+    async getAssignedRolesByUserIds(userIds: number[]) {
+      return new Map(
+        userIds.map((userId) => [
+          userId,
+          [] as Array<{ id: number; code: string; name: string }>,
+        ]),
+      );
+    },
+    async ensureRoleIdsExist() {},
+    async replaceUserRoleAssignments() {},
+    async clearUserRoleAssignments() {},
+  };
+}
+
 describe('UserService registerUser', () => {
   const records = [
     Object.assign(new UserEntity(), {
@@ -81,7 +97,10 @@ describe('UserService registerUser', () => {
   ];
 
   it('creates employee user with username as nickname', async () => {
-    const service = new UserService(createRepositoryMock(records));
+    const service = new UserService(
+      createRepositoryMock(records),
+      createAuthorizationServiceMock(),
+    );
 
     const result = await service.registerUser({
       username: 'new-user',
@@ -100,7 +119,10 @@ describe('UserService registerUser', () => {
   });
 
   it('rejects duplicate username', async () => {
-    const service = new UserService(createRepositoryMock(records));
+    const service = new UserService(
+      createRepositoryMock(records),
+      createAuthorizationServiceMock(),
+    );
 
     await expect(
       service.registerUser({
@@ -114,7 +136,10 @@ describe('UserService registerUser', () => {
   });
 
   it('rejects short password', async () => {
-    const service = new UserService(createRepositoryMock(records));
+    const service = new UserService(
+      createRepositoryMock(records),
+      createAuthorizationServiceMock(),
+    );
 
     await expect(
       service.registerUser({
@@ -136,7 +161,7 @@ describe('UserService registerUser', () => {
       return originalCreateUser(input);
     };
 
-    const service = new UserService(repository);
+    const service = new UserService(repository, createAuthorizationServiceMock());
     await service.registerUser({
       username: 'hash-user',
       password: '123456',

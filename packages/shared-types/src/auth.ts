@@ -77,7 +77,6 @@ export interface AuthorizationRoleSummary {
   id: number;
   code: string;
   name: string;
-  appCode: string;
   description?: string;
   status?: number;
   updateTime?: string;

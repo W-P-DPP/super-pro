@@ -5,7 +5,6 @@ export class RoleEntity extends BaseEntity {
   id!: number;
   code!: string;
   name!: string;
-  appCode!: string;
   status!: number;
   description!: string;
 }
@@ -34,6 +33,12 @@ export class RolePermissionAssignmentEntity extends BaseEntity {
   permissionId!: number;
 }
 
+export class RoleProjectAssignmentEntity extends BaseEntity {
+  id!: number;
+  roleId!: number;
+  projectId!: number;
+}
+
 export const RoleEntitySchema = new EntitySchema<RoleEntity>({
   name: 'Role',
   target: RoleEntity,
@@ -57,12 +62,6 @@ export const RoleEntitySchema = new EntitySchema<RoleEntity>({
       length: 128,
       nullable: false,
     },
-    appCode: {
-      name: 'app_code',
-      type: String,
-      length: 64,
-      nullable: false,
-    },
     status: {
       name: 'status',
       type: Number,
@@ -78,12 +77,6 @@ export const RoleEntitySchema = new EntitySchema<RoleEntity>({
     },
     ...BaseSchemaColumns,
   },
-  indices: [
-    {
-      name: 'idx_sys_role_app_code',
-      columns: ['appCode'],
-    },
-  ],
   uniques: [
     {
       name: 'uk_sys_role_code',
@@ -246,6 +239,47 @@ export const RolePermissionAssignmentEntitySchema = new EntitySchema<RolePermiss
     {
       name: 'uk_sys_role_permission_role_permission',
       columns: ['roleId', 'permissionId'],
+    },
+  ],
+});
+
+export const RoleProjectAssignmentEntitySchema = new EntitySchema<RoleProjectAssignmentEntity>({
+  name: 'RoleProjectAssignment',
+  target: RoleProjectAssignmentEntity,
+  tableName: 'sys_role_project',
+  columns: {
+    id: {
+      name: 'id',
+      type: Number,
+      primary: true,
+      generated: 'increment',
+    },
+    roleId: {
+      name: 'role_id',
+      type: Number,
+      nullable: false,
+    },
+    projectId: {
+      name: 'project_id',
+      type: Number,
+      nullable: false,
+    },
+    ...BaseSchemaColumns,
+  },
+  indices: [
+    {
+      name: 'idx_sys_role_project_role_id',
+      columns: ['roleId'],
+    },
+    {
+      name: 'idx_sys_role_project_project_id',
+      columns: ['projectId'],
+    },
+  ],
+  uniques: [
+    {
+      name: 'uk_sys_role_project_role_project',
+      columns: ['roleId', 'projectId'],
     },
   ],
 });

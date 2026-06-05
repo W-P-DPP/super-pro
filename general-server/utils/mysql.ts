@@ -7,6 +7,7 @@ import {
     PermissionEntitySchema,
     RoleEntitySchema,
     RolePermissionAssignmentEntitySchema,
+    RoleProjectAssignmentEntitySchema,
     UserRoleAssignmentEntitySchema,
 } from '../src/authorization/authorization.entity.ts';
 import { OperationLogEntity } from '../src/operationLog/operationLog.entity.ts';
@@ -60,6 +61,7 @@ export default async function initDataBase() {
             PermissionEntitySchema,
             UserRoleAssignmentEntitySchema,
             RolePermissionAssignmentEntitySchema,
+            RoleProjectAssignmentEntitySchema,
         ],
         migrations: ['src/**/*.migration.ts']
     });

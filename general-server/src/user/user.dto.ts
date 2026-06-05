@@ -17,7 +17,6 @@ export interface UserResponseDto {
     id: number
     code: string
     name: string
-    appCode: string
   }>
   createBy?: string
   createTime?: string
