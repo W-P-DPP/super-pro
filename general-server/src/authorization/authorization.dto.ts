@@ -73,3 +73,15 @@ export interface AuthorizationPermissionListDto {
 }
 
 export interface AssignedRoleResponseDto extends AuthorizationRoleSummary {}
+
+export interface AuthorizationUserProjectPermissionResponseDto {
+  id: number;
+  projectCode: string;
+  projectName: string;
+  roles: AuthorizationRoleSummary[];
+  permissions: AuthorizationPermissionSummary[];
+}
+
+export interface AuthorizationUserProjectPermissionListDto {
+  items: AuthorizationUserProjectPermissionResponseDto[];
+}

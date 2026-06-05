@@ -1,6 +1,7 @@
 import type {
   ApiEnvelope,
   AuthorizationPermissionSummary,
+  AuthorizationRoleSummary,
   AuthorizationRoleDetail,
   AuthorizationResourceType,
 } from '@super-pro/shared-types'
@@ -18,6 +19,18 @@ export interface AuthorizationPermissionListDto {
 
 export interface AuthorizationRoleListDto {
   items: AuthorizationRoleResponseDto[]
+}
+
+export interface AuthorizationUserProjectPermissionResponseDto {
+  id: number
+  projectCode: string
+  projectName: string
+  roles: AuthorizationRoleSummary[]
+  permissions: AuthorizationPermissionSummary[]
+}
+
+export interface AuthorizationUserProjectPermissionListDto {
+  items: AuthorizationUserProjectPermissionResponseDto[]
 }
 
 export interface AuthorizationPermissionListQueryDto {
@@ -100,6 +113,18 @@ export function getAuthorizationRoles(query: AuthorizationRoleListQueryDto = {})
       requiresAuth: true,
     }),
     '获取角色列表失败，请稍后重试。',
+  ).then((data) => data ?? { items: [] })
+}
+
+export function getUserProjectPermissions(userId: number) {
+  return unwrapResponse(
+    request.get<ApiResponse<AuthorizationUserProjectPermissionListDto>>(
+      `/authorization/users/${userId}/projects`,
+      {
+        requiresAuth: true,
+      },
+    ),
+    '获取用户项目权限失败，请稍后重试。',
   ).then((data) => data ?? { items: [] })
 }
 

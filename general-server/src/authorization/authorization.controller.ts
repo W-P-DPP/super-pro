@@ -58,6 +58,15 @@ export const getRoleList = async (req: Request, res: Response) => {
   }
 };
 
+export const getUserProjectPermissionList = async (req: Request, res: Response) => {
+  try {
+    const result = await authorizationService.listUserProjectPermissions(req.params.id);
+    res.sendSuccess(result, '获取用户项目权限成功');
+  } catch (error) {
+    return handleAuthorizationError(error, res, '获取用户项目权限失败');
+  }
+};
+
 export const createRole = async (req: Request, res: Response) => {
   try {
     const result = await authorizationService.createRole(req.body as Record<string, unknown>);

@@ -9,6 +9,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  Badge,
   Button,
   Card,
   CardContent,
@@ -19,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  ScrollArea,
   Spinner,
   Switch,
   Table,
@@ -31,7 +33,9 @@ import {
 } from '@/components/ui'
 import { MultiSelect, type MultiSelectOption } from '@super-pro/shared-ui'
 import {
+  getUserProjectPermissions,
   getAuthorizationRoles,
+  type AuthorizationUserProjectPermissionResponseDto,
   type AuthorizationRoleResponseDto,
 } from '@/api/modules/authorization'
 import {
@@ -127,6 +131,10 @@ export function UsersPage() {
   const [isCreatingUser, setIsCreatingUser] = useState(false)
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [viewingPermissionUser, setViewingPermissionUser] = useState<UserResponseDto | null>(null)
+  const [projectPermissionRows, setProjectPermissionRows] = useState<AuthorizationUserProjectPermissionResponseDto[]>([])
+  const [projectPermissionLoadState, setProjectPermissionLoadState] = useState<LoadState>('idle')
+  const [projectPermissionErrorMessage, setProjectPermissionErrorMessage] = useState('')
   const [deletingUser, setDeletingUser] = useState<UserResponseDto | null>(null)
   const [isDeletingUser, setIsDeletingUser] = useState(false)
   const [togglingUserId, setTogglingUserId] = useState<number | null>(null)
@@ -196,6 +204,7 @@ export function UsersPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalUsers / pageSize))
   const isEditDialogOpen = editingUserId !== null
+  const isProjectPermissionDialogOpen = viewingPermissionUser !== null
   const canCreateUser = createDraft.username.trim().length > 0 && createDraft.nickname.trim().length > 0
   const canSaveEditingUser = editingDraft.nickname.trim().length > 0
   const roleSelectOptions = useMemo<MultiSelectOption[]>(
@@ -228,6 +237,32 @@ export function UsersPage() {
   function handleCloseEditDialog() {
     setEditingUserId(null)
     setEditingDraft(buildEditableUserFormState())
+  }
+
+  function handleCloseProjectPermissionDialog() {
+    setViewingPermissionUser(null)
+    setProjectPermissionRows([])
+    setProjectPermissionLoadState('idle')
+    setProjectPermissionErrorMessage('')
+  }
+
+  async function handleOpenProjectPermissionDialog(user: UserResponseDto) {
+    setViewingPermissionUser(user)
+    setProjectPermissionRows([])
+    setProjectPermissionLoadState('loading')
+    setProjectPermissionErrorMessage('')
+
+    try {
+      const result = await getUserProjectPermissions(user.id)
+      setProjectPermissionRows(result.items)
+      setProjectPermissionLoadState('success')
+    } catch (error) {
+      setProjectPermissionRows([])
+      setProjectPermissionLoadState('error')
+      setProjectPermissionErrorMessage(
+        error instanceof Error ? error.message : '获取用户项目权限失败，请稍后重试。',
+      )
+    }
   }
 
   async function handleCreateUser() {
@@ -472,6 +507,15 @@ export function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={togglingUserId === row.id || resettingUserId === row.id}
+                          onClick={() => void handleOpenProjectPermissionDialog(row)}
+                        >
+                          查看权限
+                        </Button>
                         <Button
                           type="button"
                           variant="ghost"
@@ -726,6 +770,94 @@ export function UsersPage() {
             </Button>
             <Button type="button" onClick={() => void handleSaveEditingUser()} disabled={!canSaveEditingUser || isSavingEdit}>
               {isSavingEdit ? '保存中...' : '保存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isProjectPermissionDialogOpen}
+        onOpenChange={(open) => (!open ? handleCloseProjectPermissionDialog() : null)}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>查看权限</DialogTitle>
+              {/*
+                ? `查看 ${viewingPermissionUser.nickname.trim() || viewingPermissionUser.username} 拥有的项目权限`
+                : '查看用户拥有的项目权限'}
+              */}
+          </DialogHeader>
+
+          {projectPermissionLoadState === 'loading' ? (
+            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Spinner className="size-4" />
+              <span>正在加载项目权限...</span>
+            </div>
+          ) : projectPermissionLoadState === 'error' ? (
+            <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+              <span>{projectPermissionErrorMessage || '获取用户项目权限失败，请稍后重试。'}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  viewingPermissionUser
+                    ? void handleOpenProjectPermissionDialog(viewingPermissionUser)
+                    : undefined
+                }
+              >
+                重试
+              </Button>
+            </div>
+          ) : projectPermissionRows.length === 0 ? (
+            <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
+              当前用户未分配任何项目权限。
+            </div>
+          ) : (
+            <ScrollArea className="max-h-[65vh] pr-4">
+              <div className="grid gap-3">
+                {projectPermissionRows.map((project) => (
+                  <Card key={project.projectCode} className="border border-border/70 bg-muted/20 shadow-none">
+                    <CardContent className="space-y-3 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium">{project.projectName}</div>
+                          <div className="text-xs text-muted-foreground">{project.projectCode}</div>
+                        </div>
+                        <Badge variant="secondary">{project.permissions.length} 项权限</Badge>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-muted-foreground">关联角色</div>
+                        <div className="flex flex-wrap gap-2">
+                          {project.roles.map((role) => (
+                            <Badge key={`${project.projectCode}-${role.id}`} variant="outline">
+                              {role.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-muted-foreground">权限明细</div>
+                        <div className="flex flex-wrap gap-2">
+                          {project.permissions.map((permission) => (
+                            <Badge key={permission.id} variant="secondary" className="max-w-full">
+                              {permission.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleCloseProjectPermissionDialog}>
+              关闭
             </Button>
           </DialogFooter>
         </DialogContent>

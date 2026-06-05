@@ -20,6 +20,8 @@ import type {
   AuthorizationRoleListDto,
   AuthorizationSnapshotQueryDto,
   AuthorizationSnapshotResponseDto,
+  AuthorizationUserProjectPermissionListDto,
+  AuthorizationUserProjectPermissionResponseDto,
   AuthorizationValidationErrorContextDto,
   CreatePermissionRequestDto,
   CreateRoleRequestDto,
@@ -408,6 +410,18 @@ function getGrantedPermissionCodes(
   );
 }
 
+function sortRoles(
+  roles: readonly AuthorizationRoleSummary[],
+): AuthorizationRoleSummary[] {
+  return [...roles].sort((left, right) => {
+    return (
+      left.code.localeCompare(right.code) ||
+      left.name.localeCompare(right.name) ||
+      left.id - right.id
+    );
+  });
+}
+
 export class AuthorizationService {
   constructor(
     private readonly repository: AuthorizationRepositoryPort = authorizationRepository,
@@ -514,6 +528,83 @@ export class AuthorizationService {
         memberCount: memberCounts.get(role.id) ?? 0,
         permissions: sortPermissions(permissionsByRoleId.get(role.id) ?? []),
       })),
+    };
+  }
+
+  async listUserProjectPermissions(
+    userIdInput: number | string,
+  ): Promise<AuthorizationUserProjectPermissionListDto> {
+    await this.ensureSeedData();
+
+    const userId = ensurePositiveInteger(userIdInput, 'userId', 'userId');
+    const assignedRolesMap = await this.repository.getAssignedRolesByUserIds([userId]);
+    const assignedRoles = assignedRolesMap.get(userId) ?? [];
+
+    if (assignedRoles.length === 0) {
+      return { items: [] };
+    }
+
+    const roleIds = assignedRoles.map((role) => role.id);
+    const [projectsByRoleId, permissionsByRoleId] = await Promise.all([
+      this.repository.getProjectSummariesByRoleIdsMap(roleIds),
+      this.repository.getPermissionSummariesByRoleIdsMap(roleIds),
+    ]);
+
+    const itemsByProjectCode = new Map<string, AuthorizationUserProjectPermissionResponseDto>();
+    const roleById = new Map(assignedRoles.map((role) => [role.id, role]));
+
+    for (const roleId of roleIds) {
+      const role = roleById.get(roleId);
+      if (!role) {
+        continue;
+      }
+
+      const roleProjects = projectsByRoleId.get(roleId) ?? [];
+      const rolePermissions = permissionsByRoleId.get(roleId) ?? [];
+
+      for (const project of roleProjects) {
+        const current =
+          itemsByProjectCode.get(project.projectCode) ??
+          {
+            id: project.id,
+            projectCode: project.projectCode,
+            projectName: project.projectName,
+            roles: [],
+            permissions: [],
+          };
+
+        if (!current.roles.some((item) => item.id === role.id)) {
+          current.roles.push(role);
+        }
+
+        for (const permission of rolePermissions) {
+          if (permission.appCode !== project.projectCode) {
+            continue;
+          }
+
+          if (!current.permissions.some((item) => item.id === permission.id)) {
+            current.permissions.push(permission);
+          }
+        }
+
+        itemsByProjectCode.set(project.projectCode, current);
+      }
+    }
+
+    return {
+      items: Array.from(itemsByProjectCode.values())
+        .map((item) => ({
+          ...item,
+          roles: sortRoles(item.roles),
+          permissions: sortPermissions(item.permissions),
+        }))
+        .sort((left, right) => {
+          return (
+            left.projectCode.localeCompare(right.projectCode) ||
+            left.projectName.localeCompare(right.projectName) ||
+            left.id - right.id
+          );
+        }),
     };
   }
 

@@ -7,6 +7,7 @@ import {
   getAuthorizationSnapshot,
   getPermissionList,
   getRoleList,
+  getUserProjectPermissionList,
   updatePermission,
   updateRole,
 } from './authorization.controller.ts';
@@ -16,6 +17,7 @@ const authorizationRouter: Router = express.Router();
 authorizationRouter.get('/snapshot', getAuthorizationSnapshot);
 authorizationRouter.get('/permissions', getPermissionList);
 authorizationRouter.get('/roles', getRoleList);
+authorizationRouter.get('/users/:id/projects', getUserProjectPermissionList);
 authorizationRouter.post('/permissions', createPermission);
 authorizationRouter.post('/roles', createRole);
 authorizationRouter.put('/permissions/:id', updatePermission);

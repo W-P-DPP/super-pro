@@ -102,6 +102,7 @@ function createRepositoryMock(
     replaceUserRoleAssignments: async () => {},
     clearUserRoleAssignments: async () => {},
     getAssignedRolesByUserIds: async () => new Map(),
+    getProjectSummariesByRoleIdsMap: async () => new Map(),
     getPermissionSummariesByRoleIdsMap: async () => new Map(),
     getPermissionSummariesByRoleIds: async () => [],
     getFallbackRoleCodes: () => ['file-server.viewer'],
@@ -157,6 +158,62 @@ describe('AuthorizationService', () => {
     expect(snapshot.principal.permissionCodes).toEqual([
       FILE_SERVER_PERMISSION_CODES.treeRead,
       FILE_SERVER_PERMISSION_CODES.fileMove,
+    ])
+  })
+
+  it('aggregates user project permissions by assigned roles', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () =>
+        new Map([[identity.userId, [editorRole, platformRole]]]),
+      getProjectSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            editorRole.id,
+            [{ id: 101, projectCode: 'project', projectName: '项目中心' }],
+          ],
+          [
+            platformRole.id,
+            [{ id: 102, projectCode: 'platform', projectName: '平台中心' }],
+          ],
+        ]),
+      getPermissionSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            editorRole.id,
+            [
+              {
+                ...treePermission,
+                id: 21,
+                appCode: 'project',
+                code: PROJECT_PERMISSION_CODES.projectRead,
+                resourceCode: 'project',
+                action: 'read',
+                name: 'project-read',
+              },
+            ],
+          ],
+          [[platformRole.id, [platformPermission]]][0],
+        ]),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.listUserProjectPermissions(identity.userId)
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        projectCode: 'platform',
+        roles: [platformRole],
+        permissions: [platformPermission],
+      }),
+      expect.objectContaining({
+        projectCode: 'project',
+        roles: [editorRole],
+        permissions: [
+          expect.objectContaining({
+            code: PROJECT_PERMISSION_CODES.projectRead,
+          }),
+        ],
+      }),
     ])
   })
 

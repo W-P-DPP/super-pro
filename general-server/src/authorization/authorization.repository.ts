@@ -20,6 +20,12 @@ import {
 } from './authorization.entity.ts';
 import { ProjectEntity } from '../project/project.entity.ts';
 
+export interface AuthorizationProjectSummary {
+  id: number;
+  projectCode: string;
+  projectName: string;
+}
+
 export interface CreateRoleEntityInput {
   code: string;
   name: string;
@@ -78,6 +84,9 @@ export interface AuthorizationRepositoryPort {
   replaceUserRoleAssignments(userId: number, roleIds: number[]): Promise<void>;
   clearUserRoleAssignments(userId: number): Promise<void>;
   getAssignedRolesByUserIds(userIds: number[]): Promise<Map<number, AuthorizationRoleSummary[]>>;
+  getProjectSummariesByRoleIdsMap(
+    roleIds: number[],
+  ): Promise<Map<number, AuthorizationProjectSummary[]>>;
   getPermissionSummariesByRoleIdsMap(
     roleIds: number[],
   ): Promise<Map<number, AuthorizationPermissionSummary[]>>;
@@ -786,6 +795,60 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
         ...(row.description ? { description: row.description } : {}),
       });
       result.set(row.userId, current);
+    }
+
+    return result;
+  }
+
+  async getProjectSummariesByRoleIdsMap(
+    roleIds: number[],
+  ): Promise<Map<number, AuthorizationProjectSummary[]>> {
+    const result = new Map<number, AuthorizationProjectSummary[]>();
+    if (roleIds.length === 0) {
+      return result;
+    }
+
+    const dataSource = await ensureDataSource();
+    const rows = (await dataSource
+      .getRepository(RoleProjectAssignmentEntity)
+      .createQueryBuilder('roleProject')
+      .innerJoin(
+        ProjectEntity,
+        'project',
+        'project.id = roleProject.project_id AND project.delete_flag = :projectDeleteFlag',
+        { projectDeleteFlag: 0 },
+      )
+      .where('roleProject.role_id IN (:...roleIds)', { roleIds })
+      .andWhere('roleProject.delete_flag = :roleProjectDeleteFlag', {
+        roleProjectDeleteFlag: 0,
+      })
+      .select([
+        'roleProject.roleId AS roleId',
+        'project.id AS id',
+        'project.projectCode AS projectCode',
+        'project.projectName AS projectName',
+      ])
+      .orderBy('project.project_code', 'ASC')
+      .addOrderBy('project.id', 'ASC')
+      .getRawMany()) as Array<{
+      roleId: number;
+      id: number;
+      projectCode: string;
+      projectName: string;
+    }>;
+
+    for (const row of rows) {
+      const current = result.get(row.roleId) ?? [];
+      if (current.some((item) => item.id === row.id)) {
+        continue;
+      }
+
+      current.push({
+        id: row.id,
+        projectCode: row.projectCode,
+        projectName: row.projectName,
+      });
+      result.set(row.roleId, current);
     }
 
     return result;
