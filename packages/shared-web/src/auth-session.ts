@@ -3,10 +3,6 @@ import type { StoredAuthSession } from '@super-pro/shared-types';
 type AuthSessionOptions = {
   storageKey: string;
   directTokenStorageKey?: string;
-  handoffWindowNameKey?: string;
-  handoffQueryKey?: string;
-  enableQueryHandoff?: boolean;
-  enableWindowNameHandoff?: boolean;
 };
 
 function isExpiredAuthSession(session: StoredAuthSession) {
@@ -39,71 +35,9 @@ export function isStoredAuthSession(value: unknown): value is StoredAuthSession 
   );
 }
 
-function consumeWindowNameAuthSession(options: Required<AuthSessionOptions>) {
-  if (typeof window === 'undefined' || !options.enableWindowNameHandoff) {
-    return null;
-  }
-
-  const rawValue = window.name?.trim();
-  if (!rawValue) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue) as { key?: string; session?: unknown };
-
-    if (
-      parsed.key !== options.handoffWindowNameKey ||
-      !isStoredAuthSession(parsed.session)
-    ) {
-      return null;
-    }
-
-    window.name = '';
-    return parsed.session;
-  } catch {
-    return null;
-  }
-}
-
-function consumeQueryAuthSession(options: Required<AuthSessionOptions>) {
-  if (typeof window === 'undefined' || !options.enableQueryHandoff) {
-    return null;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const rawValue = params.get(options.handoffQueryKey)?.trim();
-  if (!rawValue) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue) as { key?: string; session?: unknown };
-
-    if (
-      parsed.key !== options.handoffWindowNameKey ||
-      !isStoredAuthSession(parsed.session)
-    ) {
-      return null;
-    }
-
-    params.delete(options.handoffQueryKey);
-    const nextSearch = params.toString();
-    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
-    window.history.replaceState(null, '', nextUrl);
-    return parsed.session;
-  } catch {
-    return null;
-  }
-}
-
 export function createAuthSessionStore(options: AuthSessionOptions) {
   const normalizedOptions: Required<AuthSessionOptions> = {
     directTokenStorageKey: 'token',
-    enableQueryHandoff: false,
-    enableWindowNameHandoff: false,
-    handoffWindowNameKey: 'super-pro.auth-handoff',
-    handoffQueryKey: 'spauth',
     ...options,
   };
 
@@ -125,19 +59,7 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
       storage.removeItem(normalizedOptions.storageKey);
     }
 
-    const querySession = consumeQueryAuthSession(normalizedOptions);
-    if (querySession && !isExpiredAuthSession(querySession)) {
-      storage.setItem(normalizedOptions.storageKey, JSON.stringify(querySession));
-      return querySession;
-    }
-
-    const handoffSession = consumeWindowNameAuthSession(normalizedOptions);
-    if (!handoffSession || isExpiredAuthSession(handoffSession)) {
-      return null;
-    }
-
-    storage.setItem(normalizedOptions.storageKey, JSON.stringify(handoffSession));
-    return handoffSession;
+    return null;
   }
 
   function getReusableAuthToken() {

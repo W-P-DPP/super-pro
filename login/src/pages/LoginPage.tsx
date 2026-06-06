@@ -1,7 +1,6 @@
 import type { ChangeEvent, FormEvent } from 'react'
 import { useState } from 'react'
 import { AuthApiError, loginUser, registerUser } from '@/lib/auth-client'
-import { appendAuthHandoffToUrl, writeAuthHandoff } from '@/lib/auth-handoff'
 import { getRedirectTargetFromLocation } from '@/lib/auth-redirect'
 import { saveAuthSession } from '@/lib/auth-storage'
 import {
@@ -111,8 +110,7 @@ export function LoginPage() {
         }))
 
         if (redirectTarget) {
-          writeAuthHandoff(result)
-          window.location.assign(appendAuthHandoffToUrl(redirectTarget, result))
+          window.location.assign(redirectTarget)
           return
         }
 
