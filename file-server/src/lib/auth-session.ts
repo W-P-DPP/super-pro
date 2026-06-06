@@ -14,6 +14,8 @@ const LOGIN_TEMPLATE_AUTH_STORAGE_KEY = 'login-template.auth'
 
 const authSessionStore = createAuthSessionStore({
   storageKey: LOGIN_TEMPLATE_AUTH_STORAGE_KEY,
+  directTokenStorageKey: false,
+  storageMode: 'cookie',
 })
 
 export function getAuthToken(): string | null {

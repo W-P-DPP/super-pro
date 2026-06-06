@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThemeProvider } from '@/components/theme-provider';
 import { SummaryPage } from './SummaryPage';
 
+const AUTH_COOKIE_KEY = 'super-pro.auth-session';
+
 const loginRedirectMocks = vi.hoisted(() => ({
   redirectToLoginWithCurrentPage: vi.fn(),
 }));
@@ -80,7 +82,13 @@ function renderPage() {
 
 describe('SummaryPage', () => {
   beforeEach(() => {
-    window.localStorage.setItem('token', 'test-token');
+    document.cookie = `${AUTH_COOKIE_KEY}=${encodeURIComponent(
+      JSON.stringify({
+        token: 'test-token',
+        tokenType: 'Bearer',
+        expiresAt: Date.now() + 60_000,
+      }),
+    )}; path=/`;
     loginRedirectMocks.redirectToLoginWithCurrentPage.mockReset();
     apiMocks.getScreenDevice.mockImplementation(async (window: '5m' | '15m' | '1h') =>
       createDevice(window),
@@ -90,6 +98,7 @@ describe('SummaryPage', () => {
   afterEach(() => {
     vi.useRealTimers();
     window.localStorage.clear();
+    document.cookie = `${AUTH_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
   });
 
   it('renders only the device resource panel', async () => {
@@ -135,6 +144,7 @@ describe('SummaryPage', () => {
 
   it('redirects to login instead of requesting when there is no token', async () => {
     window.localStorage.clear();
+    document.cookie = `${AUTH_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
     renderPage();
 
     await waitFor(() =>

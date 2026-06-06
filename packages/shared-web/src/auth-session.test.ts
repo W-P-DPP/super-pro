@@ -108,6 +108,42 @@ describe('shared-web auth session helpers', () => {
     expect(localStorage.getItem('login-template.auth')).toContain('"token":"cookie-token"');
   });
 
+  it('uses cookie-only mode without persisting the token to local storage', () => {
+    const localStorage = createMemoryStorage();
+    localStorage.setItem('token', 'stale-token');
+    localStorage.setItem(
+      'login-template.auth',
+      JSON.stringify({
+        token: 'stale-session-token',
+        tokenType: 'Bearer',
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    vi.stubGlobal('window', { localStorage });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        cookie: `super-pro.auth-session=${encodeURIComponent(
+          JSON.stringify({
+            token: 'cookie-token',
+            tokenType: 'Bearer',
+            expiresAt: Date.now() + 60_000,
+          }),
+        )}`,
+      },
+    });
+
+    const store = createAuthSessionStore({
+      storageKey: 'login-template.auth',
+      directTokenStorageKey: false,
+      storageMode: 'cookie',
+    });
+
+    expect(store.getReusableAuthToken()).toBe('cookie-token');
+    expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('login-template.auth')).toBeNull();
+  });
+
   it('validates stored auth session payloads', () => {
     expect(isStoredAuthSession({ token: 'abc', tokenType: 'Bearer' })).toBe(true);
     expect(isStoredAuthSession({ token: 'abc', tokenType: 'Basic' })).toBe(false);

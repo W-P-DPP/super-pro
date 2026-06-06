@@ -4,6 +4,7 @@ type AuthSessionOptions = {
   storageKey: string;
   directTokenStorageKey?: string | false;
   cookieStorageKey?: string | false;
+  storageMode?: 'hybrid' | 'cookie';
 };
 
 const DEFAULT_AUTH_SESSION_COOKIE_KEY = 'super-pro.auth-session';
@@ -106,11 +107,26 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
   const normalizedOptions = {
     directTokenStorageKey: 'token',
     cookieStorageKey: DEFAULT_AUTH_SESSION_COOKIE_KEY,
+    storageMode: 'hybrid',
     ...options,
-  } satisfies Omit<Required<AuthSessionOptions>, 'directTokenStorageKey' | 'cookieStorageKey'> & {
+  } satisfies Omit<
+    Required<AuthSessionOptions>,
+    'directTokenStorageKey' | 'cookieStorageKey'
+  > & {
     directTokenStorageKey: string | false;
     cookieStorageKey: string | false;
   };
+
+  function clearLegacyLocalAuthArtifacts(storage: Storage | null) {
+    if (!storage) {
+      return;
+    }
+
+    storage.removeItem(normalizedOptions.storageKey);
+    storage.removeItem(
+      normalizedOptions.directTokenStorageKey || 'token',
+    );
+  }
 
   function writeReusableAuthSession(session: StoredAuthSession) {
     const storage = getStorage();
@@ -120,7 +136,11 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
       return null;
     }
 
-    storage?.setItem(normalizedOptions.storageKey, JSON.stringify(session));
+    if (normalizedOptions.storageMode === 'cookie') {
+      clearLegacyLocalAuthArtifacts(storage);
+    } else {
+      storage?.setItem(normalizedOptions.storageKey, JSON.stringify(session));
+    }
 
     if (normalizedOptions.cookieStorageKey) {
       writeAuthSessionCookie(normalizedOptions.cookieStorageKey, session);
@@ -131,7 +151,37 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
 
   function readReusableAuthSession() {
     const storage = getStorage();
+    if (
+      !normalizedOptions.cookieStorageKey &&
+      normalizedOptions.storageMode === 'cookie'
+    ) {
+      clearLegacyLocalAuthArtifacts(storage);
+      return null;
+    }
+
     if (!storage && !normalizedOptions.cookieStorageKey) {
+      return null;
+    }
+
+    if (normalizedOptions.cookieStorageKey) {
+      const cookieSession = readCookieAuthSession(normalizedOptions.cookieStorageKey);
+
+      if (cookieSession && !isExpiredAuthSession(cookieSession)) {
+        if (normalizedOptions.storageMode === 'cookie') {
+          clearLegacyLocalAuthArtifacts(storage);
+        } else {
+          storage?.setItem(normalizedOptions.storageKey, JSON.stringify(cookieSession));
+        }
+        return cookieSession;
+      }
+
+      if (cookieSession) {
+        clearAuthSessionCookie(normalizedOptions.cookieStorageKey);
+      }
+    }
+
+    if (normalizedOptions.storageMode === 'cookie') {
+      clearLegacyLocalAuthArtifacts(storage);
       return null;
     }
 
@@ -147,16 +197,13 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
       storage?.removeItem(normalizedOptions.storageKey);
     }
 
-    if (normalizedOptions.cookieStorageKey) {
-      const cookieSession = readCookieAuthSession(normalizedOptions.cookieStorageKey);
-
-      if (cookieSession && !isExpiredAuthSession(cookieSession)) {
-        storage?.setItem(normalizedOptions.storageKey, JSON.stringify(cookieSession));
-        return cookieSession;
-      }
-
-      if (cookieSession) {
-        clearAuthSessionCookie(normalizedOptions.cookieStorageKey);
+    if (normalizedOptions.directTokenStorageKey) {
+      const directToken = storage?.getItem(normalizedOptions.directTokenStorageKey)?.trim();
+      if (directToken) {
+        return {
+          token: directToken,
+          tokenType: 'Bearer' as const,
+        };
       }
     }
 
@@ -164,18 +211,6 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
   }
 
   function getReusableAuthToken() {
-    const storage = getStorage();
-    if (!storage) {
-      return null;
-    }
-
-    if (normalizedOptions.directTokenStorageKey) {
-      const directToken = storage.getItem(normalizedOptions.directTokenStorageKey)?.trim();
-      if (directToken) {
-        return directToken;
-      }
-    }
-
     return readReusableAuthSession()?.token ?? null;
   }
 
@@ -192,10 +227,7 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
       return;
     }
 
-    storage.removeItem(normalizedOptions.storageKey);
-    if (normalizedOptions.directTokenStorageKey) {
-      storage.removeItem(normalizedOptions.directTokenStorageKey);
-    }
+    clearLegacyLocalAuthArtifacts(storage);
 
     if (normalizedOptions.cookieStorageKey) {
       clearAuthSessionCookie(normalizedOptions.cookieStorageKey);

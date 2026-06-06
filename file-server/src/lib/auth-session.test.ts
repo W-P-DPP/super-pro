@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getAuthToken, redirectToLoginPage } from './auth-session'
+import { redirectToLoginPage } from './auth-session'
 
 const originalWindow = globalThis.window
 const originalLoginUrl = import.meta.env.VITE_STRICT_MENU_LOGIN_URL

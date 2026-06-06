@@ -120,6 +120,7 @@ async function getRowButtonCount(name: string) {
 }
 
 const fullPermissions = Object.values(FILE_SERVER_PERMISSION_CODES)
+const AUTH_COOKIE_KEY = 'super-pro.auth-session'
 
 describe('App', () => {
   afterEach(() => {
@@ -128,6 +129,7 @@ describe('App', () => {
     redirectToLoginPageMock.mockReset()
     localStorage.clear()
     document.cookie = 'file_preview_token=; Max-Age=0; Path=/'
+    document.cookie = `${AUTH_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
   })
 
   it('loads current project permissions before tree and previews files', async () => {
@@ -332,7 +334,13 @@ describe('App', () => {
   })
 
   it('provides download action only when permission is granted', async () => {
-    localStorage.setItem('token', 'download-token')
+    document.cookie = `${AUTH_COOKIE_KEY}=${encodeURIComponent(
+      JSON.stringify({
+        token: 'download-token',
+        tokenType: 'Bearer',
+        expiresAt: Date.now() + 60_000,
+      }),
+    )}; path=/`
 
     const fetchMock = vi.fn()
     fetchMock.mockResolvedValueOnce(

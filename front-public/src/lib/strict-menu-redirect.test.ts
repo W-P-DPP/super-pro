@@ -10,7 +10,8 @@ import {
   resolveStrictMenuNavigationUrl,
   resolveStrictMenuTargetUrl,
 } from './strict-menu-redirect'
-import { LOGIN_TEMPLATE_AUTH_STORAGE_KEY } from './auth-session'
+
+const AUTH_COOKIE_KEY = 'super-pro.auth-session'
 
 const originalLoginUrl = import.meta.env.VITE_STRICT_MENU_LOGIN_URL
 const originalDevProjectUrl = import.meta.env.VITE_DEV_PROJECT_URL
@@ -19,6 +20,7 @@ const originalStrictMenuDevTargetMappings =
 
 afterEach(() => {
   localStorage.clear()
+  document.cookie = `${AUTH_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
   delete import.meta.env.VITE_DEV_PROJECT_URL
   delete import.meta.env.VITE_STRICT_MENU_DEV_TARGET_MAPPINGS
 
@@ -129,8 +131,9 @@ describe('strict-menu-redirect', () => {
     ).toBe('http://www.zwpsite.icu:8082/agent/chat?tab=history#panel')
   })
 
-  it('should open strict menu target directly when localStorage.token exists', () => {
+  it('should redirect strict menu target to login when only localStorage.token exists', () => {
     localStorage.setItem('token', 'direct-token')
+    import.meta.env.VITE_STRICT_MENU_LOGIN_URL = 'http://127.0.0.1:12697/login/'
     import.meta.env.VITE_STRICT_MENU_DEV_TARGET_MAPPINGS =
       'http://www.zwpsite.icu:8082/agent/=>http://127.0.0.1:15697/agent/'
 
@@ -138,7 +141,9 @@ describe('strict-menu-redirect', () => {
       resolveStrictMenuNavigationUrl(
         'http://www.zwpsite.icu:8082/agent/chat?tab=history#panel',
       ),
-    ).toBe('http://127.0.0.1:15697/agent/chat?tab=history#panel')
+    ).toBe(
+      'http://127.0.0.1:12697/login/?redirect=http%3A%2F%2F127.0.0.1%3A15697%2Fagent%2Fchat%3Ftab%3Dhistory%23panel',
+    )
   })
 
   it('should use the longest matching development prefix', () => {
@@ -156,14 +161,13 @@ describe('strict-menu-redirect', () => {
   })
 
   it('should reuse login-template session token for strict menu navigation', () => {
-    localStorage.setItem(
-      LOGIN_TEMPLATE_AUTH_STORAGE_KEY,
+    document.cookie = `${AUTH_COOKIE_KEY}=${encodeURIComponent(
       JSON.stringify({
         token: 'session-token',
         tokenType: 'Bearer',
         expiresAt: Date.now() + 60_000,
       }),
-    )
+    )}; path=/`
     import.meta.env.VITE_STRICT_MENU_DEV_TARGET_MAPPINGS =
       'http://www.zwpsite.icu:8082/agent/=>http://127.0.0.1:15697/agent/'
 

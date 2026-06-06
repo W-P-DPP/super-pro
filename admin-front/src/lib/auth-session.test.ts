@@ -16,29 +16,28 @@ describe('auth-session', () => {
     document.cookie = `${AUTH_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
   })
 
-  it('should prefer localStorage.token when both token sources exist', () => {
+  it('should ignore localStorage.token and prefer the reusable auth session', () => {
     localStorage.setItem('token', 'direct-token')
-    localStorage.setItem(
-      LOGIN_TEMPLATE_AUTH_STORAGE_KEY,
+    document.cookie = `${AUTH_COOKIE_KEY}=${encodeURIComponent(
       JSON.stringify({
         token: 'session-token',
         tokenType: 'Bearer',
         expiresAt: Date.now() + 60_000,
       }),
-    )
+    )}; path=/`
 
-    expect(getReusableAuthToken()).toBe('direct-token')
+    expect(getReusableAuthToken()).toBe('session-token')
+    expect(localStorage.getItem('token')).toBeNull()
   })
 
-  it('should fallback to login-template.auth when direct token is absent', () => {
-    localStorage.setItem(
-      LOGIN_TEMPLATE_AUTH_STORAGE_KEY,
+  it('should read the reusable auth session from the shared auth cookie', () => {
+    document.cookie = `${AUTH_COOKIE_KEY}=${encodeURIComponent(
       JSON.stringify({
         token: 'session-token',
         tokenType: 'Bearer',
         expiresAt: Date.now() + 60_000,
       }),
-    )
+    )}; path=/`
 
     expect(readReusableAuthSession()).toEqual(
       expect.objectContaining({
@@ -54,6 +53,7 @@ describe('auth-session', () => {
 
     expect(readReusableAuthSession()).toBeNull()
     expect(getReusableAuthToken()).toBeNull()
+    expect(localStorage.getItem(LOGIN_TEMPLATE_AUTH_STORAGE_KEY)).toBeNull()
   })
 
   it('should reuse shared auth cookie when local storage is empty', () => {
@@ -71,7 +71,7 @@ describe('auth-session', () => {
         tokenType: 'Bearer',
       }),
     )
-    expect(localStorage.getItem(LOGIN_TEMPLATE_AUTH_STORAGE_KEY)).toContain('"token":"cookie-token"')
+    expect(localStorage.getItem(LOGIN_TEMPLATE_AUTH_STORAGE_KEY)).toBeNull()
     expect(getReusableAuthToken()).toBe('cookie-token')
   })
 
