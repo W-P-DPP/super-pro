@@ -32,6 +32,12 @@ const platformRole: AuthorizationRoleSummary = {
   name: 'platform-admin',
 }
 
+const superAdminRole: AuthorizationRoleSummary = {
+  id: 4,
+  code: 'super-admin',
+  name: 'super-admin',
+}
+
 const treePermission: AuthorizationPermissionSummary = {
   id: 11,
   code: FILE_SERVER_PERMISSION_CODES.treeRead,
@@ -63,6 +69,17 @@ const platformPermission: AuthorizationPermissionSummary = {
   resourceCode: 'audit',
   action: 'read',
   name: 'audit',
+}
+
+const superPermission: AuthorizationPermissionSummary = {
+  id: 15,
+  code: '*.*.*',
+  appCode: '*',
+  status: 1,
+  resourceType: 'api',
+  resourceCode: '*',
+  action: '*',
+  name: 'super',
 }
 
 const disabledPermission: AuthorizationPermissionSummary = {
@@ -308,6 +325,32 @@ describe('AuthorizationService', () => {
     expect(principal.permissionCodes).toEqual([FILE_SERVER_PERMISSION_CODES.treeRead])
   })
 
+  it('grants the global wildcard permission to platform administrators even when assignments are stale', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () => new Map([[identity.userId, [platformRole]]]),
+      getPermissionSummariesByRoleIds: async () => [],
+    })
+    const service = new AuthorizationService(repository)
+
+    const principal = await service.getAuthenticatedPrincipal(identity)
+
+    expect(principal.roles).toEqual([platformRole])
+    expect(principal.permissionCodes).toEqual(['*.*.*'])
+  })
+
+  it('grants the global wildcard permission to super-admin roles even when assignments are stale', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () => new Map([[identity.userId, [superAdminRole]]]),
+      getPermissionSummariesByRoleIds: async () => [],
+    })
+    const service = new AuthorizationService(repository)
+
+    const principal = await service.getAuthenticatedPrincipal(identity)
+
+    expect(principal.roles).toEqual([superAdminRole])
+    expect(principal.permissionCodes).toEqual(['*.*.*'])
+  })
+
   it('creates a permission', async () => {
     const repository = createRepositoryMock({
       createPermission: async (input) => ({
@@ -334,6 +377,37 @@ describe('AuthorizationService', () => {
         id: 88,
         code: 'project.project.audit',
         appCode: 'project',
+        status: 1,
+      }),
+    )
+  })
+
+  it('accepts the global wildcard permission code', async () => {
+    const repository = createRepositoryMock({
+      createPermission: async (input) => ({
+        id: 89,
+        ...input,
+        updateTime: '2026-06-05 12:00:00',
+      }),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.createPermission({
+      code: '*.*.*',
+      appCode: '*',
+      status: 1,
+      resourceType: 'api',
+      resourceCode: '*',
+      action: '*',
+      name: '超级管理员全部权限',
+      description: '拥有所有项目、所有项目下的权限和所有行为的全部权限。',
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 89,
+        code: '*.*.*',
+        appCode: '*',
         status: 1,
       }),
     )
@@ -410,6 +484,22 @@ describe('AuthorizationService', () => {
     })
   })
 
+  it('passes when the authenticated principal has the global wildcard permission', async () => {
+    const service = new AuthorizationService(createRepositoryMock())
+
+    await expect(
+      service.requirePermission(
+        {
+          ...identity,
+          roles: [platformRole],
+          permissionCodes: ['*.*.*'],
+        },
+        FILE_SERVER_PERMISSION_CODES.fileMove,
+        'forbidden',
+      ),
+    ).resolves.toBeUndefined()
+  })
+
   it('passes when the authenticated principal has any configured permission', async () => {
     const service = new AuthorizationService(createRepositoryMock())
 
@@ -424,6 +514,108 @@ describe('AuthorizationService', () => {
         'forbidden',
       ),
     ).resolves.toBeUndefined()
+  })
+
+  it('includes wildcard permission codes in authenticated principals', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () =>
+        new Map([[identity.userId, [platformRole]]]),
+      getPermissionSummariesByRoleIds: async () => [superPermission],
+    })
+    const service = new AuthorizationService(repository)
+
+    const principal = await service.getAuthenticatedPrincipal(identity)
+
+    expect(principal.roles).toEqual([platformRole])
+    expect(principal.permissionCodes).toEqual(['*.*.*'])
+  })
+
+  it('includes wildcard permissions in current project permission queries', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () =>
+        new Map([[identity.userId, [platformRole]]]),
+      getProjectSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            platformRole.id,
+            [{ id: 102, projectCode: 'admin-console', projectName: '管理后台' }],
+          ],
+        ]),
+      getPermissionSummariesByRoleIdsMap: async () =>
+        new Map([[platformRole.id, [superPermission]]]),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.getCurrentUserProjectPermission(identity, 'admin-console')
+
+    expect(result.item).toEqual(
+      expect.objectContaining({
+        projectCode: 'admin-console',
+        roles: [platformRole],
+        permissions: [superPermission],
+      }),
+    )
+  })
+
+  it('falls back to permission-derived current project access when the project mapping is missing', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () =>
+        new Map([[identity.userId, [superAdminRole]]]),
+      getProjectSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            superAdminRole.id,
+            [{ id: 201, projectCode: 'BMS', projectName: '后台管理系统' }],
+          ],
+        ]),
+      getPermissionSummariesByRoleIdsMap: async () =>
+        new Map([[superAdminRole.id, [superPermission]]]),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.getCurrentUserProjectPermission(identity, 'admin-console')
+
+    expect(result.item).toEqual(
+      expect.objectContaining({
+        id: 0,
+        projectCode: 'admin-console',
+        roles: [superAdminRole],
+        permissions: [superPermission],
+      }),
+    )
+  })
+
+  it('includes wildcard permissions across user project permission lists', async () => {
+    const repository = createRepositoryMock({
+      getAssignedRolesByUserIds: async () =>
+        new Map([[identity.userId, [platformRole]]]),
+      getProjectSummariesByRoleIdsMap: async () =>
+        new Map([
+          [
+            platformRole.id,
+            [
+              { id: 101, projectCode: 'admin-console', projectName: '管理后台' },
+              { id: 102, projectCode: 'file-server', projectName: '文件服务' },
+            ],
+          ],
+        ]),
+      getPermissionSummariesByRoleIdsMap: async () =>
+        new Map([[platformRole.id, [superPermission]]]),
+    })
+    const service = new AuthorizationService(repository)
+
+    const result = await service.listUserProjectPermissions(identity.userId)
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        projectCode: 'admin-console',
+        permissions: [superPermission],
+      }),
+      expect.objectContaining({
+        projectCode: 'file-server',
+        permissions: [superPermission],
+      }),
+    ])
   })
 
   it('returns controlled 403 errors when the authenticated principal lacks one of all required permissions', async () => {

@@ -36,6 +36,8 @@ import {
 const DEFAULT_AUTHORIZATION_LIST_PAGE = 1;
 const DEFAULT_AUTHORIZATION_LIST_PAGE_SIZE = 10;
 const MAX_AUTHORIZATION_LIST_PAGE_SIZE = 100;
+const GLOBAL_PERMISSION_CODE = '*.*.*';
+const SUPER_ADMIN_ROLE_CODES = new Set(['platform.admin', 'super-admin']);
 
 export class AuthorizationBusinessError extends Error {
   constructor(
@@ -153,6 +155,10 @@ function normalizeRoleCode(value: unknown, field: string): string {
 
 function normalizePermissionCode(value: unknown, field: string): string {
   const permissionCode = ensureNonEmptyString(value, field, 'permissionCode');
+
+  if (permissionCode === '*.*.*') {
+    return permissionCode;
+  }
 
   if (!/^[a-z0-9]+(?:[._:-][a-z0-9]+)*$/i.test(permissionCode)) {
     throw new AuthorizationBusinessError(
@@ -619,6 +625,39 @@ function getGrantedPermissionCodes(
   );
 }
 
+function hasGlobalPermissionCode(
+  permissionCodes: readonly PermissionCode[],
+): boolean {
+  return permissionCodes.includes(GLOBAL_PERMISSION_CODE);
+}
+
+function isSuperAdminRoleCode(roleCode: string): boolean {
+  return SUPER_ADMIN_ROLE_CODES.has(roleCode.trim().toLowerCase());
+}
+
+function matchesPermissionProject(
+  permission: AuthorizationPermissionSummary,
+  projectCode: string,
+): boolean {
+  return (
+    permission.appCode === projectCode ||
+    permission.appCode === '*' ||
+    permission.code === GLOBAL_PERMISSION_CODE
+  );
+}
+
+function createVirtualProjectPermissionItem(
+  projectCode: string,
+): AuthorizationCurrentUserProjectPermissionResponseDto['item'] {
+  return {
+    id: 0,
+    projectCode,
+    projectName: projectCode,
+    roles: [],
+    permissions: [],
+  };
+}
+
 function isEnabledPermission(
   permission: AuthorizationPermissionSummary,
 ): boolean {
@@ -685,11 +724,19 @@ export class AuthorizationService {
     const permissions = await this.repository.getPermissionSummariesByRoleIds(
       roles.map((role) => role.id),
     );
+    const permissionCodes = getGrantedPermissionCodes(permissions);
+
+    if (
+      roles.some((role) => isSuperAdminRoleCode(role.code)) &&
+      !hasGlobalPermissionCode(permissionCodes)
+    ) {
+      permissionCodes.unshift(GLOBAL_PERMISSION_CODE);
+    }
 
     return {
       ...identity,
       roles,
-      permissionCodes: getGrantedPermissionCodes(permissions),
+      permissionCodes,
     };
   }
 
@@ -819,7 +866,7 @@ export class AuthorizationService {
         }
 
         for (const permission of rolePermissions) {
-          if (permission.appCode !== project.projectCode) {
+          if (!matchesPermissionProject(permission, project.projectCode)) {
             continue;
           }
 
@@ -906,7 +953,7 @@ export class AuthorizationService {
       }
 
       for (const permission of rolePermissions) {
-        if (permission.appCode !== projectCode) {
+        if (!matchesPermissionProject(permission, projectCode)) {
           continue;
         }
 
@@ -920,6 +967,38 @@ export class AuthorizationService {
       }
 
       currentItem = nextItem;
+    }
+
+    if (!currentItem) {
+      for (const roleId of roleIds) {
+        const role = roleById.get(roleId);
+        if (!role) {
+          continue;
+        }
+
+        const matchedPermissions = (permissionsByRoleId.get(roleId) ?? []).filter(
+          (permission) =>
+            matchesPermissionProject(permission, projectCode) && isEnabledPermission(permission),
+        );
+
+        if (matchedPermissions.length === 0) {
+          continue;
+        }
+
+        const nextItem = currentItem ?? createVirtualProjectPermissionItem(projectCode);
+
+        if (!nextItem.roles.some((item) => item.id === role.id)) {
+          nextItem.roles.push(role);
+        }
+
+        for (const permission of matchedPermissions) {
+          if (!nextItem.permissions.some((item) => item.id === permission.id)) {
+            nextItem.permissions.push(permission);
+          }
+        }
+
+        currentItem = nextItem;
+      }
     }
 
     if (!currentItem) {

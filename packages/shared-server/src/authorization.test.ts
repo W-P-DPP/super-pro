@@ -63,6 +63,36 @@ describe('shared-server authorization helpers', () => {
     ).toBe(false);
   });
 
+  it('supports wildcard permission codes for super administrators', () => {
+    expect(
+      hasPermission(
+        {
+          permissionCodes: ['*.*.*'],
+        },
+        'admin-console.button.roles.create',
+      ),
+    ).toBe(true);
+  });
+
+  it('supports segment wildcards when permission code dimensions align', () => {
+    expect(
+      hasPermission(
+        {
+          permissionCodes: ['admin-console.*.*.*'],
+        },
+        'admin-console.api.site-menu.read',
+      ),
+    ).toBe(true);
+    expect(
+      hasPermission(
+        {
+          permissionCodes: ['admin-console.*.*.*'],
+        },
+        'file-server.tree.read',
+      ),
+    ).toBe(false);
+  });
+
   it('throws controlled forbidden errors when permission is missing', () => {
     expect(() =>
       ensurePermission(

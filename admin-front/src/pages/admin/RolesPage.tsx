@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ADMIN_CONSOLE_PERMISSION_CODES } from '@super-pro/shared-types'
 import { PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
 import {
   createAuthorizationRole,
@@ -45,6 +46,7 @@ import {
   TableRow,
   toast,
 } from '@/components/ui'
+import { useAdminMenu } from '@/contexts/admin-menu-context'
 import {
   ADMIN_PAGE_FILL_CARD_CLASS,
   ADMIN_PAGE_FILL_LAYOUT_CLASS,
@@ -122,6 +124,7 @@ function matchesPermissionKeyword(
 }
 
 export function RolesPage() {
+  const { hasPermission } = useAdminMenu()
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -187,6 +190,10 @@ export function RolesPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalRoles / pageSize))
   const isEditDialogOpen = editingRoleId !== null
+  const canCreateRoleAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.roleCreate)
+  const canUpdateRoleAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.roleUpdate)
+  const canDeleteRoleAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.roleDelete)
+  const canAssignRoleAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.roleAssign)
   const canCreateRole = createDraft.name.trim().length > 0 && createDraft.code.trim().length > 0
   const canSaveRole = editingDraft.name.trim().length > 0 && editingDraft.code.trim().length > 0
 
@@ -479,10 +486,12 @@ export function RolesPage() {
             <RotateCcwIcon data-icon="inline-start" />
             重置
           </Button>
-          <Button type="button" className="h-9" onClick={() => setIsCreateDialogOpen(true)}>
-            <PlusIcon data-icon="inline-start" />
-            新增角色
-          </Button>
+          {canCreateRoleAction ? (
+            <Button type="button" className="h-9" onClick={() => setIsCreateDialogOpen(true)}>
+              <PlusIcon data-icon="inline-start" />
+              新增角色
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -536,7 +545,7 @@ export function RolesPage() {
                         <div className="flex min-w-[7rem] items-center gap-2">
                           <Switch
                             checked={row.status === 1}
-                            disabled={togglingRoleId === row.id}
+                            disabled={togglingRoleId === row.id || !canUpdateRoleAction}
                             onCheckedChange={(checked) => void handleRoleStatusSwitchChange(row, checked)}
                             aria-label={`${row.name}状态开关`}
                           />
@@ -546,34 +555,40 @@ export function RolesPage() {
                       <TableCell>{row.updatedAt}</TableCell>
                       <TableCell>
                         <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={togglingRoleId === row.id}
-                            onClick={() => handleOpenPermissionAssignment(row)}
-                          >
-                            权限分配
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={togglingRoleId === row.id}
-                            onClick={() => handleEditRole(row)}
-                          >
-                            修改
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={togglingRoleId === row.id}
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setDeletingRole(row)}
-                          >
-                            删除
-                          </Button>
+                          {canAssignRoleAction ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={togglingRoleId === row.id}
+                              onClick={() => handleOpenPermissionAssignment(row)}
+                            >
+                              权限分配
+                            </Button>
+                          ) : null}
+                          {canUpdateRoleAction ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={togglingRoleId === row.id}
+                              onClick={() => handleEditRole(row)}
+                            >
+                              修改
+                            </Button>
+                          ) : null}
+                          {canDeleteRoleAction ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={togglingRoleId === row.id}
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeletingRole(row)}
+                            >
+                              删除
+                            </Button>
+                          ) : null}
                         </div>
                       </TableCell>
                     </TableRow>

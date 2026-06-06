@@ -1,21 +1,26 @@
 import { Navigate, useParams } from 'react-router-dom'
 import { Card, CardContent, Spinner } from '@/components/ui'
-import { ADMIN_PAGE_SCROLL_LAYOUT_CLASS, ModulePlaceholderPage } from './module-page-shared'
 import { useAdminMenu } from '@/contexts/admin-menu-context'
+import { ADMIN_PAGE_SCROLL_LAYOUT_CLASS, ModulePlaceholderPage } from './module-page-shared'
 
 export function ModuleRoutePage() {
   const { moduleSlug } = useParams()
-  const { getModuleBySlug, status } = useAdminMenu()
+  const { getVisibleModuleBySlug, permissionStatus, status } = useAdminMenu()
 
   if (!moduleSlug) {
     return <Navigate to="/404" replace />
   }
 
-  if (getModuleBySlug(moduleSlug)) {
+  if (getVisibleModuleBySlug(moduleSlug)) {
     return <ModulePlaceholderPage moduleSlug={moduleSlug} />
   }
 
-  if (status === 'idle' || status === 'loading') {
+  if (
+    status === 'idle' ||
+    status === 'loading' ||
+    permissionStatus === 'idle' ||
+    permissionStatus === 'loading'
+  ) {
     return (
       <section className={ADMIN_PAGE_SCROLL_LAYOUT_CLASS}>
         <Card className="w-full border border-border/70 bg-card/95 shadow-sm">

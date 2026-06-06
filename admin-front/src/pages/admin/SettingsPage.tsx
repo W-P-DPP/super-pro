@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { ADMIN_CONSOLE_PERMISSION_CODES } from '@super-pro/shared-types'
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
 import { TreeDataTable, type TreeDataTableColumn } from '@super-pro/shared-ui'
 import {
@@ -37,6 +38,7 @@ import {
   Textarea,
   toast,
 } from '@/components/ui'
+import { useAdminMenu } from '@/contexts/admin-menu-context'
 import { resolveSiteMenuIcon } from '@/data/tool-directory'
 import {
   ADMIN_PAGE_FILL_CARD_CLASS,
@@ -59,6 +61,8 @@ type SiteMenuFormState = {
 }
 
 type SiteMenuRowRecord = SiteMenuListItemDto
+
+const TOP_LEVEL_MENU_LABEL = '\u9876\u7ea7\u83dc\u5355'
 
 function buildEmptyDraft(): SiteMenuFormState {
   return {
@@ -124,6 +128,18 @@ function flattenSiteMenuTree(
 
       return [current, ...flattenSiteMenuTree(node.children, level + 1, node.name)]
     })
+}
+
+function buildTopLevelParentOptions(nodes: SiteMenuRowRecord[]) {
+  return [
+    { value: 'root', label: TOP_LEVEL_MENU_LABEL },
+    ...nodes
+      .filter((record) => record.level === 0)
+      .map((record) => ({
+        value: String(record.id),
+        label: record.name,
+      })),
+  ]
 }
 
 function collectDescendantIds(node: SiteMenuResponseDto): number[] {
@@ -257,6 +273,7 @@ function SiteMenuFormFields({
 }
 
 export function SettingsPage() {
+  const { hasPermission } = useAdminMenu()
   const [menuTree, setMenuTree] = useState<SiteMenuResponseDto[]>([])
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorMessage, setErrorMessage] = useState('')
@@ -305,16 +322,7 @@ export function SettingsPage() {
     return map
   }, [menuTree])
 
-  const parentOptions = useMemo(
-    () => [
-      { value: 'root', label: '顶级菜单' },
-      ...flatMenuRecords.map((record) => ({
-        value: String(record.id),
-        label: `${'· '.repeat(record.level)}${record.name}`,
-      })),
-    ],
-    [flatMenuRecords],
-  )
+  const parentOptions = useMemo(() => buildTopLevelParentOptions(flatMenuRecords), [flatMenuRecords])
 
   const editingParentOptions = useMemo(() => {
     if (!editingMenu) {
@@ -324,9 +332,9 @@ export function SettingsPage() {
     const excludedIds = new Set<number>([editingMenu.id, ...collectDescendantIds(editingMenu)])
 
     return [
-      { value: 'root', label: '顶级菜单' },
+      { value: 'root', label: TOP_LEVEL_MENU_LABEL },
       ...flatMenuRecords
-        .filter((record) => !excludedIds.has(record.id))
+        .filter((record) => record.level === 0 && !excludedIds.has(record.id))
         .map((record) => ({
           value: String(record.id),
           label: `${'· '.repeat(record.level)}${record.name}`,
@@ -335,6 +343,9 @@ export function SettingsPage() {
   }, [editingMenu, flatMenuRecords, parentOptions])
 
   const totalPages = Math.max(1, Math.ceil(totalMenus / pageSize))
+  const canCreateMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.settingCreate)
+  const canUpdateMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.settingUpdate)
+  const canDeleteMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.settingDelete)
   const canCreateMenu = createDraft.name.trim().length > 0
   const canSaveMenu = editingDraft.name.trim().length > 0
 
@@ -413,36 +424,40 @@ export function SettingsPage() {
         headerClassName: 'w-[10rem]',
         cell: (row) => (
           <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const source = menuNodeMap.get(row.id)
-                if (!source) {
-                  return
-                }
+            {canUpdateMenuAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const source = menuNodeMap.get(row.id)
+                  if (!source) {
+                    return
+                  }
 
-                setEditingMenu(source)
-                setEditingDraft(buildDraftFromRow(row))
-              }}
-            >
-              修改
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeletingMenu(row)}
-            >
-              删除
-            </Button>
+                  setEditingMenu(source)
+                  setEditingDraft(buildDraftFromRow(row))
+                }}
+              >
+                修改
+              </Button>
+            ) : null}
+            {canDeleteMenuAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeletingMenu(row)}
+              >
+                删除
+              </Button>
+            ) : null}
           </div>
         ),
       },
     ],
-    [menuNodeMap],
+    [canDeleteMenuAction, canUpdateMenuAction, menuNodeMap],
   )
 
   useEffect(() => {
@@ -597,10 +612,12 @@ export function SettingsPage() {
             <RotateCcwIcon data-icon="inline-start" />
             重置
           </Button>
-          <Button type="button" className="h-9" onClick={() => setIsCreateDialogOpen(true)}>
-            <PlusIcon data-icon="inline-start" />
-            新增菜单
-          </Button>
+          {canCreateMenuAction ? (
+            <Button type="button" className="h-9" onClick={() => setIsCreateDialogOpen(true)}>
+              <PlusIcon data-icon="inline-start" />
+              新增菜单
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 

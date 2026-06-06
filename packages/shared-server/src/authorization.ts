@@ -5,6 +5,8 @@ import type {
   PermissionCode,
 } from '@super-pro/shared-types';
 
+const GLOBAL_PERMISSION_CODE = '*.*.*';
+
 function normalizeCompatibilityRole(value: unknown): CompatibilityUserRole {
   if (
     value === 'admin' ||
@@ -79,7 +81,26 @@ export function hasPermission(
   principal: Pick<AuthenticatedPrincipal, 'permissionCodes'>,
   permissionCode: PermissionCode,
 ): boolean {
-  return principal.permissionCodes.includes(permissionCode);
+  return principal.permissionCodes.some((grantedPermissionCode) => {
+    if (grantedPermissionCode === GLOBAL_PERMISSION_CODE) {
+      return true;
+    }
+
+    if (grantedPermissionCode === permissionCode) {
+      return true;
+    }
+
+    const grantedSegments = grantedPermissionCode.split('.');
+    const requiredSegments = permissionCode.split('.');
+
+    if (grantedSegments.length !== requiredSegments.length) {
+      return false;
+    }
+
+    return grantedSegments.every((segment, index) => {
+      return segment === '*' || segment === requiredSegments[index];
+    });
+  });
 }
 
 export function ensurePermission(

@@ -39,6 +39,10 @@ export interface AuthorizationUserProjectPermissionListDto {
   items: AuthorizationUserProjectPermissionResponseDto[]
 }
 
+export interface AuthorizationCurrentUserProjectPermissionDto {
+  item: AuthorizationUserProjectPermissionResponseDto | null
+}
+
 export interface AuthorizationPermissionListQueryDto {
   appCode?: string
   keyword?: string
@@ -141,6 +145,18 @@ export function getUserProjectPermissions(userId: number) {
     ),
     '获取用户项目权限失败，请稍后重试。',
   ).then((data) => data ?? { items: [] })
+}
+
+export function getCurrentUserProjectPermission(projectCode: string) {
+  return unwrapResponse(
+    request.get<ApiResponse<AuthorizationCurrentUserProjectPermissionDto>>(
+      `/authorization/me/projects/${projectCode}`,
+      {
+        requiresAuth: true,
+      },
+    ),
+    '获取当前用户项目权限失败，请稍后重试。',
+  ).then((data) => data ?? { item: null })
 }
 
 export function createAuthorizationRole(payload: CreateAuthorizationRoleRequestDto) {

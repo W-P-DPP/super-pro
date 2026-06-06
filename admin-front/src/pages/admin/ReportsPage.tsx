@@ -1,8 +1,9 @@
-import type {
-  AdminMenuNodeType,
-  AdminMenuResponseDto,
-  CreateAdminMenuRequestDto,
-  UpdateAdminMenuRequestDto,
+import {
+  ADMIN_CONSOLE_PERMISSION_CODES,
+  type AdminMenuNodeType,
+  type AdminMenuResponseDto,
+  type CreateAdminMenuRequestDto,
+  type UpdateAdminMenuRequestDto,
 } from '@super-pro/shared-types'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
@@ -317,7 +318,7 @@ function MenuFormFields({
 }
 
 export function ReportsPage() {
-  const { menuTree, reload } = useAdminMenu()
+  const { menuTree, reload, hasPermission } = useAdminMenu()
   const groupOptions = useMemo(
     () => menuTree.filter((node) => node.menuType === 'group'),
     [menuTree],
@@ -343,6 +344,9 @@ export function ReportsPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalMenus / pageSize))
   const isEditDialogOpen = editingMenu !== null
+  const canCreateMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.reportCreate)
+  const canUpdateMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.reportUpdate)
+  const canDeleteMenuAction = hasPermission(ADMIN_CONSOLE_PERMISSION_CODES.reportDelete)
   const canCreateMenu = canSubmitMenuDraft(createDraft)
   const canSaveMenu = canSubmitMenuDraft(editingDraft)
 
@@ -410,31 +414,35 @@ export function ReportsPage() {
         headerClassName: 'w-[10rem]',
         cell: (row) => (
           <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setEditingMenu(row)
-                setEditingDraft(buildDraftFromRow(row))
-              }}
-            >
-              修改
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeletingMenu(row)}
-            >
-              删除
-            </Button>
+            {canUpdateMenuAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setEditingMenu(row)
+                  setEditingDraft(buildDraftFromRow(row))
+                }}
+              >
+                修改
+              </Button>
+            ) : null}
+            {canDeleteMenuAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeletingMenu(row)}
+              >
+                删除
+              </Button>
+            ) : null}
           </div>
         ),
       },
     ],
-    [],
+    [canDeleteMenuAction, canUpdateMenuAction],
   )
 
   useEffect(() => {
@@ -597,10 +605,12 @@ export function ReportsPage() {
             <RotateCcwIcon data-icon="inline-start" />
             重置
           </Button>
-          <Button type="button" className="h-9" onClick={handleOpenCreateDialog}>
-            <PlusIcon data-icon="inline-start" />
-            新增菜单
-          </Button>
+          {canCreateMenuAction ? (
+            <Button type="button" className="h-9" onClick={handleOpenCreateDialog}>
+              <PlusIcon data-icon="inline-start" />
+              新增菜单
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 

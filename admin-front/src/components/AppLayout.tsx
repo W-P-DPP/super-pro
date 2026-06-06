@@ -108,10 +108,13 @@ export function AppLayout() {
   const {
     status: adminMenuStatus,
     errorMessage: adminMenuErrorMessage,
+    permissionStatus,
+    permissionErrorMessage,
     visibleNavGroups,
     visibleModules,
     getModuleBySlug,
     reload: reloadAdminMenu,
+    reloadPermissions,
   } = useAdminMenu()
   const [searchKeyword, setSearchKeyword] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
@@ -281,26 +284,33 @@ export function AppLayout() {
             <SidebarGroupLabel>导航菜单</SidebarGroupLabel>
             <SidebarGroupContent>
               <div className="grid gap-4">
-                {adminMenuStatus === 'loading' && visibleNavGroups.length === 0 ? (
+                {(adminMenuStatus === 'loading' || permissionStatus === 'loading') &&
+                visibleNavGroups.length === 0 ? (
                   <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
                     <CardContent className="px-3">
                       <div className="flex items-center gap-2 text-sm text-sidebar-foreground/75">
                         <Spinner className="size-4" />
-                        <span>正在加载后台菜单...</span>
+                        <span>正在加载后台菜单与权限...</span>
                       </div>
                     </CardContent>
                   </Card>
                 ) : null}
 
-                {adminMenuStatus === 'error' && visibleNavGroups.length === 0 ? (
+                {(adminMenuStatus === 'error' || permissionStatus === 'error') &&
+                visibleNavGroups.length === 0 ? (
                   <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
                     <CardContent className="grid gap-3 px-3">
                       <p className="text-sm text-sidebar-foreground/75">
-                        {adminMenuErrorMessage || '后台菜单加载失败，请稍后重试。'}
+                        {adminMenuErrorMessage || permissionErrorMessage || '后台菜单或权限加载失败，请稍后重试。'}
                       </p>
-                      <Button type="button" variant="outline" size="sm" onClick={reloadAdminMenu}>
-                        重试
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={reloadAdminMenu}>
+                          重试菜单
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={reloadPermissions}>
+                          重试权限
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ) : null}
@@ -353,7 +363,9 @@ export function AppLayout() {
                   </Collapsible>
                 ))}
 
-                {filteredGroups.length === 0 && adminMenuStatus === 'success' ? (
+                {filteredGroups.length === 0 &&
+                adminMenuStatus === 'success' &&
+                permissionStatus === 'success' ? (
                   <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
                     <CardContent className="px-3">
                       <p className="text-sm text-sidebar-foreground/75">
