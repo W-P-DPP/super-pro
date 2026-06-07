@@ -1,0 +1,26 @@
+◇ injected env (19) from .env.development // tip: ⌘ override existing { override: true }
+2026-05-07 08:50:41 [[32minfo[39m] Bootstrapping service {"serviceName":"general-server","profile":"development","port":30010}
+2026-05-07 08:50:41 [[32minfo[39m] [Redis] connecting... 
+2026-05-07 08:50:41 [[32minfo[39m] [Redis] ready 
+2026-05-07 08:50:41 [[32minfo[39m] Initializing MySQL Database Connection... 
+2026-05-07 08:50:43 [[32minfo[39m] HTTP server listening {"serviceName":"general-server","host":"::","port":30010}
+2026-05-07 08:52:00 [[32minfo[39m] aeeb2693-9bee-4b99-b907-3b84bccb4a06 GET /live 200 54 - 4.136 ms {} 
+2026-05-07 08:52:00 [[32minfo[39m] 83d7f73b-4069-4eec-bed9-b0da841a02c4 GET /api/todo/list 401 86 - 6.912 ms {} 
+2026-05-07 08:52:00 [[32minfo[39m] 4d267b23-ab6b-466e-9186-94d702c38a62 GET /api/todo/list 401 86 - 0.619 ms {} 
+2026-05-07 19:46:01 [[32minfo[39m] de32397a-6dfb-45cd-a6fe-0e0845ec2404 GET /api/todo/list 401 86 - 4.687 ms {} 
+2026-05-07 19:46:01 [[32minfo[39m] 185b212b-ee05-4f72-bb2c-05f42f4c8a23 GET /api/todo/list 401 86 - 0.540 ms {} 
+2026-05-07 19:46:03 [[32minfo[39m] e0b10b9f-5d66-4f71-a0bc-6a6c7cbb7bf8 GET /api/todo/list 200 124 - 35.210 ms {} 
+2026-05-07 19:46:03 [[32minfo[39m] cc042dc5-1650-4f26-9c14-eaa5d7289620 GET /api/todo/list 200 124 - 4.227 ms {} 
+2026-05-07 19:57:03 [[32minfo[39m] 79a4a7bf-267e-41a6-896b-ba258cfefdf9 GET /api/todo/list 200 124 - 3.084 ms {} 
+2026-05-07 19:57:36 [[32minfo[39m] 715beb1b-19f2-4162-ac72-e34fa8f5d291 GET /api/todo/list 200 124 - 2.589 ms {} 
+2026-05-07 19:59:01 [[32minfo[39m] 7f5f00b8-e6ad-4ec8-b51f-fdfb7e041c81 GET /api/todo/list 200 124 - 2.189 ms {} 
+2026-05-07 20:01:56 [[32minfo[39m] 1afb4aef-139f-4246-a68e-e2f83beacf11 POST /api/todo/reject/1 404 157 - 2.090 ms {} 
+2026-05-07 20:01:58 [[32minfo[39m] 9611f2b8-9f6b-4113-a9af-6ee8c4a07112 POST /api/todo/approve/1 403 67 - 3.143 ms {} 
+2026-05-07 20:02:00 [[32minfo[39m] a31e6a13-bd61-4329-9dca-27fa33fe3b2b GET /api/todo/list 200 124 - 2.344 ms {} 
+2026-05-07 20:02:00 [[32minfo[39m] bbd61b4d-5fc1-40fe-9c3a-0497b5aecff7 GET /api/todo/list 200 124 - 1.866 ms {} 
+2026-05-07 20:02:01 [[32minfo[39m] 95752e23-306b-4bfb-9abb-d12be69f9082 POST /api/todo/approve/1 403 67 - 1.441 ms {} 
+2026-05-07 20:02:04 [[32minfo[39m] 53c19192-7e67-4788-ace3-6d9d2f3a4759 GET /api/todo/list 200 124 - 1.518 ms {} 
+2026-05-07 20:02:04 [[32minfo[39m] 780935af-1d0f-4bd0-b53d-4fb5bdda0004 GET /api/todo/list 200 124 - 2.129 ms {} 
+2026-05-07 20:02:10 [[32minfo[39m] 1b56a908-a808-4b29-a6f7-535a76673f2f GET /api/todo/list 200 124 - 1.606 ms {} 
+2026-05-07 20:02:10 [[32minfo[39m] ac05a57b-6b55-48a5-a089-1c2f7337d9a2 GET /api/todo/list 200 124 - 2.334 ms {} 
+2026-05-07 20:02:15 [[32minfo[39m] 1fe573d0-fa35-4b8d-a46e-7f10013746bf POST /api/todo/approve/1 403 67 - 1.599 ms {} 

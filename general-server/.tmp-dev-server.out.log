@@ -1,0 +1,9 @@
+◇ injected env (21) from .env.development // tip: ⌘ suppress logs { quiet: true }
+2026-06-07 09:43:06 [[32minfo[39m] Bootstrapping service {"serviceName":"general-server","profile":"development","port":31010}
+2026-06-07 09:43:06 [[32minfo[39m] [Redis] connecting... 
+2026-06-07 09:43:06 [[32minfo[39m] [Redis] ready 
+2026-06-07 09:43:06 [[32minfo[39m] Initializing MySQL Database Connection... 
+2026-06-07 09:43:06 [[32minfo[39m] HTTP server listening {"serviceName":"general-server","host":"::","port":31010}
+undefined
+C:\Users\admin\Desktop\my\super-pro\general-server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "tsx" not found
