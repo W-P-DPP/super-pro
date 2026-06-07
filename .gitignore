@@ -9,7 +9,7 @@ dist
 coverage
 logs
 
-.codex
+# .codex
 .claude
 
 

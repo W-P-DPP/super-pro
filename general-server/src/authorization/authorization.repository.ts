@@ -129,6 +129,10 @@ async function ensureDataSource() {
   return initDataBase();
 }
 
+function normalizeProjectCode(projectCode: string) {
+  return projectCode.trim().toLowerCase();
+}
+
 function toRoleSummary(entity: RoleEntity): AuthorizationRoleSummary {
   return {
     id: entity.id,
@@ -332,19 +336,18 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
   private async syncSeedProjects(manager?: EntityManager): Promise<void> {
     const projectRepository = await this.getProjectRepository(manager);
     const existingProjects = await projectRepository.find({
-      where: { deleteFlag: 0 },
       order: { id: 'ASC' },
     });
     const projectByCode = new Map(
-      existingProjects.map((project) => [project.projectCode.trim().toLowerCase(), project]),
+      existingProjects.map((project) => [normalizeProjectCode(project.projectCode), project]),
     );
 
     for (const seed of SEEDED_PROJECTS) {
-      const canonicalCode = seed.projectCode.trim().toLowerCase();
+      const canonicalCode = normalizeProjectCode(seed.projectCode);
       let canonicalProject = projectByCode.get(canonicalCode) ?? null;
 
       for (const aliasCode of seed.aliases ?? []) {
-        const normalizedAliasCode = aliasCode.trim().toLowerCase();
+        const normalizedAliasCode = normalizeProjectCode(aliasCode);
         const aliasProject = projectByCode.get(normalizedAliasCode);
 
         if (!aliasProject) {
@@ -359,12 +362,14 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
           continue;
         }
 
+        const previousAliasCode = aliasProject.projectCode;
         aliasProject.projectCode = seed.projectCode;
         aliasProject.projectName = seed.projectName;
+        aliasProject.deleteFlag = 0;
         aliasProject.remark = seed.remark ?? aliasProject.remark ?? '';
         aliasProject.updateBy = 'system';
         const savedProject = await projectRepository.save(aliasProject);
-        projectByCode.delete(normalizedAliasCode);
+        projectByCode.delete(normalizeProjectCode(previousAliasCode));
         projectByCode.set(canonicalCode, savedProject);
         canonicalProject = savedProject;
       }
@@ -372,13 +377,19 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
       if (canonicalProject) {
         const nextRemark = seed.remark ?? canonicalProject.remark ?? '';
         if (
+          canonicalProject.deleteFlag !== 0 ||
+          canonicalProject.projectCode !== seed.projectCode ||
           canonicalProject.projectName !== seed.projectName ||
           canonicalProject.remark !== nextRemark
         ) {
+          const previousCanonicalCode = canonicalProject.projectCode;
+          canonicalProject.deleteFlag = 0;
+          canonicalProject.projectCode = seed.projectCode;
           canonicalProject.projectName = seed.projectName;
           canonicalProject.remark = nextRemark;
           canonicalProject.updateBy = 'system';
           const savedProject = await projectRepository.save(canonicalProject);
+          projectByCode.delete(normalizeProjectCode(previousCanonicalCode));
           projectByCode.set(canonicalCode, savedProject);
         }
         continue;
