@@ -100,7 +100,10 @@ export class ProjectRepository implements ProjectRepositoryPort {
                   .select('COUNT(permission.id)', 'permissionCount')
                   .from(PermissionEntity, 'permission')
                   .where('permission.appCode = project.projectCode')
-                  .andWhere('permission.deleteFlag = :deleteFlag', { deleteFlag: 0 }),
+                  .andWhere('permission.deleteFlag = :deleteFlag', { deleteFlag: 0 })
+                  .andWhere('permission.status = :permissionStatus', {
+                    permissionStatus: 1,
+                  }),
               'permissionCount',
             )
             .orderBy('project.id', 'ASC')
