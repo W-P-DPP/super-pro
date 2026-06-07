@@ -1,13 +1,5 @@
 packages:
   - packages/*
-  - admin-front
-  - agent-front
   - front-public
-  - login
   - general-server
-  - file-server
-  - agent-server
-  - summary-front
-  - resume-template
-  - reimburse-front
-  - reimburse-server
+
