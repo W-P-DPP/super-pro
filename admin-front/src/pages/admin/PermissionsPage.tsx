@@ -24,8 +24,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -49,6 +47,7 @@ import { useAdminMenu } from '@/contexts/admin-menu-context'
 import {
   ADMIN_PAGE_FILL_CARD_CLASS,
   ADMIN_PAGE_FILL_LAYOUT_CLASS,
+  ADMIN_PAGE_TOOLBAR_CLASS,
   DEFAULT_PAGE_SIZE,
   ListPagination,
   type LoadState,
@@ -539,8 +538,8 @@ export function PermissionsPage() {
   return (
     <section className={ADMIN_PAGE_FILL_LAYOUT_CLASS}>
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
-        <Card className="h-full min-h-0 border border-border/70 bg-card/95 pt-2 pb-4 shadow-sm">
-          <CardContent className="flex h-full min-h-0 flex-col gap-3 pt-1">
+        <section className="h-full min-h-0 rounded-3xl border border-border/70 bg-background/85">
+          <div className="flex h-full min-h-0 flex-col gap-3 px-4 py-4 md:px-5 md:py-5">
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -551,12 +550,12 @@ export function PermissionsPage() {
               />
             </div>
             {renderProjectListContent()}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
         <div className="flex min-h-0 min-w-0 flex-col gap-4">
-          <Card className="shrink-0 border border-border/70 bg-card/95 pt-2 pb-4 shadow-sm">
-            <CardContent className="grid gap-4 pt-1">
+          <section className={ADMIN_PAGE_TOOLBAR_CLASS}>
+            <div className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(11rem,0.7fr)_minmax(11rem,0.7fr)_auto_auto_auto]">
                 <div className="relative">
                   <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -628,11 +627,11 @@ export function PermissionsPage() {
                   </Button>
                 ) : null}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
-          <Card className={cn(ADMIN_PAGE_FILL_CARD_CLASS, 'pt-2 pb-4')}>
-            <CardContent className="flex h-full min-h-0 flex-col gap-4 pt-1">
+          <section className={cn(ADMIN_PAGE_FILL_CARD_CLASS)}>
+            <div className="flex h-full min-h-0 flex-col gap-4 px-4 py-4 md:px-5 md:py-5">
               <div className="min-h-0 flex-1 overflow-auto">
                 <Table>
                   <TableHeader>
@@ -739,8 +738,8 @@ export function PermissionsPage() {
                   setCurrentPage(1)
                 }}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
       </div>
 

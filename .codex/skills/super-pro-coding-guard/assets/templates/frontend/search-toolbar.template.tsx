@@ -1,5 +1,5 @@
 import { PlusIcon, RotateCcwIcon, SearchIcon } from 'lucide-react'
-import { Button, Card, CardContent, Input } from '@/components/ui'
+import { Button, Input } from '@/components/ui'
 import { ModuleSelect, type SelectOption } from '@/pages/admin/module-page-shared'
 
 export type __Resource__Filters = {
@@ -41,8 +41,8 @@ export function __Resource__SearchToolbar({
   onCreate,
 }: __Resource__SearchToolbarProps) {
   return (
-    <Card className="shrink-0 border border-border/70 bg-card/95 shadow-sm">
-      <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.7fr)_minmax(11rem,0.8fr)_auto_auto_auto]">
+    <section className="shrink-0 rounded-xl border border-border/70 bg-background/80 p-4 shadow-sm">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.7fr)_minmax(11rem,0.8fr)_auto_auto_auto]">
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -71,7 +71,7 @@ export function __Resource__SearchToolbar({
             {createLabel}
           </Button>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

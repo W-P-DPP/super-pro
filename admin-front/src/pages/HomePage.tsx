@@ -17,8 +17,6 @@ import {
   AlertTitle,
   Badge,
   Button,
-  Card,
-  CardContent,
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -40,6 +38,9 @@ import {
 import { resolveStrictMenuNavigationUrl } from '@/lib/strict-menu-redirect'
 
 const compactSectionNames = new Set(['网址大全', 'git', '工具'])
+
+const HOME_SURFACE_CLASS = 'rounded-[2rem] border border-border/70 bg-background/88 px-4 py-4 md:px-5 md:py-5'
+const HOME_FEEDBACK_CLASS = 'rounded-[2rem] border border-border/70 bg-background/88 px-5 py-8'
 
 function openSearch(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
@@ -116,9 +117,9 @@ export function HomePage() {
   }
 
   return (
-    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 md:px-6 md:py-6">
-      <Card className="overflow-visible border-border/80 bg-card/95 shadow-sm">
-        <CardContent className="space-y-4 px-4 py-4 md:px-5">
+    <section className="flex min-w-0 w-full flex-col gap-6 px-4 py-5 md:px-6 md:py-6">
+      <section className={HOME_SURFACE_CLASS}>
+        <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             {searchEngines.map((engine) => (
               <Button
@@ -164,21 +165,19 @@ export function HomePage() {
             <CornerDownLeftIcon className="size-3.5" />
             回车可直接搜索
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <div className="space-y-4">
         {directory.status === 'loading' ? (
-          <Card className="border-border/80 bg-card/95 shadow-sm">
-            <CardContent className="flex min-h-40 items-center justify-center gap-3 px-5 py-8 text-sm text-muted-foreground">
+          <div className={`${HOME_FEEDBACK_CLASS} flex min-h-40 items-center justify-center gap-3 text-sm text-muted-foreground`}>
               <Spinner className="size-5" />
               <span>正在同步后端目录，请稍候。</span>
-            </CardContent>
-          </Card>
+          </div>
         ) : null}
 
         {directory.status === 'error' ? (
-          <Alert className="rounded-2xl border-border/80 bg-card/95 shadow-sm">
+          <Alert className="rounded-[2rem] border-border/80 bg-background/88 shadow-none">
             <CircleAlertIcon className="size-4" />
             <AlertTitle>目录加载失败</AlertTitle>
             <AlertDescription>{directory.errorMessage}</AlertDescription>
@@ -198,8 +197,7 @@ export function HomePage() {
         ) : null}
 
         {directory.status === 'success' && directory.menuTree.length === 0 ? (
-          <Card className="border-border/80 bg-card/95 shadow-sm">
-            <CardContent className="px-5 py-8">
+          <div className={HOME_FEEDBACK_CLASS}>
               <Empty className="border border-dashed border-border/80 bg-background/40">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -209,8 +207,7 @@ export function HomePage() {
                   <EmptyDescription>当前后端菜单尚未配置可展示入口。</EmptyDescription>
                 </EmptyHeader>
               </Empty>
-            </CardContent>
-          </Card>
+          </div>
         ) : null}
 
         {directory.status === 'success'
@@ -226,7 +223,7 @@ export function HomePage() {
                 <section
                   key={String(section.id)}
                   id={`section-${String(section.id)}`}
-                  className="scroll-mt-[var(--app-shell-section-scroll-offset)] rounded-2xl border border-border/80 bg-card/95 px-4 py-4 shadow-sm md:px-5"
+                  className="scroll-mt-[var(--app-shell-section-scroll-offset)] rounded-[2rem] border border-border/70 bg-background/88 px-4 py-4 md:px-5 md:py-5"
                 >
                   <div className="flex items-center justify-between gap-4 border-b border-border/70 pb-3">
                     <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -273,10 +270,10 @@ export function HomePage() {
                             key={String(item.id)}
                             type="button"
                             onClick={() => openTool(itemPath, item.name, item.strict)}
-                            className="group flex min-h-[9.25rem] flex-col rounded-xl border border-border/80 bg-background/65 p-4 text-left shadow-2xs transition-[border-color,box-shadow,background-color] duration-200 hover:border-primary/35 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                            className="group flex min-h-[9.25rem] flex-col rounded-[1.35rem] border border-border/80 bg-background/72 p-4 text-left shadow-2xs transition-[border-color,box-shadow,background-color] duration-200 hover:border-primary/35 hover:bg-background hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                           >
                             <div className="flex gap-3">
-                              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-card/80">
+                              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background/90">
                                 <img
                                   src={resolveSiteMenuIcon(item.icon)}
                                   alt=""

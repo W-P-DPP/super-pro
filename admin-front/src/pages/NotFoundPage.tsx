@@ -3,7 +3,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } fro
 
 export function NotFoundPage() {
   return (
-    <section className="mx-auto flex min-h-[calc(100svh-var(--app-shell-header-height)-2rem)] w-full max-w-[var(--app-shell-page-width)] items-center justify-center px-4 py-6 md:px-6">
+    <section className="flex min-h-[calc(100svh-var(--app-shell-header-height)-2rem)] min-w-0 w-full items-center justify-center px-4 py-6 md:px-6">
       <Card className="w-full max-w-xl border border-border/70 bg-card/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <CardDescription>404</CardDescription>

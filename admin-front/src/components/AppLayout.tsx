@@ -21,8 +21,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
   Button,
-  Card,
-  CardContent,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -60,6 +58,8 @@ import { clearReusableAuthSession, getReusableAuthToken } from '@/lib/auth-sessi
 import { getStrictMenuLoginUrl } from '@/lib/strict-menu-redirect'
 
 const APP_SHELL_HEADER_CLASS = 'h-[var(--app-shell-header-height)] shrink-0'
+const APP_SHELL_SIDEBAR_NOTICE_CLASS =
+  'rounded-2xl border border-sidebar-border/80 bg-sidebar-accent/30 px-3 py-3 text-sm text-sidebar-foreground/75'
 
 type CurrentUserTokenPayload = {
   userId: number | null
@@ -286,21 +286,19 @@ export function AppLayout() {
               <div className="grid gap-4">
                 {(adminMenuStatus === 'loading' || permissionStatus === 'loading') &&
                 visibleNavGroups.length === 0 ? (
-                  <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
-                    <CardContent className="px-3">
-                      <div className="flex items-center gap-2 text-sm text-sidebar-foreground/75">
+                  <div className={APP_SHELL_SIDEBAR_NOTICE_CLASS}>
+                    <div className="flex items-center gap-2">
                         <Spinner className="size-4" />
                         <span>正在加载后台菜单与权限...</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 ) : null}
 
                 {(adminMenuStatus === 'error' || permissionStatus === 'error') &&
                 visibleNavGroups.length === 0 ? (
-                  <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
-                    <CardContent className="grid gap-3 px-3">
-                      <p className="text-sm text-sidebar-foreground/75">
+                  <div className={APP_SHELL_SIDEBAR_NOTICE_CLASS}>
+                    <div className="grid gap-3">
+                      <p>
                         {adminMenuErrorMessage || permissionErrorMessage || '后台菜单或权限加载失败，请稍后重试。'}
                       </p>
                       <div className="flex gap-2">
@@ -311,8 +309,8 @@ export function AppLayout() {
                           重试权限
                         </Button>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 ) : null}
 
                 {filteredGroups.map((group) => (
@@ -366,13 +364,11 @@ export function AppLayout() {
                 {filteredGroups.length === 0 &&
                 adminMenuStatus === 'success' &&
                 permissionStatus === 'success' ? (
-                  <Card className="border border-sidebar-border/80 bg-sidebar-accent/35 py-3 shadow-none">
-                    <CardContent className="px-3">
-                      <p className="text-sm text-sidebar-foreground/75">
+                  <div className={APP_SHELL_SIDEBAR_NOTICE_CLASS}>
+                    <p>
                         {hasSearchKeyword ? '没有匹配的菜单项。' : '当前没有可展示的后台菜单。'}
-                      </p>
-                    </CardContent>
-                  </Card>
+                    </p>
+                  </div>
                 ) : null}
               </div>
             </SidebarGroupContent>

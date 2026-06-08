@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react'
 import {
   Button,
-  Card,
-  CardContent,
   Spinner,
   Table,
   TableBody,
@@ -50,8 +48,8 @@ export function __Resource__TableSection<T>({
   pagination,
 }: __Resource__TableSectionProps<T>) {
   return (
-    <Card className={ADMIN_PAGE_FILL_CARD_CLASS}>
-      <CardContent className="flex h-full min-h-0 flex-col gap-4">
+    <section className={`${ADMIN_PAGE_FILL_CARD_CLASS} rounded-xl border border-border/70 bg-background/80 p-4 shadow-sm`}>
+      <div className="flex h-full min-h-0 flex-col gap-4">
         <div className="min-h-0 flex-1 overflow-auto">
           <Table>
             <TableHeader>
@@ -106,7 +104,7 @@ export function __Resource__TableSection<T>({
             onPageSizeChange={pagination.onPageSizeChange}
           />
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

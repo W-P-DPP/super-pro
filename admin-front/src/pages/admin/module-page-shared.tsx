@@ -36,10 +36,15 @@ import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
 export const DEFAULT_PAGE_SIZE = 10
 export const PAGE_SIZE_OPTIONS = [10, 20, 50]
 export const ADMIN_PAGE_SCROLL_LAYOUT_CLASS =
-  'mx-auto flex min-h-full w-full max-w-[var(--app-shell-page-width)] flex-col gap-4 px-4 py-4 md:px-6 md:py-6'
+  'flex min-h-full min-w-0 w-full flex-col gap-4 px-4 py-4 md:px-6 md:py-6'
 export const ADMIN_PAGE_FILL_LAYOUT_CLASS =
-  'mx-auto flex h-full min-h-0 w-full max-w-[var(--app-shell-page-width)] flex-col gap-4 overflow-hidden px-4 py-4 md:px-6 md:py-6'
-export const ADMIN_PAGE_FILL_CARD_CLASS = 'min-h-0 flex-1 border border-border/70 bg-card/95 shadow-sm'
+  'flex h-full min-h-0 min-w-0 w-full flex-col gap-4 overflow-hidden px-4 py-4 md:px-6 md:py-6'
+export const ADMIN_PAGE_TOOLBAR_CLASS =
+  'shrink-0 rounded-3xl border border-border/70 bg-background/85 px-4 py-4 md:px-5 md:py-5'
+export const ADMIN_PAGE_FILL_CARD_CLASS =
+  'min-h-0 flex-1 overflow-hidden rounded-3xl border border-border/70 bg-background/85'
+export const ADMIN_PAGE_STATUS_SECTION_CLASS =
+  'w-full rounded-3xl border border-border/70 bg-background/85 px-5 py-8'
 export const USER_ROLE_OPTIONS = [
   'admin',
   'employee',
@@ -113,15 +118,15 @@ export function parseIntegerInput(value: string) {
 
 export function MetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <Card className="border border-border/70 bg-card/90 shadow-sm">
-      <CardHeader className="gap-2">
+    <section className="rounded-3xl border border-border/70 bg-background/85 px-5 py-4">
+      <div className="space-y-2">
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-2xl font-semibold tracking-tight">{value}</CardTitle>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="pt-3">
         <p className="text-sm text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }
 
@@ -266,7 +271,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
   return (
     <section className={ADMIN_PAGE_SCROLL_LAYOUT_CLASS}>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.8fr)]">
-        <Card className="border border-border/70 bg-card/95 shadow-sm">
+        <Card className="rounded-3xl border border-border/70 bg-background/85 shadow-none">
           <CardHeader className="gap-3 border-b border-border/70">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary" className="rounded-full">
@@ -298,7 +303,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
           </CardContent>
         </Card>
 
-        <Card className="border border-border/70 bg-card/95 shadow-sm">
+        <Card className="rounded-3xl border border-border/70 bg-background/85 shadow-none">
           <CardHeader className="border-b border-border/70">
             <CardTitle className="text-base">本页可承接的能力</CardTitle>
             <CardDescription>先把页面层次和信息密度搭好，再逐步接真实接口。</CardDescription>
@@ -326,7 +331,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <Card className="border border-border/70 bg-card/95 shadow-sm">
+        <Card className="rounded-3xl border border-border/70 bg-background/85 shadow-none">
           <CardHeader className="border-b border-border/70">
             <CardTitle className="text-base">{module.table.title}</CardTitle>
             <CardDescription>{module.table.description}</CardDescription>
@@ -353,7 +358,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
           </CardContent>
         </Card>
 
-        <Card className="border border-border/70 bg-card/95 shadow-sm">
+        <Card className="rounded-3xl border border-border/70 bg-background/85 shadow-none">
           <CardHeader className="border-b border-border/70">
             <CardTitle className="text-base">页面结构建议</CardTitle>
             <CardDescription>作为后台项目首版，这些区域通常都值得预留。</CardDescription>
@@ -375,7 +380,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
       </div>
 
       {module.slug === 'dashboard' ? (
-        <Card className="border border-border/70 bg-card/95 shadow-sm">
+        <Card className="rounded-3xl border border-border/70 bg-background/85 shadow-none">
           <CardHeader className="border-b border-border/70">
             <CardTitle className="text-base">快捷入口</CardTitle>
             <CardDescription>用于模拟后台首页的常用模块导航。</CardDescription>
@@ -406,7 +411,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border border-dashed border-border/70 bg-card/80 shadow-sm">
+        <Card className="rounded-3xl border border-dashed border-border/70 bg-background/80 shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <LayoutGridIcon className="size-4" />

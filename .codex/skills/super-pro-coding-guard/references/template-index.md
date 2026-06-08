@@ -8,6 +8,7 @@
 2. 优先复制最接近的模板，不要把多个不相干模板硬拼在一起。
 3. 复制后必须替换所有 `__Resource__`、`__resource__`、`__PERMISSION__`、`__ROUTE__` 等占位符。
 4. 模板只是起步骨架，落地时仍要遵守本 skill 的前后端动作流、shared 边界和权限规则。
+5. 页面做完后，额外读取 `references/page-detail-checklist.md` 做细节验收，不要只停在“能用”。
 
 ## 前端模板
 
@@ -16,10 +17,10 @@
   - 对齐当前仓库 `unwrapResponse + request + requiresAuth` 写法
 - `assets/templates/frontend/search-toolbar.template.tsx`
   - 适用于管理页搜索区、筛选区、重置和新增按钮区
-  - 对齐 `Card + CardContent + Input + ModuleSelect + Button` 结构
+  - 对齐轻量区块容器 + `Input + ModuleSelect + Button` 结构
 - `assets/templates/frontend/table-section.template.tsx`
   - 适用于列表页表格主体、加载态、错误态、空态和分页区
-  - 对齐 `Table + Spinner + ListPagination` 结构
+  - 对齐轻量表格区容器 + `Table + Spinner + ListPagination` 结构
 - `assets/templates/frontend/permission-usage.template.tsx`
   - 适用于页面准入、按钮显隐、受保护请求错误处理
   - 明确 `401` 与 `403` 的不同处理
