@@ -1,4 +1,0 @@
-interface:
-  display_name: "全栈开发自动提交工作流"
-  short_description: "串联前端、后端、验证与自动 Git 提交的仓库工作流。"
-  default_prompt: "使用 $fullstack-dev-auto-commit 完成一个从前端到后端并自动提交 Git 的全栈开发任务。"

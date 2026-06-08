@@ -1,4 +1,0 @@
-interface:
-  display_name: "Git 提交规范"
-  short_description: "为这个 monorepo 生成和检查规范化提交信息。"
-  default_prompt: "使用 $git-commit-convention 为当前变更生成一条符合 Conventional Commits 的提交信息。"
