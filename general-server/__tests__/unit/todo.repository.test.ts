@@ -21,7 +21,7 @@ describe('TodoRepository', () => {
     jest.clearAllMocks()
   })
 
-  it('adds assignee fuzzy search conditions and maps assignee summaries', async () => {
+  it('adds project filter conditions and maps project summaries', async () => {
     const detailQueryBuilder = {
       select: createChainableMock(),
       leftJoin: createChainableMock(),
@@ -41,10 +41,9 @@ describe('TodoRepository', () => {
     detailQueryBuilder.getRawAndEntities.mockResolvedValue({
       raw: [
         {
-          assignee_id: 2,
-          assignee_username: 'lisi',
-          assignee_nickname: '李四',
-          assignee_status: 1,
+          project_id: 22,
+          project_projectName: 'Client Portal',
+          project_projectCode: 'client-portal',
         },
       ],
       entities: [
@@ -53,7 +52,7 @@ describe('TodoRepository', () => {
           title: '联调待办接口',
           status: 'in_progress',
           priority: 'medium',
-          assigneeUserId: 2,
+          projectId: 22,
         },
       ],
     })
@@ -69,22 +68,20 @@ describe('TodoRepository', () => {
 
     const todoRepository = new TodoRepository()
     const result = await todoRepository.getTodoList({
-      assigneeKeyword: '李四',
+      projectId: 22,
       page: 1,
       pageSize: 10,
     })
 
-    expect(detailQueryBuilder.andWhere).toHaveBeenCalledWith(
-      '(assignee.username LIKE :assigneeKeyword OR assignee.nickname LIKE :assigneeKeyword)',
-      { assigneeKeyword: '%李四%' },
-    )
+    expect(detailQueryBuilder.andWhere).toHaveBeenCalledWith('todo.projectId = :projectId', {
+      projectId: 22,
+    })
     expect(result.items).toEqual([
       expect.objectContaining({
-        assignee: {
-          id: 2,
-          username: 'lisi',
-          nickname: '李四',
-          status: 1,
+        project: {
+          id: 22,
+          projectName: 'Client Portal',
+          projectCode: 'client-portal',
         },
       }),
     ])

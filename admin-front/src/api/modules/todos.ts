@@ -32,7 +32,7 @@ export type TodoListQueryInput = {
   keyword?: string
   status?: TodoStatus | ''
   priority?: TodoPriority | ''
-  assigneeKeyword?: string
+  projectId?: number
   page?: number
   pageSize?: number
 }
@@ -71,15 +71,14 @@ export function normalizeTodoListQuery(query: TodoListQueryInput): TodoListQuery
     normalizedQuery.priority = priority
   }
 
-  const assigneeKeyword = query.assigneeKeyword?.trim()
-  if (assigneeKeyword) {
-    normalizedQuery.assigneeKeyword = assigneeKeyword
+  if (typeof query.projectId === 'number' && Number.isInteger(query.projectId) && query.projectId > 0) {
+    normalizedQuery.projectId = query.projectId
   }
 
   return normalizedQuery
 }
 
-export function getTodos(query: TodoListQueryDto) {
+export function getTodos(query: TodoListQueryInput) {
   const normalizedQuery = normalizeTodoListQuery(query)
 
   return unwrapResponse(

@@ -1,14 +1,13 @@
-import { BaseEntity, BaseSchemaColumns } from '@super-pro/shared-server';
-import { EntitySchema } from 'typeorm';
+import { BaseEntity, BaseSchemaColumns } from '@super-pro/shared-server'
+import { EntitySchema } from 'typeorm'
 
 export class TodoEntity extends BaseEntity {
-  id!: number;
-  title!: string;
-  description!: string;
-  status!: string;
-  priority!: string;
-  assigneeUserId!: number;
-  dueAt?: Date | string | null;
+  id!: number
+  title!: string
+  description!: string
+  status!: string
+  priority!: string
+  projectId!: number
 }
 
 export const TodoEntitySchema = new EntitySchema<TodoEntity>({
@@ -55,18 +54,11 @@ export const TodoEntitySchema = new EntitySchema<TodoEntity>({
       default: 'medium',
       comment: '待办优先级',
     },
-    assigneeUserId: {
-      name: 'assignee_user_id',
+    projectId: {
+      name: 'project_id',
       type: Number,
       nullable: false,
-      comment: '负责人用户 ID',
-    },
-    dueAt: {
-      name: 'due_at',
-      type: 'datetime',
-      nullable: true,
-      default: null,
-      comment: '截止时间',
+      comment: '归属项目 ID',
     },
     ...BaseSchemaColumns,
   },
@@ -76,8 +68,8 @@ export const TodoEntitySchema = new EntitySchema<TodoEntity>({
       columns: ['status', 'priority'],
     },
     {
-      name: 'idx_sys_todo_assignee_user_id',
-      columns: ['assigneeUserId'],
+      name: 'idx_sys_todo_project_id',
+      columns: ['projectId'],
     },
   ],
-});
+})

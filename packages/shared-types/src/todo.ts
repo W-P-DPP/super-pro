@@ -4,69 +4,64 @@ export const TODO_STATUSES = [
   'in_progress',
   'completed',
   'canceled',
-] as const;
+] as const
 
-export type TodoStatus = (typeof TODO_STATUSES)[number];
+export type TodoStatus = (typeof TODO_STATUSES)[number]
 
-export const TODO_PRIORITIES = ['low', 'medium', 'high'] as const;
+export const TODO_PRIORITIES = ['low', 'medium', 'high'] as const
 
-export type TodoPriority = (typeof TODO_PRIORITIES)[number];
+export type TodoPriority = (typeof TODO_PRIORITIES)[number]
 
-export interface UserSummaryDto {
-  id: number;
-  username: string;
-  nickname: string;
-  status: number;
+export interface TodoProjectSummaryDto {
+  id: number
+  projectName: string
+  projectCode: string
 }
 
 export interface TodoResponseDto {
-  id: number;
-  title: string;
-  description?: string;
-  status: TodoStatus;
-  priority: TodoPriority;
-  assigneeUserId: number;
-  assignee: UserSummaryDto | null;
-  dueAt?: string;
-  createBy?: string;
-  createTime?: string;
-  updateBy?: string;
-  updateTime?: string;
-  remark?: string;
+  id: number
+  title: string
+  description?: string
+  status: TodoStatus
+  priority: TodoPriority
+  projectId: number
+  project: TodoProjectSummaryDto | null
+  createBy?: string
+  createTime?: string
+  updateBy?: string
+  updateTime?: string
+  remark?: string
 }
 
 export interface TodoListQueryDto {
-  keyword?: string;
-  status?: TodoStatus;
-  priority?: TodoPriority;
-  assigneeKeyword?: string;
-  page?: number;
-  pageSize?: number;
+  keyword?: string
+  status?: TodoStatus
+  priority?: TodoPriority
+  projectId?: number
+  page?: number
+  pageSize?: number
 }
 
 export interface TodoListDto {
-  items: TodoResponseDto[];
-  total: number;
-  page: number;
-  pageSize: number;
+  items: TodoResponseDto[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export interface CreateTodoRequestDto {
-  title: string;
-  description?: string;
-  status?: TodoStatus;
-  priority?: TodoPriority;
-  assigneeUserId: number;
-  dueAt?: string | null;
-  remark?: string;
+  title: string
+  description?: string
+  priority?: TodoPriority
+  projectId: number
+  remark?: string
 }
 
 export interface UpdateTodoRequestDto {
-  title?: string;
-  description?: string;
-  status?: TodoStatus;
-  priority?: TodoPriority;
-  assigneeUserId?: number;
-  dueAt?: string | null;
-  remark?: string;
+  title?: string
+  description?: string
+  status?: TodoStatus
+  priority?: TodoPriority
+  projectId?: number
+  remark?: string
 }
