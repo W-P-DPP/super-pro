@@ -1,8 +1,11 @@
 import { HttpStatus } from '@super-pro/shared-constants'
 import {
+  SUGGESTION_SOURCE_APPS,
   TODO_PRIORITIES,
   TODO_STATUSES,
   type CreateTodoRequestDto,
+  type SubmitSuggestionRequestDto,
+  type SuggestionSourceApp,
   type TodoListDto,
   type TodoListQueryDto,
   type TodoPriority,
@@ -24,8 +27,14 @@ const MAX_TODO_LIST_PAGE_SIZE = 100
 const MAX_TODO_TITLE_LENGTH = 128
 const MAX_TODO_DESCRIPTION_LENGTH = 1000
 const MAX_TODO_REMARK_LENGTH = 255
+const MAX_SUGGESTION_PAGE_URL_LENGTH = 512
 const DEFAULT_TODO_PRIORITY: TodoPriority = 'medium'
 const DEFAULT_TODO_STATUS: TodoStatus = 'pending_review'
+const SUGGESTION_PROJECT_CODE_BY_SOURCE_APP: Record<SuggestionSourceApp, string> = {
+  'admin-front': 'BMS',
+  'front-public': 'zwpsite',
+  login: 'login',
+}
 
 export class TodoBusinessError extends Error {
   constructor(
@@ -137,6 +146,23 @@ function normalizeOptionalString(
   }
 
   return normalizedValue
+}
+
+function ensureSuggestionSourceApp(value: unknown, field: string): SuggestionSourceApp {
+  if (typeof value !== 'string' || !SUGGESTION_SOURCE_APPS.includes(value as SuggestionSourceApp)) {
+    throw new TodoBusinessError(
+      '建议来源应用不合法',
+      {
+        nodePath: 'todo',
+        field,
+        reason: `来源应用必须是 ${SUGGESTION_SOURCE_APPS.join(' / ')} 之一`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    )
+  }
+
+  return value as SuggestionSourceApp
 }
 
 function ensureTodoStatus(value: unknown, field: string): TodoStatus {
@@ -292,25 +318,81 @@ function toListItemResponseDto(record: TodoListItemRepositoryRecord): TodoRespon
 }
 
 function validateCreateInput(input: Record<string, unknown>): CreateTodoRequestDto {
-  return {
+  const payload: CreateTodoRequestDto = {
     title: ensureRequiredString(input.title, 'title', '待办标题', MAX_TODO_TITLE_LENGTH),
-    ...(Object.prototype.hasOwnProperty.call(input, 'description')
-      ? {
-          description: normalizeOptionalString(
-            input.description,
-            'description',
-            '待办描述',
-            MAX_TODO_DESCRIPTION_LENGTH,
-          ),
-        }
-      : {}),
     priority: ensureTodoPriority(input.priority, 'priority'),
     projectId: ensurePositiveInteger(Number(input.projectId), 'projectId', '项目标识'),
-    ...(Object.prototype.hasOwnProperty.call(input, 'remark')
-      ? {
-          remark: normalizeOptionalString(input.remark, 'remark', '待办备注', MAX_TODO_REMARK_LENGTH),
-        }
-      : {}),
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'description')) {
+    const description = normalizeOptionalString(
+      input.description,
+      'description',
+      '待办描述',
+      MAX_TODO_DESCRIPTION_LENGTH,
+    )
+    if (description !== undefined) {
+      payload.description = description
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'remark')) {
+    const remark = normalizeOptionalString(input.remark, 'remark', '待办备注', MAX_TODO_REMARK_LENGTH)
+    if (remark !== undefined) {
+      payload.remark = remark
+    }
+  }
+
+  return payload
+}
+
+function buildSuggestionSourceDescriptionBlock(sourceApp: SuggestionSourceApp, pageUrl?: string) {
+  return `来源应用：${sourceApp}\n来源页面：${pageUrl || '未提供'}`
+}
+
+function composeSuggestionDescription(
+  description: string | undefined,
+  sourceApp: SuggestionSourceApp,
+  pageUrl?: string,
+) {
+  const sourceDescriptionBlock = buildSuggestionSourceDescriptionBlock(sourceApp, pageUrl)
+  const normalizedDescription = description?.trim()
+
+  return normalizedDescription
+    ? `${normalizedDescription}\n\n${sourceDescriptionBlock}`
+    : sourceDescriptionBlock
+}
+
+function validateSuggestionInput(input: Record<string, unknown>): SubmitSuggestionRequestDto {
+  const sourceApp = ensureSuggestionSourceApp(input.sourceApp, 'sourceApp')
+  const title = ensureRequiredString(input.title, 'title', '建议标题', MAX_TODO_TITLE_LENGTH)
+  const description = normalizeOptionalString(
+    input.description,
+    'description',
+    '建议描述',
+    MAX_TODO_DESCRIPTION_LENGTH,
+  )
+  const pageUrl = normalizeOptionalString(input.pageUrl, 'pageUrl', '来源页面', MAX_SUGGESTION_PAGE_URL_LENGTH)
+  const composedDescription = composeSuggestionDescription(description, sourceApp, pageUrl)
+
+  if (composedDescription.length > MAX_TODO_DESCRIPTION_LENGTH) {
+    throw new TodoBusinessError(
+      `建议描述长度不能超过 ${MAX_TODO_DESCRIPTION_LENGTH} 个字符`,
+      {
+        nodePath: 'todo',
+        field: 'description',
+        reason: '建议描述与来源信息组合后超出限制',
+        value: composedDescription.length,
+      },
+      HttpStatus.BAD_REQUEST,
+    )
+  }
+
+  return {
+    sourceApp,
+    title,
+    ...(description !== undefined ? { description } : {}),
+    ...(pageUrl !== undefined ? { pageUrl } : {}),
   }
 }
 
@@ -322,12 +404,15 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateTodoRequestD
   }
 
   if (Object.prototype.hasOwnProperty.call(input, 'description')) {
-    payload.description = normalizeOptionalString(
+    const description = normalizeOptionalString(
       input.description,
       'description',
       '待办描述',
       MAX_TODO_DESCRIPTION_LENGTH,
     )
+    if (description !== undefined) {
+      payload.description = description
+    }
   }
 
   if (Object.prototype.hasOwnProperty.call(input, 'status')) {
@@ -343,7 +428,10 @@ function validateUpdateInput(input: Record<string, unknown>): UpdateTodoRequestD
   }
 
   if (Object.prototype.hasOwnProperty.call(input, 'remark')) {
-    payload.remark = normalizeOptionalString(input.remark, 'remark', '待办备注', MAX_TODO_REMARK_LENGTH)
+    const remark = normalizeOptionalString(input.remark, 'remark', '待办备注', MAX_TODO_REMARK_LENGTH)
+    if (remark !== undefined) {
+      payload.remark = remark
+    }
   }
 
   return payload
@@ -432,11 +520,11 @@ export class TodoService {
 
     const created = await this.repository.createTodo({
       title: payload.title,
-      description: payload.description,
+      ...(payload.description !== undefined ? { description: payload.description } : {}),
       status: DEFAULT_TODO_STATUS,
       priority: payload.priority ?? DEFAULT_TODO_PRIORITY,
       projectId: payload.projectId,
-      remark: payload.remark,
+      ...(payload.remark !== undefined ? { remark: payload.remark } : {}),
     })
 
     if (!created) {
@@ -446,6 +534,52 @@ export class TodoService {
           nodePath: 'todo',
           field: 'create',
           reason: '待办创建失败',
+        },
+        HttpStatus.ERROR,
+      )
+    }
+
+    return toResponseDto({
+      entity: created,
+      project,
+    })
+  }
+
+  async submitSuggestion(
+    input: SubmitSuggestionRequestDto | Record<string, unknown>,
+  ): Promise<TodoResponseDto> {
+    const payload = validateSuggestionInput(input as Record<string, unknown>)
+    const mappedProjectCode = SUGGESTION_PROJECT_CODE_BY_SOURCE_APP[payload.sourceApp]
+    const project = await this.repository.getProjectByCode(mappedProjectCode)
+
+    if (!project) {
+      throw new TodoBusinessError(
+        '建议归属项目不存在',
+        {
+          nodePath: 'todo',
+          field: 'sourceApp',
+          reason: `来源应用 ${payload.sourceApp} 映射的项目编码 ${mappedProjectCode} 不存在`,
+          value: payload.sourceApp,
+        },
+        HttpStatus.BAD_REQUEST,
+      )
+    }
+
+    const created = await this.repository.createTodo({
+      title: payload.title,
+      description: composeSuggestionDescription(payload.description, payload.sourceApp, payload.pageUrl),
+      status: DEFAULT_TODO_STATUS,
+      priority: DEFAULT_TODO_PRIORITY,
+      projectId: project.id,
+    })
+
+    if (!created) {
+      throw new TodoBusinessError(
+        '提交建议失败',
+        {
+          nodePath: 'todo',
+          field: 'submitSuggestion',
+          reason: '建议待办创建失败',
         },
         HttpStatus.ERROR,
       )

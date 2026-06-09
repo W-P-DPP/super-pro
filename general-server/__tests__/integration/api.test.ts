@@ -1328,4 +1328,67 @@ describe('JWT route mounting', () => {
       }),
     });
   });
+
+  it('keeps todo suggestion submission anonymous while private todo list stays protected', async () => {
+    await clearProjectTable();
+    await insertProjectRows([
+      {
+        id: 11,
+        project_name: '后台管理系统',
+        project_code: 'BMS',
+        create_by: 'system',
+        create_time: '2026-04-09 10:00:00',
+        update_by: 'system',
+        update_time: '2026-04-09 10:00:00',
+        remark: '后台建议归属项目',
+      },
+      {
+        id: 12,
+        project_name: '公开站点',
+        project_code: 'zwpsite',
+        create_by: 'system',
+        create_time: '2026-04-09 10:00:00',
+        update_by: 'system',
+        update_time: '2026-04-09 10:00:00',
+        remark: '公开站建议归属项目',
+      },
+      {
+        id: 13,
+        project_name: '登录系统',
+        project_code: 'login',
+        create_by: 'system',
+        create_time: '2026-04-09 10:00:00',
+        update_by: 'system',
+        update_time: '2026-04-09 10:00:00',
+        remark: '登录建议归属项目',
+      },
+    ]);
+
+    const suggestionRes = await request(app).post('/api/todo/submitSuggestion').send({
+      sourceApp: 'admin-front',
+      title: '建议增加反馈入口',
+      description: '方便业务同学直接提需求',
+      pageUrl: 'http://localhost:5173/#/dashboard',
+    });
+    const privateTodoRes = await request(app).get('/api/todo/getTodo');
+
+    expect(suggestionRes.status).toBe(200);
+    expect(suggestionRes.body).toMatchObject({
+      code: 200,
+      msg: '提交建议成功',
+      data: expect.objectContaining({
+        title: '建议增加反馈入口',
+        status: 'pending_review',
+        priority: 'medium',
+        project: expect.objectContaining({
+          projectCode: 'BMS',
+        }),
+      }),
+    });
+    expect(privateTodoRes.status).toBe(401);
+    expect(privateTodoRes.body).toMatchObject({
+      code: 401,
+      msg: '缺少授权信息或授权格式错误',
+    });
+  });
 });

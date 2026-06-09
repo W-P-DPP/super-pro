@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@fontsource-variable/geist";
+@source "../../packages/shared-ui/src";
 
 @custom-variant dark (&:is(.dark *));
 

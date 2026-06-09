@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals'
+import type { SubmitSuggestionRequestDto } from '@super-pro/shared-types'
 import type {
   CreateTodoEntityInput,
   TodoListItemRepositoryRecord,
@@ -100,6 +101,10 @@ function createRepositoryMock(
     },
     async getProjectById(id: number) {
       const current = projects.find((project) => project.id === id)
+      return current ? cloneProject(current) : null
+    },
+    async getProjectByCode(projectCode: string) {
+      const current = projects.find((project) => project.projectCode === projectCode)
       return current ? cloneProject(current) : null
     },
   }
@@ -252,6 +257,88 @@ describe('TodoService', () => {
       total: 1,
       page: 1,
       pageSize: 5,
+    })
+  })
+
+  it('submits anonymous suggestion into mapped project with default status and priority', async () => {
+    const service = createService(todoRecords, [
+      ...activeProjects,
+      {
+        id: 33,
+        projectName: '公开站点',
+        projectCode: 'zwpsite',
+      },
+    ])
+
+    const result = await service.submitSuggestion({
+      sourceApp: 'front-public',
+      title: '建议补一个快速搜索入口',
+      description: '现在层级深的时候不太好找',
+      pageUrl: 'https://www.zwpsite.icu/zwpsite/#/tools',
+    } satisfies SubmitSuggestionRequestDto)
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 99,
+        title: '建议补一个快速搜索入口',
+        status: 'pending_review',
+        priority: 'medium',
+        projectId: 33,
+        project: expect.objectContaining({
+          id: 33,
+          projectCode: 'zwpsite',
+        }),
+        description: expect.stringContaining('来源应用：front-public'),
+      }),
+    )
+    expect(result.description).toContain('来源页面：https://www.zwpsite.icu/zwpsite/#/tools')
+  })
+
+  it('rejects unknown suggestion source app', async () => {
+    const service = createService(todoRecords, activeProjects)
+
+    await expect(
+      service.submitSuggestion({
+        sourceApp: 'unknown-app',
+        title: '非法来源',
+      } as SubmitSuggestionRequestDto),
+    ).rejects.toMatchObject<Partial<TodoBusinessError>>({
+      statusCode: 400,
+      context: expect.objectContaining({
+        field: 'sourceApp',
+      }),
+    })
+  })
+
+  it('rejects empty suggestion title', async () => {
+    const service = createService(todoRecords, activeProjects)
+
+    await expect(
+      service.submitSuggestion({
+        sourceApp: 'admin-front',
+        title: '   ',
+      }),
+    ).rejects.toMatchObject<Partial<TodoBusinessError>>({
+      statusCode: 400,
+      context: expect.objectContaining({
+        field: 'title',
+      }),
+    })
+  })
+
+  it('rejects suggestion when mapped project code does not exist', async () => {
+    const service = createService(todoRecords, activeProjects)
+
+    await expect(
+      service.submitSuggestion({
+        sourceApp: 'login',
+        title: '登录页建议',
+      }),
+    ).rejects.toMatchObject<Partial<TodoBusinessError>>({
+      statusCode: 400,
+      context: expect.objectContaining({
+        field: 'sourceApp',
+      }),
     })
   })
 })

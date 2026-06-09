@@ -1,4 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { SuggestionCollector } from '@super-pro/shared-ui'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useTheme } from 'next-themes'
 import {
@@ -52,6 +53,7 @@ import {
   toast,
 } from '@/components/ui'
 import { getUserDetail, type UpdateUserRequestDto, updateUser, type UserResponseDto } from '@/api/modules/users'
+import { submitSuggestion } from '@/api/modules/todo-suggestion'
 import { useAdminMenu } from '@/contexts/admin-menu-context'
 import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
 import { clearReusableAuthSession, getReusableAuthToken } from '@/lib/auth-session'
@@ -553,6 +555,8 @@ export function AppLayout() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SuggestionCollector sourceApp="admin-front" onSubmit={submitSuggestion} />
     </SidebarProvider>
   )
 }

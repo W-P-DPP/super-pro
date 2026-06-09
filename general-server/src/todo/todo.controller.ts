@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { HttpStatus } from '@super-pro/shared-constants';
-import type { CreateTodoRequestDto, UpdateTodoRequestDto } from '@super-pro/shared-types';
+import type { CreateTodoRequestDto, SubmitSuggestionRequestDto, UpdateTodoRequestDto } from '@super-pro/shared-types';
 import { TodoBusinessError, todoService } from './todo.service.ts';
 
 const getTodo = async (req: Request, res: Response) => {
@@ -42,6 +42,19 @@ const createTodo = async (req: Request, res: Response) => {
   }
 };
 
+const submitSuggestion = async (req: Request, res: Response) => {
+  try {
+    const created = await todoService.submitSuggestion(req.body as SubmitSuggestionRequestDto);
+    res.sendSuccess(created, '提交建议成功');
+  } catch (error) {
+    if (error instanceof TodoBusinessError) {
+      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
+    }
+
+    return res.status(HttpStatus.ERROR).sendFail('提交建议失败', HttpStatus.ERROR);
+  }
+};
+
 const updateTodo = async (req: Request, res: Response) => {
   try {
     const updated = await todoService.updateTodo(
@@ -76,5 +89,6 @@ export {
   deleteTodo,
   getTodo,
   getTodoDetail,
+  submitSuggestion,
   updateTodo,
 };

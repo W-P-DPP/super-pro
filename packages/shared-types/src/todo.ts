@@ -12,6 +12,10 @@ export const TODO_PRIORITIES = ['low', 'medium', 'high'] as const
 
 export type TodoPriority = (typeof TODO_PRIORITIES)[number]
 
+export const SUGGESTION_SOURCE_APPS = ['admin-front', 'front-public', 'login'] as const
+
+export type SuggestionSourceApp = (typeof SUGGESTION_SOURCE_APPS)[number]
+
 export interface TodoProjectSummaryDto {
   id: number
   projectName: string
@@ -64,4 +68,11 @@ export interface UpdateTodoRequestDto {
   priority?: TodoPriority
   projectId?: number
   remark?: string
+}
+
+export interface SubmitSuggestionRequestDto {
+  sourceApp: SuggestionSourceApp
+  title: string
+  description?: string
+  pageUrl?: string
 }

@@ -1,10 +1,12 @@
 export type {
   CreateTodoRequestDto,
+  SubmitSuggestionRequestDto,
   TodoListDto,
   TodoListQueryDto,
   TodoPriority,
   TodoProjectSummaryDto,
   TodoResponseDto,
+  SuggestionSourceApp,
   TodoStatus,
   UpdateTodoRequestDto,
 } from '@super-pro/shared-types'

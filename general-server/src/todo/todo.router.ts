@@ -9,10 +9,14 @@ import {
   deleteTodo,
   getTodo,
   getTodoDetail,
+  submitSuggestion,
   updateTodo,
 } from './todo.controller.ts';
 
 const todoRouter: Router = express.Router();
+const todoPublicRouter: Router = express.Router();
+
+todoPublicRouter.post('/submitSuggestion', submitSuggestion);
 
 todoRouter.use(loadAuthenticatedPrincipal);
 
@@ -57,4 +61,5 @@ todoRouter.delete(
   deleteTodo,
 );
 
+export { todoPublicRouter };
 export default todoRouter;

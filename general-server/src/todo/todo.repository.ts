@@ -49,6 +49,7 @@ export interface TodoRepositoryPort {
   updateTodo(id: number, input: UpdateTodoEntityInput): Promise<TodoEntity | null>
   deleteTodo(id: number): Promise<TodoEntity | null>
   getProjectById(id: number): Promise<TodoProjectSummaryDto | null>
+  getProjectByCode(projectCode: string): Promise<TodoProjectSummaryDto | null>
 }
 
 async function ensureDataSource() {
@@ -280,6 +281,31 @@ export class TodoRepository implements TodoRepositoryPort {
         'project.projectCode',
       ])
       .where('project.id = :id', { id })
+      .andWhere('project.deleteFlag = :deleteFlag', { deleteFlag: 0 })
+      .getOne()
+
+    if (!project) {
+      return null
+    }
+
+    return {
+      id: project.id,
+      projectName: project.projectName,
+      projectCode: project.projectCode,
+    }
+  }
+
+  async getProjectByCode(projectCode: string): Promise<TodoProjectSummaryDto | null> {
+    const dataSource = await ensureDataSource()
+    const repository = dataSource.getRepository(ProjectEntity)
+    const project = await repository
+      .createQueryBuilder('project')
+      .select([
+        'project.id',
+        'project.projectName',
+        'project.projectCode',
+      ])
+      .where('project.projectCode = :projectCode', { projectCode })
       .andWhere('project.deleteFlag = :deleteFlag', { deleteFlag: 0 })
       .getOne()
 

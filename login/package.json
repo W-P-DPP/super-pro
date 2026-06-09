@@ -14,6 +14,7 @@
   "dependencies": {
     "@super-pro/shared-constants": "workspace:*",
     "@super-pro/shared-types": "workspace:*",
+    "@super-pro/shared-ui": "workspace:*",
     "@super-pro/shared-web": "workspace:*",
     "@fontsource-variable/geist": "^5.2.8",
     "lucide-react": "^1.7.0",
