@@ -69,3 +69,13 @@
 - 手动检查页面细节是否稳定，包括容器外边距、容器内边距、区块间距、标题与内容对齐、卡片边界、滚动容器和空白密度
 - 涉及权限时，检查有权限、无权限、未登录三条路径
 - 重点确认 `403` 不会误触发登录跳转
+
+## Admin Single Page Layout
+
+当任务是在 `admin-front` 中新增或改造后台单页面时：
+
+1. 先读 `references/single-page-layout.md`
+2. 优先从 `assets/templates/frontend/admin-single-page.template.tsx` 起步
+3. 根 `section` 要占满内容区，不做额外外边距和窄容器
+4. 搜索区和主体区优先用轻量 `section` 容器，不用 `Card` 承载整页
+5. `main` 外层不要补回圆角，分页区要留在主体区内部

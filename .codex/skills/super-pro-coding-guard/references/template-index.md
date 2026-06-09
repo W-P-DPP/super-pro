@@ -10,6 +10,21 @@
 4. 模板只是起步骨架，落地时仍要遵守本 skill 的前后端动作流、shared 边界和权限规则。
 5. 页面做完后，额外读取 `references/page-detail-checklist.md` 做细节验收，不要只停在“能用”。
 
+## Backend Single Page Layout
+
+- `assets/templates/frontend/admin-single-page.template.tsx`
+  - 适用于 `admin-front` 这类后台单页面 CRUD / 配置 / 报表页
+  - 对齐当前仓库“搜索区 + 主体区 + 分页区”的统一壳子
+  - 默认复用 `ADMIN_PAGE_FILL_LAYOUT_CLASS`、`ADMIN_PAGE_TOOLBAR_CLASS`、`ADMIN_PAGE_FILL_CARD_CLASS`
+  - 具体布局约束先读 `references/single-page-layout.md`
+
+推荐组合补充：
+
+1. 后台单页面先看 `references/single-page-layout.md`
+2. 优先从 `admin-single-page.template.tsx` 起步
+3. 如果只是抽局部区块，再拆用 `search-toolbar.template.tsx` 和 `table-section.template.tsx`
+4. 涉及权限时，再补 `permission-usage.template.tsx`
+
 ## 前端模板
 
 - `assets/templates/frontend/api-module.template.ts`

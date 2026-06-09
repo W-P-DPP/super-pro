@@ -87,3 +87,16 @@ description: 约束本仓库真实编码开发任务的统一动作流。适用�
 - 后端无法确认鉴权链路、权限码来源或运行时接法
 - shared 导出变更会影响多端，但无法确认受影响面
 - 用户要求与现有共享边界、权限边界或契约直接冲突
+
+## Admin Single Page Template
+
+当任务是在 `admin-front` 中新增、修改或重构“单页面后台布局”时，额外执行下面动作流：
+
+1. 先读取 `references/single-page-layout.md`
+2. 优先检查 `admin-front/src/pages/admin/module-page-shared.tsx` 的现有布局常量是否可复用
+3. 如需快速起页，优先复制 `assets/templates/frontend/admin-single-page.template.tsx`
+4. 根页面 `section` 默认占满内容区，不加额外外边距，不再套窄内容容器
+5. 搜索区使用轻量顶部工具栏容器，主体区使用填充型内容容器
+6. 搜索区、表格壳子、状态提示区默认不用 `Card` 作为纯布局容器
+7. 只有信息分组本身成立时，才允许保留或新增 `Card`
+8. 页面完成后，按 `references/page-detail-checklist.md` 和 `references/verification-matrix.md` 收口
