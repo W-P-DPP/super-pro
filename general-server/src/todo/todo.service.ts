@@ -1,0 +1,602 @@
+import { HttpStatus } from '@super-pro/shared-constants';
+import {
+  TODO_PRIORITIES,
+  TODO_STATUSES,
+  type CreateTodoRequestDto,
+  type TodoListDto,
+  type TodoListQueryDto,
+  type TodoPriority,
+  type TodoResponseDto,
+  type TodoStatus,
+  type UpdateTodoRequestDto,
+} from '@super-pro/shared-types';
+import type { TodoValidationErrorContextDto } from './todo.dto.ts';
+import type { TodoEntity } from './todo.entity.ts';
+import {
+  todoRepository,
+  type TodoDetailRepositoryRecord,
+  type TodoListItemRepositoryRecord,
+  type TodoRepositoryPort,
+} from './todo.repository.ts';
+
+const DEFAULT_TODO_LIST_PAGE = 1;
+const DEFAULT_TODO_LIST_PAGE_SIZE = 10;
+const MAX_TODO_LIST_PAGE_SIZE = 100;
+const MAX_TODO_TITLE_LENGTH = 128;
+const MAX_TODO_DESCRIPTION_LENGTH = 1000;
+const MAX_TODO_REMARK_LENGTH = 255;
+const DEFAULT_TODO_PRIORITY: TodoPriority = 'medium';
+const DEFAULT_TODO_STATUS: TodoStatus = 'pending_review';
+
+export class TodoBusinessError extends Error {
+  constructor(
+    message: string,
+    public readonly context: TodoValidationErrorContextDto,
+    public readonly statusCode: number,
+  ) {
+    super(message);
+    this.name = 'TodoBusinessError';
+  }
+}
+
+function ensurePositiveInteger(value: number, field: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TodoBusinessError(
+      '待办标识不合法',
+      {
+        nodePath: 'todo',
+        field,
+        reason: '待办标识必须为正整数',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return value;
+}
+
+function ensureRequiredString(
+  value: unknown,
+  field: string,
+  label: string,
+  maxLength: number,
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TodoBusinessError(
+      `${label}不能为空`,
+      {
+        nodePath: 'todo',
+        field,
+        reason: `${label}必须是非空字符串`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const normalizedValue = value.trim();
+  if (normalizedValue.length > maxLength) {
+    throw new TodoBusinessError(
+      `${label}长度不能超过 ${maxLength} 个字符`,
+      {
+        nodePath: 'todo',
+        field,
+        reason: `${label}长度超出限制`,
+        value: normalizedValue.length,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return normalizedValue;
+}
+
+function normalizeOptionalString(
+  value: unknown,
+  field: string,
+  label: string,
+  maxLength: number,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return '';
+  }
+
+  if (typeof value !== 'string') {
+    throw new TodoBusinessError(
+      `${label}必须是字符串`,
+      {
+        nodePath: 'todo',
+        field,
+        reason: `${label}必须是字符串`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return '';
+  }
+
+  if (normalizedValue.length > maxLength) {
+    throw new TodoBusinessError(
+      `${label}长度不能超过 ${maxLength} 个字符`,
+      {
+        nodePath: 'todo',
+        field,
+        reason: `${label}长度超出限制`,
+        value: normalizedValue.length,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return normalizedValue;
+}
+
+function ensureTodoStatus(value: unknown, field: string): TodoStatus {
+  if (typeof value !== 'string' || !TODO_STATUSES.includes(value as TodoStatus)) {
+    throw new TodoBusinessError(
+      '待办状态不合法',
+      {
+        nodePath: 'todo',
+        field,
+        reason: `待办状态必须是 ${TODO_STATUSES.join(' / ')} 之一`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return value as TodoStatus;
+}
+
+function ensureTodoPriority(value: unknown, field: string): TodoPriority {
+  if (value === undefined) {
+    return DEFAULT_TODO_PRIORITY;
+  }
+
+  if (typeof value !== 'string' || !TODO_PRIORITIES.includes(value as TodoPriority)) {
+    throw new TodoBusinessError(
+      '待办优先级不合法',
+      {
+        nodePath: 'todo',
+        field,
+        reason: `待办优先级必须是 ${TODO_PRIORITIES.join(' / ')} 之一`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return value as TodoPriority;
+}
+
+function normalizeOptionalDueAt(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === '') {
+    return null;
+  }
+
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TodoBusinessError(
+      '截止时间格式不合法',
+      {
+        nodePath: 'todo',
+        field: 'dueAt',
+        reason: '截止时间必须是合法的日期时间字符串',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const normalizedValue = value.trim();
+  const parsedDate = new Date(normalizedValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new TodoBusinessError(
+      '截止时间格式不合法',
+      {
+        nodePath: 'todo',
+        field: 'dueAt',
+        reason: '截止时间必须是合法的日期时间字符串',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return normalizedValue;
+}
+
+function normalizePaginationInteger(
+  value: unknown,
+  field: 'page' | 'pageSize',
+  defaultValue: number,
+  options?: {
+    min?: number;
+    max?: number;
+  },
+): number {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  const parsedValue =
+    typeof value === 'string' ? Number(value.trim()) : typeof value === 'number' ? value : Number.NaN;
+
+  if (!Number.isInteger(parsedValue)) {
+    throw new TodoBusinessError(
+      `${field === 'page' ? '页码' : '分页大小'}不合法`,
+      {
+        nodePath: 'todo',
+        field,
+        reason: `${field === 'page' ? '页码' : '分页大小'}必须为正整数`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const minValue = options?.min ?? 1;
+  const maxValue = options?.max;
+
+  if (parsedValue < minValue || (maxValue !== undefined && parsedValue > maxValue)) {
+    throw new TodoBusinessError(
+      `${field === 'page' ? '页码' : '分页大小'}不合法`,
+      {
+        nodePath: 'todo',
+        field,
+        reason:
+          field === 'page'
+            ? '页码必须大于等于 1'
+            : `分页大小必须在 ${minValue} 到 ${maxValue ?? Number.MAX_SAFE_INTEGER} 之间`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return parsedValue;
+}
+
+function normalizeOptionalKeyword(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new TodoBusinessError(
+      '筛选关键字必须是字符串',
+      {
+        nodePath: 'todo',
+        field,
+        reason: '筛选关键字必须是字符串',
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  const trimmedValue = value.trim();
+  return trimmedValue ? trimmedValue : undefined;
+}
+
+function normalizeDateTime(value: unknown): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return undefined;
+}
+
+function toResponseDto(record: TodoDetailRepositoryRecord): TodoResponseDto {
+  const { entity, assignee } = record;
+  const dueAt = normalizeDateTime(entity.dueAt);
+  const createTime = normalizeDateTime(entity.createTime);
+  const updateTime = normalizeDateTime(entity.updateTime);
+
+  return {
+    id: entity.id,
+    title: entity.title,
+    ...(entity.description ? { description: entity.description } : {}),
+    status: entity.status as TodoStatus,
+    priority: entity.priority as TodoPriority,
+    assigneeUserId: entity.assigneeUserId,
+    assignee,
+    ...(dueAt ? { dueAt } : {}),
+    ...(entity.createBy ? { createBy: entity.createBy } : {}),
+    ...(createTime ? { createTime } : {}),
+    ...(entity.updateBy ? { updateBy: entity.updateBy } : {}),
+    ...(updateTime ? { updateTime } : {}),
+    ...(entity.remark ? { remark: entity.remark } : {}),
+  };
+}
+
+function toListItemResponseDto(record: TodoListItemRepositoryRecord): TodoResponseDto {
+  return toResponseDto(record);
+}
+
+function validateCreateInput(input: Record<string, unknown>): CreateTodoRequestDto {
+  return {
+    title: ensureRequiredString(input.title, 'title', '待办标题', MAX_TODO_TITLE_LENGTH),
+    ...(Object.prototype.hasOwnProperty.call(input, 'description')
+      ? {
+          description: normalizeOptionalString(
+            input.description,
+            'description',
+            '待办描述',
+            MAX_TODO_DESCRIPTION_LENGTH,
+          ),
+        }
+      : {}),
+    priority: ensureTodoPriority(input.priority, 'priority'),
+    assigneeUserId: ensurePositiveInteger(Number(input.assigneeUserId), 'assigneeUserId'),
+    ...(Object.prototype.hasOwnProperty.call(input, 'dueAt')
+      ? {
+          dueAt: normalizeOptionalDueAt(input.dueAt),
+        }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(input, 'remark')
+      ? {
+          remark: normalizeOptionalString(input.remark, 'remark', '待办备注', MAX_TODO_REMARK_LENGTH),
+        }
+      : {}),
+  };
+}
+
+function validateUpdateInput(input: Record<string, unknown>): UpdateTodoRequestDto {
+  const payload: UpdateTodoRequestDto = {};
+
+  if (Object.prototype.hasOwnProperty.call(input, 'title')) {
+    payload.title = ensureRequiredString(input.title, 'title', '待办标题', MAX_TODO_TITLE_LENGTH);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'description')) {
+    payload.description = normalizeOptionalString(
+      input.description,
+      'description',
+      '待办描述',
+      MAX_TODO_DESCRIPTION_LENGTH,
+    );
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'status')) {
+    payload.status = ensureTodoStatus(input.status, 'status');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'priority')) {
+    payload.priority = ensureTodoPriority(input.priority, 'priority');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'assigneeUserId')) {
+    payload.assigneeUserId = ensurePositiveInteger(Number(input.assigneeUserId), 'assigneeUserId');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'dueAt')) {
+    payload.dueAt = normalizeOptionalDueAt(input.dueAt);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'remark')) {
+    payload.remark = normalizeOptionalString(input.remark, 'remark', '待办备注', MAX_TODO_REMARK_LENGTH);
+  }
+
+  return payload;
+}
+
+function validateListQuery(input: Record<string, unknown>): TodoListQueryDto {
+  const payload: TodoListQueryDto = {
+    page: normalizePaginationInteger(input.page, 'page', DEFAULT_TODO_LIST_PAGE),
+    pageSize: normalizePaginationInteger(input.pageSize, 'pageSize', DEFAULT_TODO_LIST_PAGE_SIZE, {
+      min: 1,
+      max: MAX_TODO_LIST_PAGE_SIZE,
+    }),
+  };
+
+  const keyword = normalizeOptionalKeyword(input.keyword, 'keyword');
+  if (keyword) {
+    payload.keyword = keyword;
+  }
+
+  if (input.status !== undefined && input.status !== '') {
+    payload.status = ensureTodoStatus(input.status, 'status');
+  }
+
+  if (input.priority !== undefined && input.priority !== '') {
+    payload.priority = ensureTodoPriority(input.priority, 'priority');
+  }
+
+  const assigneeKeyword = normalizeOptionalKeyword(input.assigneeKeyword, 'assigneeKeyword');
+  if (assigneeKeyword) {
+    payload.assigneeKeyword = assigneeKeyword;
+  }
+
+  return payload;
+}
+
+export class TodoService {
+  constructor(private readonly repository: TodoRepositoryPort = todoRepository) {}
+
+  async getTodoList(input: TodoListQueryDto | Record<string, unknown>): Promise<TodoListDto> {
+    const payload = validateListQuery(input as Record<string, unknown>);
+    const result = await this.repository.getTodoList(payload);
+
+    return {
+      items: result.items.map((item) => toListItemResponseDto(item)),
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+    };
+  }
+
+  async getTodoDetail(id: number): Promise<TodoResponseDto> {
+    const targetId = ensurePositiveInteger(id, 'id');
+    const detail = await this.repository.getTodoDetailById(targetId);
+
+    if (!detail) {
+      throw new TodoBusinessError(
+        '待办不存在',
+        {
+          nodePath: 'todo',
+          field: 'id',
+          reason: '未找到对应待办',
+          value: id,
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return toResponseDto(detail);
+  }
+
+  async createTodo(input: CreateTodoRequestDto | Record<string, unknown>): Promise<TodoResponseDto> {
+    const payload = validateCreateInput(input as Record<string, unknown>);
+    const assignee = await this.repository.getActiveUserById(payload.assigneeUserId);
+
+    if (!assignee) {
+      throw new TodoBusinessError(
+        '负责人不存在或未启用',
+        {
+          nodePath: 'todo',
+          field: 'assigneeUserId',
+          reason: '负责人必须是已启用用户',
+          value: payload.assigneeUserId,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const created = await this.repository.createTodo({
+      title: payload.title,
+      description: payload.description,
+      status: DEFAULT_TODO_STATUS,
+      priority: payload.priority ?? DEFAULT_TODO_PRIORITY,
+      assigneeUserId: payload.assigneeUserId,
+      dueAt: payload.dueAt,
+      remark: payload.remark,
+    });
+
+    if (!created) {
+      throw new TodoBusinessError(
+        '新增待办失败',
+        {
+          nodePath: 'todo',
+          field: 'create',
+          reason: '待办创建失败',
+        },
+        HttpStatus.ERROR,
+      );
+    }
+
+    return toResponseDto({
+      entity: created,
+      assignee,
+    });
+  }
+
+  async updateTodo(id: number, input: UpdateTodoRequestDto | Record<string, unknown>): Promise<TodoResponseDto> {
+    const targetId = ensurePositiveInteger(id, 'id');
+    const current = await this.repository.getTodoById(targetId);
+
+    if (!current) {
+      throw new TodoBusinessError(
+        '待办不存在',
+        {
+          nodePath: 'todo',
+          field: 'id',
+          reason: '未找到对应待办',
+          value: id,
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const payload = validateUpdateInput(input as Record<string, unknown>);
+
+    if (payload.assigneeUserId !== undefined) {
+      const assignee = await this.repository.getActiveUserById(payload.assigneeUserId);
+      if (!assignee) {
+        throw new TodoBusinessError(
+          '负责人不存在或未启用',
+          {
+            nodePath: 'todo',
+            field: 'assigneeUserId',
+            reason: '负责人必须是已启用用户',
+            value: payload.assigneeUserId,
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
+    const updated = await this.repository.updateTodo(targetId, payload);
+
+    if (!updated) {
+      throw new TodoBusinessError(
+        '更新待办失败',
+        {
+          nodePath: 'todo',
+          field: 'update',
+          reason: '待办更新失败',
+          value: id,
+        },
+        HttpStatus.ERROR,
+      );
+    }
+
+    return this.getTodoDetail(updated.id);
+  }
+
+  async deleteTodo(id: number): Promise<TodoResponseDto> {
+    const targetId = ensurePositiveInteger(id, 'id');
+    const detail = await this.repository.getTodoDetailById(targetId);
+
+    if (!detail) {
+      throw new TodoBusinessError(
+        '待办不存在',
+        {
+          nodePath: 'todo',
+          field: 'id',
+          reason: '未找到对应待办',
+          value: id,
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const deleted = await this.repository.deleteTodo(targetId);
+    if (!deleted) {
+      throw new TodoBusinessError(
+        '删除待办失败',
+        {
+          nodePath: 'todo',
+          field: 'delete',
+          reason: '待办删除失败',
+          value: id,
+        },
+        HttpStatus.ERROR,
+      );
+    }
+
+    return toResponseDto(detail);
+  }
+}
+
+export const todoService = new TodoService();

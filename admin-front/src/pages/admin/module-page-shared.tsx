@@ -30,8 +30,8 @@ import {
   TableRow,
 } from '@/components/ui'
 import { useAdminMenu } from '@/contexts/admin-menu-context'
-import { cn } from '@/lib/utils'
 import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
+import { cn } from '@/lib/utils'
 
 export const DEFAULT_PAGE_SIZE = 10
 export const PAGE_SIZE_OPTIONS = [10, 20, 50]
@@ -45,18 +45,21 @@ export const ADMIN_PAGE_FILL_CARD_CLASS =
   'min-h-0 flex-1 overflow-hidden rounded-3xl border border-border/70 bg-background/85'
 export const ADMIN_PAGE_STATUS_SECTION_CLASS =
   'w-full rounded-3xl border border-border/70 bg-background/85 px-5 py-8'
+
 export const USER_ROLE_OPTIONS = [
   'admin',
   'employee',
   'approver',
   'guest',
 ] as const satisfies readonly UserRoleEnum[]
+
 export const USER_ROLE_LABELS: Record<UserRoleEnum, string> = {
   admin: '管理员',
   employee: '员工',
   approver: '审批人',
   guest: '访客',
 }
+
 export const STATUS_LABELS: Record<number, string> = {
   0: '冻结',
   1: '正常',
@@ -183,9 +186,7 @@ export function ListPagination({
   return (
     <div className="flex shrink-0 flex-col gap-3 border-t border-border/70 pt-4 md:flex-row md:items-center md:justify-between">
       <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center">
-        <div>
-          第 {currentPage} / {totalPages} 页，共 {total} 条
-        </div>
+        <div>第 {currentPage} / {totalPages} 页，共 {total} 条</div>
         <div className="flex items-center gap-2">
           <span>每页</span>
           <ModuleSelect
@@ -264,9 +265,10 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
   }
 
   const Icon = module.icon
-  const shortcutModules = visibleModules.length > 0
-    ? visibleModules.filter((item) => item.slug !== 'dashboard')
-    : adminModules.filter((item) => item.slug !== 'dashboard')
+  const shortcutModules =
+    visibleModules.length > 0
+      ? visibleModules.filter((item) => item.slug !== 'dashboard')
+      : adminModules.filter((item) => item.slug !== 'dashboard')
 
   return (
     <section className={ADMIN_PAGE_SCROLL_LAYOUT_CLASS}>
@@ -299,7 +301,9 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
                 {module.secondaryAction}
               </Button>
             </div>
-            <div className="text-sm text-muted-foreground">当前页面仍为静态占位内容，可继续按相同模板替换为真实业务页。</div>
+            <div className="text-sm text-muted-foreground">
+              当前页面仍为静态占位内容，可继续按相同模板替换成真实业务页。
+            </div>
           </CardContent>
         </Card>
 
@@ -361,7 +365,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
         <Card className="rounded-3xl border border-border/70 bg-background/85 shadow-none">
           <CardHeader className="border-b border-border/70">
             <CardTitle className="text-base">页面结构建议</CardTitle>
-            <CardDescription>作为后台项目首版，这些区域通常都值得预留。</CardDescription>
+            <CardDescription>作为后台项目首页版，这些区域通常都值得预留。</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 pt-4">
             {[
@@ -421,7 +425,7 @@ export function ModulePlaceholderPage({ moduleSlug }: { moduleSlug: string }) {
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
             {[
-              '补充筛选表单和分页协议。',
+              '补充分筛选表单和分页协议。',
               '从 src/api/modules 接真实接口。',
               '接入角色权限与按钮级禁用逻辑。',
             ].map((item) => (

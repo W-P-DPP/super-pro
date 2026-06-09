@@ -52,8 +52,8 @@ import {
   toast,
 } from '@/components/ui'
 import { getUserDetail, type UpdateUserRequestDto, updateUser, type UserResponseDto } from '@/api/modules/users'
-import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
 import { useAdminMenu } from '@/contexts/admin-menu-context'
+import { adminModules, getAdminModuleBySlug } from '@/data/admin-navigation'
 import { clearReusableAuthSession, getReusableAuthToken } from '@/lib/auth-session'
 import { getStrictMenuLoginUrl } from '@/lib/strict-menu-redirect'
 
@@ -266,9 +266,7 @@ export function AppLayout() {
               <CommandIcon className="size-5" />
             </div>
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <div className="truncate text-sm font-semibold text-sidebar-foreground">
-                后台管理系统
-              </div>
+              <div className="truncate text-sm font-semibold text-sidebar-foreground">后台管理系统</div>
               <div className="mt-1 flex items-center gap-2">
                 <Badge variant="outline" className="h-5 rounded-full px-2 text-[11px]">
                   {visibleModules.length} 个菜单
@@ -288,8 +286,8 @@ export function AppLayout() {
                 visibleNavGroups.length === 0 ? (
                   <div className={APP_SHELL_SIDEBAR_NOTICE_CLASS}>
                     <div className="flex items-center gap-2">
-                        <Spinner className="size-4" />
-                        <span>正在加载后台菜单与权限...</span>
+                      <Spinner className="size-4" />
+                      <span>正在加载后台菜单与权限...</span>
                     </div>
                   </div>
                 ) : null}
@@ -365,9 +363,7 @@ export function AppLayout() {
                 adminMenuStatus === 'success' &&
                 permissionStatus === 'success' ? (
                   <div className={APP_SHELL_SIDEBAR_NOTICE_CLASS}>
-                    <p>
-                        {hasSearchKeyword ? '没有匹配的菜单项。' : '当前没有可展示的后台菜单。'}
-                    </p>
+                    <p>{hasSearchKeyword ? '没有匹配的菜单项。' : '当前没有可展示的后台菜单。'}</p>
                   </div>
                 ) : null}
               </div>
@@ -377,9 +373,7 @@ export function AppLayout() {
 
         <SidebarFooter className="border-t border-sidebar-border/80 px-3 py-3">
           <div className="group-data-[collapsible=icon]:hidden">
-            <div className="text-xs text-sidebar-foreground/70">
-              单页演示骨架，可继续扩成真实后台。
-            </div>
+            <div className="text-xs text-sidebar-foreground/70">单页演示骨架，可继续扩成真实后台。</div>
           </div>
         </SidebarFooter>
         <SidebarRail />
@@ -517,7 +511,7 @@ export function AppLayout() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>修改用户信息</DialogTitle>
-            <DialogDescription>支持修改当前登录用户的姓名和手机号。</DialogDescription>
+            <DialogDescription>支持修改当前登录用户的昵称和手机号。</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-2">
@@ -525,13 +519,13 @@ export function AppLayout() {
               <Input value={currentUser?.username || currentUserToken?.username || ''} disabled />
             </div>
             <div className="grid gap-2">
-              <div className="text-sm font-medium">用户姓名</div>
+              <div className="text-sm font-medium">用户昵称</div>
               <Input
                 value={currentUserDraft.nickname}
                 onChange={(event) =>
                   setCurrentUserDraft((currentDraft) => ({ ...currentDraft, nickname: event.target.value }))
                 }
-                placeholder="请输入用户姓名"
+                placeholder="请输入用户昵称"
               />
             </div>
             <div className="grid gap-2">

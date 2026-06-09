@@ -80,6 +80,23 @@ export const ADMIN_MENU_SEED_NODES: readonly AdminMenuSeedNode[] = [
     ],
   },
   {
+    name: '\u5e94\u7528',
+    iconKey: 'sparkles',
+    menuType: 'group',
+    children: [
+      {
+        name: '\u5f85\u529e\u7ba1\u7406',
+        shortTitle: '\u5f85\u529e',
+        slug: 'todos',
+        iconKey: 'file-text',
+        menuType: 'item',
+        description:
+          '\u7edf\u4e00\u7ba1\u7406\u56e2\u961f\u5f85\u529e\u4efb\u52a1\uff0c\u652f\u6301\u5f85\u5ba1\u6838\u3001\u8fdb\u884c\u4e2d\u3001\u5df2\u5b8c\u6210\u7b49\u72b6\u6001\u7684\u521b\u5efa\u3001\u67e5\u8be2\u3001\u7f16\u8f91\u4e0e\u5220\u9664\u3002',
+        permissionCode: ADMIN_CONSOLE_PERMISSION_CODES.todosMenuView,
+      },
+    ],
+  },
+  {
     name: '系统管理',
     iconKey: 'settings-2',
     menuType: 'group',

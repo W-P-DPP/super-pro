@@ -4,6 +4,7 @@ import type {
   AuthorizationPermissionSummary,
   AuthorizationRoleSummary,
 } from '@super-pro/shared-types';
+import { ADMIN_CONSOLE_PERMISSION_CODES } from '@super-pro/shared-types';
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
 import {
   COMPATIBILITY_ROLE_FALLBACK_ROLE_CODES,
@@ -27,6 +28,16 @@ import type {
 
 const SUPER_ADMIN_ROLE_CODES = new Set(['platform.admin', 'super-admin']);
 const GLOBAL_PERMISSION_CODE = '*.*.*';
+const TODO_PERMISSION_CODES = [
+  ADMIN_CONSOLE_PERMISSION_CODES.todosMenuView,
+  ADMIN_CONSOLE_PERMISSION_CODES.todoCreate,
+  ADMIN_CONSOLE_PERMISSION_CODES.todoUpdate,
+  ADMIN_CONSOLE_PERMISSION_CODES.todoDelete,
+  ADMIN_CONSOLE_PERMISSION_CODES.todosApiRead,
+  ADMIN_CONSOLE_PERMISSION_CODES.todosApiCreate,
+  ADMIN_CONSOLE_PERMISSION_CODES.todosApiUpdate,
+  ADMIN_CONSOLE_PERMISSION_CODES.todosApiDelete,
+] as const;
 
 export interface AuthorizationProjectSummary {
   id: number;
@@ -157,6 +168,17 @@ function toPermissionSummary(entity: PermissionEntity): AuthorizationPermissionS
     ...(entity.description ? { description: entity.description } : {}),
     ...(entity.updateTime ? { updateTime: String(entity.updateTime) } : {}),
   };
+}
+
+function shouldAutoGrantTodoPermissions(role: RoleEntity): boolean {
+  const normalizedCode = role.code.trim().toLowerCase();
+  const normalizedName = role.name.trim();
+
+  return (
+    normalizedCode.endsWith('.editor') ||
+    normalizedCode.includes('admin') ||
+    normalizedName.includes('管理员')
+  );
 }
 
 export class AuthorizationRepository implements AuthorizationRepositoryPort {
@@ -477,6 +499,43 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
     await roleProjectRepository.save(entities);
   }
 
+  private async syncTodoPermissionAssignmentsForCustomRoles(
+    latestRoles: RoleEntity[],
+    latestPermissionByCode: Map<string, PermissionEntity>,
+    rolePermissionRepository: Repository<RolePermissionAssignmentEntity>,
+    assignmentSet: Set<string>,
+  ): Promise<void> {
+    const todoPermissions = TODO_PERMISSION_CODES.map((code) => latestPermissionByCode.get(code)).filter(
+      (permission): permission is PermissionEntity => Boolean(permission),
+    );
+
+    if (todoPermissions.length === 0) {
+      return;
+    }
+
+    for (const role of latestRoles) {
+      if (!shouldAutoGrantTodoPermissions(role)) {
+        continue;
+      }
+
+      for (const permission of todoPermissions) {
+        const assignmentKey = `${role.id}:${permission.id}`;
+        if (assignmentSet.has(assignmentKey)) {
+          continue;
+        }
+
+        assignmentSet.add(assignmentKey);
+        const created = rolePermissionRepository.create({
+          roleId: role.id,
+          permissionId: permission.id,
+          createBy: 'system',
+          updateBy: 'system',
+        });
+        await rolePermissionRepository.save(created);
+      }
+    }
+  }
+
   async ensureSeedData(): Promise<void> {
     if (this.seedInitialized) {
       return;
@@ -563,6 +622,13 @@ export class AuthorizationRepository implements AuthorizationRepositoryPort {
             await rolePermissionRepository.save(created);
           }
         }
+
+        await this.syncTodoPermissionAssignmentsForCustomRoles(
+          latestRoles,
+          latestPermissionByCode,
+          rolePermissionRepository,
+          assignmentSet,
+        );
 
         await this.syncRoleProjectAssignments(
           latestRoles.map((item) => item.id),

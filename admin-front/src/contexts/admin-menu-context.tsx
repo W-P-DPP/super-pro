@@ -74,9 +74,21 @@ function buildDefaultRuntimeModule(slug: string, title: string, group: string): 
       { label: '默认渲染', value: '占位页', hint: '未注册专属页面时会走统一占位模板' },
     ],
     highlights: [
-      { title: '菜单已接入后端', detail: '当前模块已经由后台菜单控制显示、排序和分组。', status: '已完成' },
-      { title: '页面可继续扩展', detail: '后续可按需把占位页替换成真实业务页面。', status: '可实施' },
-      { title: '权限可继续挂载', detail: '建议为菜单补充对应权限编码，便于后续联动控制。', status: '建议' },
+      {
+        title: '菜单已接入后端',
+        detail: '当前模块已经由后台菜单控制显示、排序和分组。',
+        status: '已完成',
+      },
+      {
+        title: '页面可继续扩展',
+        detail: '后续可按需把占位页替换成真实业务页面。',
+        status: '可实施',
+      },
+      {
+        title: '权限可继续挂载',
+        detail: '建议为菜单补充对应权限编码，便于后续联动控制。',
+        status: '建议',
+      },
     ],
     table: {
       title: '默认菜单信息',
@@ -99,7 +111,8 @@ function buildRuntimeModule(
   parent: AdminMenuResponseDto,
 ): RuntimeAdminModule {
   const fallback = getAdminModuleBySlug(node.slug ?? undefined)
-  const baseModule = fallback ?? buildDefaultRuntimeModule(node.slug ?? `menu-${node.id}`, node.name, parent.name)
+  const baseModule =
+    fallback ?? buildDefaultRuntimeModule(node.slug ?? `menu-${node.id}`, node.name, parent.name)
 
   return {
     ...baseModule,
@@ -121,7 +134,7 @@ function buildRuntimeModule(
   }
 }
 
-function buildMenuViewModel(
+export function buildMenuViewModel(
   tree: AdminMenuResponseDto[],
   hasPermission: (permissionCode: PermissionCode) => boolean,
 ) {
@@ -228,7 +241,9 @@ export function AdminMenuProvider({ children }: PropsWithChildren) {
 
         setProjectPermission(null)
         setPermissionStatus('error')
-        setPermissionErrorMessage(error instanceof Error ? error.message : '获取当前用户后台权限失败，请稍后重试。')
+        setPermissionErrorMessage(
+          error instanceof Error ? error.message : '获取当前用户后台权限失败，请稍后重试。',
+        )
       }
     }
 

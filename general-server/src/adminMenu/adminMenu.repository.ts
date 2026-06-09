@@ -1,6 +1,7 @@
 import type { EntityManager, Repository } from 'typeorm';
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
 import {
+  ADMIN_CONSOLE_PERMISSION_CODES,
   type AdminMenuIconKey,
   type AdminMenuNodeType,
 } from '@super-pro/shared-types';
@@ -94,6 +95,25 @@ async function ensureDataSource() {
   return initDataBase();
 }
 
+const APPLICATION_GROUP_NAME = '应用';
+const APPLICATION_GROUP_SHORT_TITLE = '应用';
+const APPLICATION_GROUP_ICON_KEY: AdminMenuIconKey = 'sparkles';
+const TODOS_MENU_NAME = '待办管理';
+const TODOS_MENU_SHORT_TITLE = '待办';
+const TODOS_MENU_SLUG = 'todos';
+const TODOS_MENU_ICON_KEY: AdminMenuIconKey = 'file-text';
+const TODOS_MENU_PERMISSION_CODE = ADMIN_CONSOLE_PERMISSION_CODES.todosMenuView;
+
+function sortMenuRecords(left: AdminMenuEntity, right: AdminMenuEntity): number {
+  return left.sort - right.sort || left.id - right.id;
+}
+
+function getNextSiblingSort(records: readonly AdminMenuEntity[], parentId: number | null): number {
+  return records
+    .filter((record) => record.deleteFlag === 0 && sameParent(record.parentId, parentId))
+    .sort(sortMenuRecords).length;
+}
+
 export class AdminMenuRepository implements AdminMenuRepositoryPort {
   private initializationPromise: Promise<void> | null = null;
 
@@ -114,19 +134,119 @@ export class AdminMenuRepository implements AdminMenuRepositoryPort {
 
   private async initializeInternal(): Promise<void> {
     const dataSource = await ensureDataSource();
-    const repository = dataSource.getRepository(AdminMenuEntity);
-    const count = await repository.count();
+    await dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(AdminMenuEntity);
+      const count = await repository.count();
 
-    if (count > 0) {
+      if (count === 0) {
+        const seedEntities = flattenAdminMenuSeedNodes(ADMIN_MENU_SEED_NODES);
+        if (seedEntities.length > 0) {
+          await repository.upsert(seedEntities, ['id']);
+        }
+      }
+
+      await this.syncTodoAdminMenuSeed(manager);
+    });
+  }
+
+  private async syncTodoAdminMenuSeed(manager: EntityManager): Promise<void> {
+    const repository = manager.getRepository(AdminMenuEntity);
+    const records = await repository.find({
+      order: {
+        sort: 'ASC',
+        id: 'ASC',
+      },
+    });
+
+    let applicationGroup =
+      records.find(
+        (record) =>
+          record.deleteFlag === 0 &&
+          record.menuType === 'group' &&
+          record.parentId == null &&
+          record.name.trim() === APPLICATION_GROUP_NAME,
+      ) ?? null;
+
+    if (!applicationGroup) {
+      const reactivatableGroup =
+        records.find(
+          (record) =>
+            record.menuType === 'group' &&
+            record.parentId == null &&
+            record.name.trim() === APPLICATION_GROUP_NAME,
+        ) ?? null;
+
+      if (reactivatableGroup) {
+        reactivatableGroup.deleteFlag = 0;
+        reactivatableGroup.updateBy = 'system';
+        applicationGroup = await repository.save(reactivatableGroup);
+      } else {
+        applicationGroup = await repository.save(
+          repository.create({
+            parentId: null,
+            name: APPLICATION_GROUP_NAME,
+            shortTitle: APPLICATION_GROUP_SHORT_TITLE,
+            slug: null,
+            iconKey: APPLICATION_GROUP_ICON_KEY,
+            menuType: 'group',
+            status: 1,
+            sort: getNextSiblingSort(records, null),
+            description: '',
+            badge: '',
+            permissionCode: '',
+            createBy: 'system',
+            updateBy: 'system',
+            remark: '',
+          }),
+        );
+      }
+
+      records.push(applicationGroup);
+    }
+
+    const todosMenu =
+      records.find((record) => record.deleteFlag === 0 && record.slug === TODOS_MENU_SLUG) ?? null;
+
+    if (!todosMenu) {
+      const reactivatableTodos = records.find((record) => record.slug === TODOS_MENU_SLUG) ?? null;
+
+      if (reactivatableTodos) {
+        reactivatableTodos.parentId = applicationGroup.id;
+        reactivatableTodos.deleteFlag = 0;
+        reactivatableTodos.status = 1;
+        reactivatableTodos.sort = getNextSiblingSort(records, applicationGroup.id);
+        reactivatableTodos.permissionCode = TODOS_MENU_PERMISSION_CODE;
+        reactivatableTodos.updateBy = 'system';
+        await repository.save(reactivatableTodos);
+        return;
+      }
+
+      await repository.save(
+        repository.create({
+          parentId: applicationGroup.id,
+          name: TODOS_MENU_NAME,
+          shortTitle: TODOS_MENU_SHORT_TITLE,
+          slug: TODOS_MENU_SLUG,
+          iconKey: TODOS_MENU_ICON_KEY,
+          menuType: 'item',
+          status: 1,
+          sort: getNextSiblingSort(records, applicationGroup.id),
+          description: '',
+          badge: '',
+          permissionCode: TODOS_MENU_PERMISSION_CODE,
+          createBy: 'system',
+          updateBy: 'system',
+          remark: '',
+        }),
+      );
       return;
     }
 
-    const seedEntities = flattenAdminMenuSeedNodes(ADMIN_MENU_SEED_NODES);
-    if (seedEntities.length === 0) {
-      return;
+    if (todosMenu.permissionCode.trim() !== TODOS_MENU_PERMISSION_CODE) {
+      todosMenu.permissionCode = TODOS_MENU_PERMISSION_CODE;
+      todosMenu.updateBy = 'system';
+      await repository.save(todosMenu);
     }
-
-    await repository.upsert(seedEntities, ['id']);
   }
 
   private async getRepository(manager?: EntityManager): Promise<Repository<AdminMenuEntity>> {

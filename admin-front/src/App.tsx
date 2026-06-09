@@ -5,12 +5,16 @@ import { Spinner } from './components/ui'
 import { useAdminMenu } from './contexts/admin-menu-context'
 import { DashboardPage } from './pages/admin/DashboardPage'
 import { ModuleRoutePage } from './pages/admin/ModuleRoutePage'
-import { ADMIN_PAGE_SCROLL_LAYOUT_CLASS, ADMIN_PAGE_STATUS_SECTION_CLASS } from './pages/admin/module-page-shared'
+import {
+  ADMIN_PAGE_SCROLL_LAYOUT_CLASS,
+  ADMIN_PAGE_STATUS_SECTION_CLASS,
+} from './pages/admin/module-page-shared'
 import { PermissionsPage } from './pages/admin/PermissionsPage'
 import { ProjectsPage } from './pages/admin/ProjectsPage'
 import { ReportsPage } from './pages/admin/ReportsPage'
 import { RolesPage } from './pages/admin/RolesPage'
 import { SettingsPage } from './pages/admin/SettingsPage'
+import { TodosPage } from './pages/admin/TodosPage'
 import { UsersPage } from './pages/admin/UsersPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
@@ -105,6 +109,14 @@ function App() {
           element={
             <AdminRouteGuard moduleSlug="projects">
               <ProjectsPage />
+            </AdminRouteGuard>
+          }
+        />
+        <Route
+          path="todos"
+          element={
+            <AdminRouteGuard moduleSlug="todos">
+              <TodosPage />
             </AdminRouteGuard>
           }
         />
