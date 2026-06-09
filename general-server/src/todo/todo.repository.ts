@@ -1,4 +1,4 @@
-import type { EntityManager, Repository } from 'typeorm'
+import type { DataSource, EntityManager, Repository } from 'typeorm'
 import type {
   TodoListQueryDto,
   TodoPriority,
@@ -52,13 +52,66 @@ export interface TodoRepositoryPort {
   getProjectByCode(projectCode: string): Promise<TodoProjectSummaryDto | null>
 }
 
+let ensureTodoTablePromise: Promise<void> | null = null
+
+function resolveConfiguredDatabaseName(dataSource: DataSource): string | null {
+  const database = dataSource.options.database
+  return typeof database === 'string' && database.trim() ? database.trim() : null
+}
+
+async function ensureTodoTableSchema(dataSource: DataSource) {
+  if (ensureTodoTablePromise) {
+    return ensureTodoTablePromise
+  }
+
+  ensureTodoTablePromise = (async () => {
+    const databaseName = resolveConfiguredDatabaseName(dataSource)
+    if (!databaseName) {
+      return
+    }
+
+    const rows = (await dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = ?
+          AND TABLE_NAME = 'sys_todo'
+          AND COLUMN_NAME = 'description'
+      `,
+      [databaseName],
+    )) as Array<{ count?: number | string }>
+
+    const existingColumnCount = Number(rows[0]?.count ?? 0)
+    if (existingColumnCount > 0) {
+      return
+    }
+
+    await dataSource.query(`
+      ALTER TABLE sys_todo
+      ADD COLUMN description VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '待办描述'
+    `)
+  })()
+    .then(() => {
+      ensureTodoTablePromise = null
+    })
+    .catch((error) => {
+      ensureTodoTablePromise = null
+      throw error
+    })
+
+  return ensureTodoTablePromise
+}
+
 async function ensureDataSource() {
   const current = getDataSource()
   if (current?.isInitialized) {
+    await ensureTodoTableSchema(current)
     return current
   }
 
-  return initDataBase()
+  const dataSource = await initDataBase()
+  await ensureTodoTableSchema(dataSource)
+  return dataSource
 }
 
 function mapProjectSummary(raw: Record<string, unknown>): TodoProjectSummaryDto | null {
@@ -67,10 +120,23 @@ function mapProjectSummary(raw: Record<string, unknown>): TodoProjectSummaryDto 
     return null
   }
 
+  const projectName =
+    raw.project_projectName ??
+    raw.project_project_name ??
+    raw.projectName ??
+    raw.project_name ??
+    ''
+  const projectCode =
+    raw.project_projectCode ??
+    raw.project_project_code ??
+    raw.projectCode ??
+    raw.project_code ??
+    ''
+
   return {
     id,
-    projectName: String(raw.project_projectName ?? ''),
-    projectCode: String(raw.project_projectCode ?? ''),
+    projectName: String(projectName),
+    projectCode: String(projectCode),
   }
 }
 

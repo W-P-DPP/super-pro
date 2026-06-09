@@ -556,7 +556,7 @@ export function AppLayout() {
         </DialogContent>
       </Dialog>
 
-      <SuggestionCollector sourceApp="admin-front" onSubmit={submitSuggestion} />
+      <SuggestionCollector sourceApp="BMS" onSubmit={submitSuggestion} />
     </SidebarProvider>
   )
 }

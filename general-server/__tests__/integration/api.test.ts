@@ -1335,7 +1335,7 @@ describe('JWT route mounting', () => {
       {
         id: 11,
         project_name: '后台管理系统',
-        project_code: 'BMS',
+        project_code: 'admin-console',
         create_by: 'system',
         create_time: '2026-04-09 10:00:00',
         update_by: 'system',
@@ -1365,7 +1365,7 @@ describe('JWT route mounting', () => {
     ]);
 
     const suggestionRes = await request(app).post('/api/todo/submitSuggestion').send({
-      sourceApp: 'admin-front',
+      sourceApp: 'BMS',
       title: '建议增加反馈入口',
       description: '方便业务同学直接提需求',
       pageUrl: 'http://localhost:5173/#/dashboard',
@@ -1381,7 +1381,7 @@ describe('JWT route mounting', () => {
         status: 'pending_review',
         priority: 'medium',
         project: expect.objectContaining({
-          projectCode: 'BMS',
+          projectCode: 'admin-console',
         }),
       }),
     });

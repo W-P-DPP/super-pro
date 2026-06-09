@@ -475,7 +475,7 @@ export function AppLayout() {
         <Outlet context={outletContext} />
       </SidebarInset>
 
-      <SuggestionCollector sourceApp="front-public" onSubmit={submitSuggestion} />
+      <SuggestionCollector sourceApp="zwpsite" onSubmit={submitSuggestion} />
     </SidebarProvider>
   )
 }

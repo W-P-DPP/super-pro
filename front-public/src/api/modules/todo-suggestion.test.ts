@@ -18,7 +18,7 @@ describe('front-public todo suggestion api', () => {
     postMock.mockReset()
   })
 
-  it('submits anonymous suggestion with front-public source app and public request config', async () => {
+  it('submits anonymous suggestion with zwpsite source app and public request config', async () => {
     postMock.mockResolvedValue({
       code: 200,
       msg: '提交建议成功',
@@ -29,7 +29,7 @@ describe('front-public todo suggestion api', () => {
     })
 
     await submitSuggestion({
-      sourceApp: 'front-public',
+      sourceApp: 'zwpsite',
       title: '公开站建议',
       description: '建议增加快捷筛选',
       pageUrl: 'http://localhost:5174/zwpsite/#/tools',
@@ -38,7 +38,7 @@ describe('front-public todo suggestion api', () => {
     expect(postMock).toHaveBeenCalledWith(
       '/todo/submitSuggestion',
       {
-        sourceApp: 'front-public',
+        sourceApp: 'zwpsite',
         title: '公开站建议',
         description: '建议增加快捷筛选',
         pageUrl: 'http://localhost:5174/zwpsite/#/tools',

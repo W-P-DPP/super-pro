@@ -18,7 +18,7 @@ describe('admin todo suggestion api', () => {
     postMock.mockReset()
   })
 
-  it('submits anonymous suggestion with admin source app and public request config', async () => {
+  it('submits anonymous suggestion with BMS source app and public request config', async () => {
     postMock.mockResolvedValue({
       code: 200,
       msg: '提交建议成功',
@@ -29,7 +29,7 @@ describe('admin todo suggestion api', () => {
     })
 
     await submitSuggestion({
-      sourceApp: 'admin-front',
+      sourceApp: 'BMS',
       title: '补充建议入口',
       description: '希望能更快反馈问题',
       pageUrl: 'http://localhost:5173/#/dashboard',
@@ -38,7 +38,7 @@ describe('admin todo suggestion api', () => {
     expect(postMock).toHaveBeenCalledWith(
       '/todo/submitSuggestion',
       {
-        sourceApp: 'admin-front',
+        sourceApp: 'BMS',
         title: '补充建议入口',
         description: '希望能更快反馈问题',
         pageUrl: 'http://localhost:5173/#/dashboard',

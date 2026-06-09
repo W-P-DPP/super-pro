@@ -35,6 +35,9 @@ import {
   TableHeader,
   TableRow,
   Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   toast,
 } from '@/components/ui'
 import {
@@ -46,7 +49,7 @@ import {
   TODO_STATUS_LABELS,
   updateTodo,
 } from '@/api/modules/todos'
-import { getProjects, type ProjectResponseDto } from '@/api/modules/projects'
+import { getProjects } from '@/api/modules/projects'
 import { useAdminMenu } from '@/contexts/admin-menu-context'
 import {
   ADMIN_PAGE_FILL_CARD_CLASS,
@@ -57,6 +60,7 @@ import {
   ModuleSelect,
   type LoadState,
 } from './module-page-shared'
+import { resolveTodoProjectOption, type TodoProjectOption } from './todo-page-helpers'
 import { cn } from '@/lib/utils'
 
 type TodoFilters = {
@@ -66,7 +70,7 @@ type TodoFilters = {
   projectId: number | null
 }
 
-type ProjectOption = Pick<ProjectResponseDto, 'id' | 'projectName' | 'projectCode'>
+type ProjectOption = TodoProjectOption
 
 type TodoFormState = {
   title: string
@@ -77,7 +81,7 @@ type TodoFormState = {
   status: TodoStatus
 }
 
-const TABLE_COLUMN_COUNT = 6
+const TABLE_COLUMN_COUNT = 7
 const PROJECT_QUERY_LIMIT = 100
 const TEXT = {
   titlePlaceholder: '\u8bf7\u8f93\u5165\u5f85\u529e\u6807\u9898',
@@ -117,6 +121,7 @@ const TEXT = {
   emptyList: '\u6682\u65e0\u5339\u914d\u7684\u5f85\u529e\u6570\u636e\u3002',
   retryButton: '\u91cd\u8bd5',
   titleColumn: '\u6807\u9898',
+  descriptionColumn: '\u63cf\u8ff0',
   statusColumn: '\u72b6\u6001',
   priorityColumn: '\u4f18\u5148\u7ea7',
   projectColumn: '\u5f52\u5c5e\u9879\u76ee',
@@ -408,7 +413,10 @@ export function TodosPage() {
 
   function handleEditTodo(todo: TodoResponseDto) {
     setEditingTodo(todo)
-    setEditingDraft(buildEditDraft(todo))
+    setEditingDraft({
+      ...buildEditDraft(todo),
+      project: resolveTodoProjectOption(todo, projectOptions),
+    })
   }
 
   function handleCloseEditDialog() {
@@ -617,6 +625,7 @@ export function TodosPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{TEXT.titleColumn}</TableHead>
+                  <TableHead>{TEXT.descriptionColumn}</TableHead>
                   <TableHead>{TEXT.statusColumn}</TableHead>
                   <TableHead>{TEXT.priorityColumn}</TableHead>
                   <TableHead>{TEXT.projectColumn}</TableHead>
@@ -646,78 +655,89 @@ export function TodosPage() {
                     </TableCell>
                   </TableRow>
                 ) : todoRows.length > 0 ? (
-                  todoRows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium">{row.title}</div>
-                          {row.description ? (
-                            <div className="max-w-[32rem] truncate text-xs text-muted-foreground">{row.description}</div>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <TodoStatusBadge status={row.status} />
-                      </TableCell>
-                      <TableCell>
-                        <TodoPriorityBadge priority={row.priority} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium">{row.project?.projectName ?? '--'}</div>
-                          {row.project?.projectCode ? (
-                            <div className="font-mono text-xs text-muted-foreground">{row.project.projectCode}</div>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatDateTimeCell(row.updateTime || row.createTime)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {canUpdateTodoAction
-                            ? QUICK_STATUS_ACTIONS[row.status].map((action) => {
-                                const nextKey = `${row.id}:${action.nextStatus}`
-                                const isUpdating = statusUpdatingKey === nextKey
+                  todoRows.map((row) => {
+                    const resolvedProject = resolveTodoProjectOption(row, projectOptions)
 
-                                return (
-                                  <Button
-                                    key={nextKey}
-                                    type="button"
-                                    variant={action.tone === 'danger' ? 'outline' : 'secondary'}
-                                    size="sm"
-                                    className={cn(
-                                      'h-8 rounded-full px-3',
-                                      action.tone === 'danger'
-                                        ? 'border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/70 dark:text-rose-300 dark:hover:bg-rose-950/40'
-                                        : 'bg-sky-100 text-sky-700 hover:bg-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-900/60',
-                                    )}
-                                    onClick={() => void handleQuickStatusUpdate(row, action.nextStatus)}
-                                    disabled={Boolean(statusUpdatingKey) || isSavingTodo}
-                                  >
-                                    {isUpdating ? TEXT.saving : action.label}
-                                  </Button>
-                                )
-                              })
-                            : null}
-                          {canUpdateTodoAction ? (
-                            <Button type="button" variant="ghost" size="sm" onClick={() => handleEditTodo(row)}>
-                              {TEXT.editButton}
-                            </Button>
-                          ) : null}
-                          {canDeleteTodoAction ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => setDeletingTodo(row)}
-                            >
-                              {TEXT.deleteButton}
-                            </Button>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-medium">{row.title}</TableCell>
+                        <TableCell className="max-w-[24rem]">
+                          {row.description?.trim() ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="truncate text-sm text-muted-foreground">{row.description.trim()}</div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="start" className="max-w-md whitespace-pre-wrap leading-5">
+                                {row.description.trim()}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <div className="truncate text-sm text-muted-foreground">--</div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <TodoStatusBadge status={row.status} />
+                        </TableCell>
+                        <TableCell>
+                          <TodoPriorityBadge priority={row.priority} />
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{resolvedProject?.projectName ?? '--'}</div>
+                            {resolvedProject?.projectCode ? (
+                              <div className="font-mono text-xs text-muted-foreground">{resolvedProject.projectCode}</div>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatDateTimeCell(row.updateTime || row.createTime)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {canUpdateTodoAction
+                              ? QUICK_STATUS_ACTIONS[row.status].map((action) => {
+                                  const nextKey = `${row.id}:${action.nextStatus}`
+                                  const isUpdating = statusUpdatingKey === nextKey
+
+                                  return (
+                                    <Button
+                                      key={nextKey}
+                                      type="button"
+                                      variant={action.tone === 'danger' ? 'outline' : 'secondary'}
+                                      size="sm"
+                                      className={cn(
+                                        'h-8 rounded-full px-3',
+                                        action.tone === 'danger'
+                                          ? 'border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900/70 dark:text-rose-300 dark:hover:bg-rose-950/40'
+                                          : 'bg-sky-100 text-sky-700 hover:bg-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-900/60',
+                                      )}
+                                      onClick={() => void handleQuickStatusUpdate(row, action.nextStatus)}
+                                      disabled={Boolean(statusUpdatingKey) || isSavingTodo}
+                                    >
+                                      {isUpdating ? TEXT.saving : action.label}
+                                    </Button>
+                                  )
+                                })
+                              : null}
+                            {canUpdateTodoAction ? (
+                              <Button type="button" variant="ghost" size="sm" onClick={() => handleEditTodo(row)}>
+                                {TEXT.editButton}
+                              </Button>
+                            ) : null}
+                            {canDeleteTodoAction ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setDeletingTodo(row)}
+                              >
+                                {TEXT.deleteButton}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={TABLE_COLUMN_COUNT} className="h-24 text-center text-muted-foreground">

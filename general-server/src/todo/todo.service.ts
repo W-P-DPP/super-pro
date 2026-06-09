@@ -30,9 +30,13 @@ const MAX_TODO_REMARK_LENGTH = 255
 const MAX_SUGGESTION_PAGE_URL_LENGTH = 512
 const DEFAULT_TODO_PRIORITY: TodoPriority = 'medium'
 const DEFAULT_TODO_STATUS: TodoStatus = 'pending_review'
-const SUGGESTION_PROJECT_CODE_BY_SOURCE_APP: Record<SuggestionSourceApp, string> = {
+const LEGACY_SUGGESTION_SOURCE_APP_ALIASES = {
   'admin-front': 'BMS',
   'front-public': 'zwpsite',
+} as const
+const SUGGESTION_PROJECT_CODE_BY_SOURCE_APP: Record<SuggestionSourceApp, string> = {
+  BMS: 'admin-console',
+  zwpsite: 'zwpsite',
   login: 'login',
 }
 
@@ -149,7 +153,7 @@ function normalizeOptionalString(
 }
 
 function ensureSuggestionSourceApp(value: unknown, field: string): SuggestionSourceApp {
-  if (typeof value !== 'string' || !SUGGESTION_SOURCE_APPS.includes(value as SuggestionSourceApp)) {
+  if (typeof value !== 'string') {
     throw new TodoBusinessError(
       '建议来源应用不合法',
       {
@@ -162,7 +166,26 @@ function ensureSuggestionSourceApp(value: unknown, field: string): SuggestionSou
     )
   }
 
-  return value as SuggestionSourceApp
+  const trimmedValue = value.trim()
+  const canonicalValue =
+    LEGACY_SUGGESTION_SOURCE_APP_ALIASES[
+      trimmedValue as keyof typeof LEGACY_SUGGESTION_SOURCE_APP_ALIASES
+    ] ?? trimmedValue
+
+  if (!SUGGESTION_SOURCE_APPS.includes(canonicalValue as SuggestionSourceApp)) {
+    throw new TodoBusinessError(
+      '建议来源应用不合法',
+      {
+        nodePath: 'todo',
+        field,
+        reason: `来源应用必须是 ${SUGGESTION_SOURCE_APPS.join(' / ')} 之一`,
+        value,
+      },
+      HttpStatus.BAD_REQUEST,
+    )
+  }
+
+  return canonicalValue as SuggestionSourceApp
 }
 
 function ensureTodoStatus(value: unknown, field: string): TodoStatus {

@@ -271,7 +271,7 @@ describe('TodoService', () => {
     ])
 
     const result = await service.submitSuggestion({
-      sourceApp: 'front-public',
+      sourceApp: 'zwpsite',
       title: '建议补一个快速搜索入口',
       description: '现在层级深的时候不太好找',
       pageUrl: 'https://www.zwpsite.icu/zwpsite/#/tools',
@@ -288,7 +288,7 @@ describe('TodoService', () => {
           id: 33,
           projectCode: 'zwpsite',
         }),
-        description: expect.stringContaining('来源应用：front-public'),
+        description: expect.stringContaining('来源应用：zwpsite'),
       }),
     )
     expect(result.description).toContain('来源页面：https://www.zwpsite.icu/zwpsite/#/tools')
@@ -310,12 +310,37 @@ describe('TodoService', () => {
     })
   })
 
+  it('normalizes legacy admin-front source app to BMS', async () => {
+    const service = createService(todoRecords, [
+      ...activeProjects,
+      {
+        id: 44,
+        projectName: '后台管理系统',
+        projectCode: 'BMS',
+      },
+    ])
+
+    const result = await service.submitSuggestion({
+      sourceApp: 'admin-front',
+      title: 'Normalize legacy source app',
+      pageUrl: 'http://localhost:5173/#/dashboard',
+    })
+
+    expect(result.project).toEqual(
+      expect.objectContaining({
+        id: 11,
+        projectCode: 'admin-console',
+      }),
+    )
+    expect(result.description).toContain('来源应用：BMS')
+  })
+
   it('rejects empty suggestion title', async () => {
     const service = createService(todoRecords, activeProjects)
 
     await expect(
       service.submitSuggestion({
-        sourceApp: 'admin-front',
+        sourceApp: 'BMS',
         title: '   ',
       }),
     ).rejects.toMatchObject<Partial<TodoBusinessError>>({
