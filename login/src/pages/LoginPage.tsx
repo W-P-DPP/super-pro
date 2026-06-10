@@ -1,7 +1,6 @@
 import type { ChangeEvent, FormEvent } from 'react'
 import { useState } from 'react'
 import { AuthApiError, loginUser, registerUser } from '@/lib/auth-client'
-import { appendAuthHandoffToUrl, writeAuthHandoff } from '@/lib/auth-handoff'
 import { getRedirectTargetFromLocation } from '@/lib/auth-redirect'
 import { saveAuthSession } from '@/lib/auth-storage'
 import {
@@ -24,13 +23,21 @@ const initialRegisterState: RegisterFormState = {
   confirmPassword: '',
 }
 
+function getMessageFromLocation() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  return new URLSearchParams(window.location.search).get('message')?.trim() ?? ''
+}
+
 export function LoginPage() {
   const [mode, setMode] = useState<AuthMode>('login')
   const [loginForm, setLoginForm] = useState(initialLoginState)
   const [registerForm, setRegisterForm] = useState(initialRegisterState)
   const [errors, setErrors] = useState<AuthFormErrors>({})
   const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState('')
+  const [formError, setFormError] = useState(() => getMessageFromLocation())
   const [successMessage, setSuccessMessage] = useState('')
 
   const isLogin = mode === 'login'
@@ -103,8 +110,7 @@ export function LoginPage() {
         }))
 
         if (redirectTarget) {
-          writeAuthHandoff(result)
-          window.location.assign(appendAuthHandoffToUrl(redirectTarget, result))
+          window.location.assign(redirectTarget)
           return
         }
 

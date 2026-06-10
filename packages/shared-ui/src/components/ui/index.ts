@@ -32,6 +32,7 @@ export * from './item'
 export * from './kbd'
 export * from './label'
 export * from './menubar'
+export * from './multi-select'
 export * from './native-select'
 export * from './navigation-menu'
 export * from './pagination'
@@ -57,6 +58,7 @@ export * from './toggle'
 export * from './toggle-group'
 export * from './tooltip'
 export * from './typography'
+export * from './tree-data-table'
 
 
 

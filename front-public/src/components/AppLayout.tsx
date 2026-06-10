@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { SuggestionCollector } from '@super-pro/shared-ui'
 import { Outlet } from 'react-router-dom'
 import { useTheme } from 'next-themes'
 import {
@@ -40,6 +41,7 @@ import {
   toast,
 } from '@/components/ui'
 import { getSiteMenuConfig, getSiteMenuTree } from '@/api/modules/site-menu'
+import { submitSuggestion } from '@/api/modules/todo-suggestion'
 import {
   buildToolStats,
   emptyToolStats,
@@ -472,6 +474,8 @@ export function AppLayout() {
 
         <Outlet context={outletContext} />
       </SidebarInset>
+
+      <SuggestionCollector sourceApp="zwpsite" onSubmit={submitSuggestion} />
     </SidebarProvider>
   )
 }

@@ -1,6 +1,5 @@
+import { BaseEntity, BaseSchemaColumns } from '@super-pro/shared-server';
 import { EntitySchema } from 'typeorm';
-import { BaseEntity, BaseSchemaColumns } from '../../utils/entities/base.entity.ts';
-import { UserRoleEnum } from './user.dto.ts';
 
 export class UserEntity extends BaseEntity {
   id!: number
@@ -9,7 +8,6 @@ export class UserEntity extends BaseEntity {
   email!: string
   phone!: string
   status!: number
-  role!: UserRoleEnum
   passwordHash!: string
 }
 
@@ -63,14 +61,6 @@ export const UserEntitySchema = new EntitySchema<UserEntity>({
       default: 1,
       comment: '用户状态，1 启用，0 停用',
     },
-    role: {
-      name: 'role',
-      type: String,
-      length: 32,
-      nullable: false,
-      default: UserRoleEnum.Guest,
-      comment: '用户角色',
-    },
     passwordHash: {
       name: 'password_hash',
       type: String,
@@ -86,10 +76,6 @@ export const UserEntitySchema = new EntitySchema<UserEntity>({
     {
       name: 'idx_sys_user_status',
       columns: ['status'],
-    },
-    {
-      name: 'idx_sys_user_role',
-      columns: ['role'],
     },
   ],
   uniques: [

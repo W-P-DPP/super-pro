@@ -33,6 +33,11 @@ const originalWindow = globalThis.window;
 describe('shared-web auth session helpers', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    if (typeof document !== 'undefined') {
+      document.cookie =
+        'super-pro.auth-session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    }
+
     if (originalWindow === undefined) {
       Reflect.deleteProperty(globalThis, 'window');
       return;
@@ -74,6 +79,69 @@ describe('shared-web auth session helpers', () => {
 
     store.clearReusableAuthSession();
     expect(store.getReusableAuthToken()).toBeNull();
+  });
+
+  it('reads a reusable session from the shared auth cookie', () => {
+    const localStorage = createMemoryStorage();
+    vi.stubGlobal('window', { localStorage });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        cookie: `super-pro.auth-session=${encodeURIComponent(
+          JSON.stringify({
+            token: 'cookie-token',
+            tokenType: 'Bearer',
+            expiresAt: Date.now() + 60_000,
+          }),
+        )}`,
+      },
+    });
+
+    const store = createAuthSessionStore({ storageKey: 'login-template.auth' });
+
+    expect(store.readReusableAuthSession()).toEqual({
+      token: 'cookie-token',
+      tokenType: 'Bearer',
+      expiresAt: expect.any(Number),
+    });
+    expect(store.getReusableAuthToken()).toBe('cookie-token');
+    expect(localStorage.getItem('login-template.auth')).toContain('"token":"cookie-token"');
+  });
+
+  it('uses cookie-only mode without persisting the token to local storage', () => {
+    const localStorage = createMemoryStorage();
+    localStorage.setItem('token', 'stale-token');
+    localStorage.setItem(
+      'login-template.auth',
+      JSON.stringify({
+        token: 'stale-session-token',
+        tokenType: 'Bearer',
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    vi.stubGlobal('window', { localStorage });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        cookie: `super-pro.auth-session=${encodeURIComponent(
+          JSON.stringify({
+            token: 'cookie-token',
+            tokenType: 'Bearer',
+            expiresAt: Date.now() + 60_000,
+          }),
+        )}`,
+      },
+    });
+
+    const store = createAuthSessionStore({
+      storageKey: 'login-template.auth',
+      directTokenStorageKey: false,
+      storageMode: 'cookie',
+    });
+
+    expect(store.getReusableAuthToken()).toBe('cookie-token');
+    expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('login-template.auth')).toBeNull();
   });
 
   it('validates stored auth session payloads', () => {

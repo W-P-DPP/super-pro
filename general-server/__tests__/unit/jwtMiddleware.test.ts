@@ -1,14 +1,19 @@
 import type { NextFunction, Request, Response } from 'express';
 import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import {
-  generateToken,
-  jwtMiddleware,
+  createJwtMiddleware,
+  generateJwtToken,
   type JwtPayload,
-} from '../../utils/middleware/jwtMiddleware.ts';
+} from '@super-pro/shared-server';
 
 const SECRET = 'test_secret';
+const jwtMiddleware = createJwtMiddleware({
+  cookieNames: ['file_preview_token'],
+  missingTokenMessage: '缺少授权信息或授权格式错误',
+  invalidTokenMessage: '令牌无效或已过期',
+});
 
 type MockResponse = Response & {
   sendFail: jest.Mock
@@ -71,7 +76,7 @@ describe('jwtMiddleware', () => {
   it('attaches decoded payload for a valid bearer token', () => {
     process.env.JWT_ENABLED = 'true';
     const payload: JwtPayload = { userId: 1, role: 'admin' };
-    const token = generateToken(payload);
+    const token = generateJwtToken(payload);
     const req = createRequest({
       headers: {
         authorization: `Bearer ${token}`,
@@ -90,7 +95,7 @@ describe('jwtMiddleware', () => {
   it('attaches decoded payload for a valid preview cookie token', () => {
     process.env.JWT_ENABLED = 'true';
     const payload: JwtPayload = { userId: 2, role: 'viewer' };
-    const token = generateToken(payload);
+    const token = generateJwtToken(payload);
     const req = createRequest({
       headers: {
         cookie: `theme=dark; file_preview_token=${encodeURIComponent(token)}`,
@@ -127,7 +132,7 @@ describe('jwtMiddleware', () => {
 describe('generateToken', () => {
   it('returns a JWT token string that can be verified', () => {
     const payload = { userId: 42, name: 'test-user' };
-    const token = generateToken(payload);
+    const token = generateJwtToken(payload);
     const decoded = jwt.verify(token, SECRET) as Record<string, unknown>;
 
     expect(typeof token).toBe('string');
@@ -137,7 +142,7 @@ describe('generateToken', () => {
   });
 
   it('expires when a short ttl is used', async () => {
-    const token = generateToken({ userId: 1 }, 1);
+    const token = generateJwtToken({ userId: 1 }, 1);
 
     await new Promise<void>((resolve) => {
       setTimeout(() => {

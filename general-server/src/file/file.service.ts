@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { TextDecoder } from 'node:util'
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts'
+import { HttpStatus } from '@super-pro/shared-constants'
 import type {
   CompleteChunkUploadBatchRequestDto,
   CompleteChunkUploadRequestDto,

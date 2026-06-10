@@ -1,17 +1,21 @@
 import { constants, publicEncrypt } from 'crypto';
 import type {
-  CreateUserEntityInput,
-  UpdateUserEntityInput,
-  UserRepositoryPort,
-} from '../../src/user/user.repository.ts';
-import { UserRoleEnum } from '../../src/user/user.dto.ts';
-import { UserEntity } from '../../src/user/user.entity.ts';
+  AuthorizationRoleSummary,
+  CompatibilityUserRole,
+} from '@super-pro/shared-types';
 import {
   clearCachedLoginEncryptionKeyPair,
   hashPassword,
   UserBusinessError,
   UserService,
+  verifyPassword,
 } from '../../src/user/user.service.ts';
+import type {
+  CreateUserEntityInput,
+  UpdateUserEntityInput,
+  UserRepositoryPort,
+} from '../../src/user/user.repository.ts';
+import { UserEntity } from '../../src/user/user.entity.ts';
 
 const TEST_PASSWORD = '123456';
 const DISABLED_USER_PASSWORD = '654321';
@@ -22,8 +26,22 @@ function cloneUser(user: UserEntity): UserEntity {
 
 function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
   return {
-    async getUserList() {
-      return records.map(cloneUser);
+    async getUserList(query) {
+      const keyword = typeof query.keyword === 'string' ? query.keyword.toLowerCase() : '';
+      const filteredRecords = records.filter((record) => {
+        const matchesKeyword =
+          !keyword ||
+          `${record.username} ${record.nickname} ${record.phone}`.toLowerCase().includes(keyword);
+        const matchesStatus = query.status === undefined || record.status === query.status;
+        return matchesKeyword && matchesStatus;
+      });
+
+      return {
+        items: filteredRecords.map(cloneUser),
+        total: filteredRecords.length,
+        page: 1,
+        pageSize: query.pageSize ?? 10,
+      };
     },
     async getUserById(id: number) {
       const target = records.find((record) => record.id === id);
@@ -31,6 +49,10 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
     },
     async getUserByUsername(username: string) {
       const target = records.find((record) => record.username === username);
+      return target ? cloneUser(target) : null;
+    },
+    async getUserByPhone(phone: string) {
+      const target = records.find((record) => record.phone === phone);
       return target ? cloneUser(target) : null;
     },
     async getUserAuthByUsername(username: string) {
@@ -45,7 +67,6 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
         email: input.email,
         phone: input.phone,
         status: input.status,
-        role: input.role,
         passwordHash: input.passwordHash,
         ...(input.remark !== undefined ? { remark: input.remark } : {}),
       });
@@ -65,6 +86,49 @@ function createRepositoryMock(records: UserEntity[]): UserRepositoryPort {
   };
 }
 
+function createAuthorizationServiceMock(initialAssignments?: Map<number, AuthorizationRoleSummary[]>) {
+  const assignments = new Map<number, AuthorizationRoleSummary[]>();
+
+  for (const [userId, roles] of initialAssignments ?? new Map()) {
+    assignments.set(
+      userId,
+      roles.map((role) => ({ ...role })),
+    );
+  }
+
+  return {
+    async getAssignedRolesByUserIds(userIds: number[]) {
+      return new Map(
+        userIds.map((userId) => [
+          userId,
+          (assignments.get(userId) ?? []).map((role) => ({ ...role })),
+        ]),
+      );
+    },
+    async ensureRoleIdsExist() {},
+    async replaceUserRoleAssignments(userId: number, roleIds: number[]) {
+      assignments.set(
+        userId,
+        roleIds.map((roleId) => ({
+          id: roleId,
+          code: `role.${roleId}`,
+          name: `Role ${roleId}`,
+        })),
+      );
+    },
+    async clearUserRoleAssignments(userId: number) {
+      assignments.set(userId, []);
+    },
+  };
+}
+
+function createService(records: UserEntity[], assignments?: Map<number, AuthorizationRoleSummary[]>) {
+  return new UserService(
+    createRepositoryMock(records),
+    createAuthorizationServiceMock(assignments),
+  );
+}
+
 function encryptPassword(publicKey: string, password: string): string {
   return publicEncrypt(
     {
@@ -81,22 +145,19 @@ describe('UserService', () => {
     Object.assign(new UserEntity(), {
       id: 1,
       username: 'zhangsan',
-      nickname: '张三',
+      nickname: 'zhangsan',
       email: 'zhangsan@example.com',
       phone: '13800000001',
       status: 1,
-      role: UserRoleEnum.Admin,
       passwordHash: hashPassword(TEST_PASSWORD),
-      remark: '初始用户',
     }),
     Object.assign(new UserEntity(), {
       id: 2,
       username: 'lisi',
-      nickname: '李四',
+      nickname: 'lisi',
       email: 'lisi@example.com',
       phone: '13800000002',
       status: 0,
-      role: UserRoleEnum.Guest,
       passwordHash: hashPassword(DISABLED_USER_PASSWORD),
     }),
   ];
@@ -108,34 +169,37 @@ describe('UserService', () => {
     clearCachedLoginEncryptionKeyPair();
   });
 
-  it('新增用户成功时应返回角色字段', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('creates a user and returns assigned roles from the relation table', async () => {
+    const service = createService(records);
 
     const result = await service.createUser({
       username: 'wangwu',
-      nickname: '王五',
+      nickname: 'wangwu',
       email: 'wangwu@example.com',
       phone: '13800000003',
       status: 1,
-      role: UserRoleEnum.Admin,
+      assignedRoleIds: [10, 20],
     });
 
     expect(result).toEqual(
       expect.objectContaining({
         id: 99,
         username: 'wangwu',
-        nickname: '王五',
-        role: UserRoleEnum.Admin,
+        assignedRoles: [
+          { id: 10, code: 'role.10', name: 'Role 10' },
+          { id: 20, code: 'role.20', name: 'Role 20' },
+        ],
       }),
     );
+    expect(result).not.toHaveProperty('role');
   });
 
-  it('未传角色时应默认创建为 guest', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('returns empty assigned roles when no role relation exists', async () => {
+    const service = createService(records);
 
     const result = await service.createUser({
       username: 'zhaoliu',
-      nickname: '赵六',
+      nickname: 'zhaoliu',
       email: 'zhaoliu@example.com',
       phone: '13800000004',
       status: 1,
@@ -144,89 +208,124 @@ describe('UserService', () => {
     expect(result).toEqual(
       expect.objectContaining({
         username: 'zhaoliu',
-        role: UserRoleEnum.Guest,
+        assignedRoles: [],
       }),
     );
   });
 
-  it('新增重复用户名时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('rejects duplicate username on create', async () => {
+    const service = createService(records);
 
     await expect(
       service.createUser({
         username: 'zhangsan',
-        nickname: '重复用户',
-        email: 'dup@example.com',
-        phone: '13800000009',
+        nickname: 'duplicate-user',
         status: 1,
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户名已存在',
-    });
-  });
-
-  it('传入非法角色时应返回角色字段错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
-
-    await expect(
-      service.createUser({
-        username: 'guest-user',
-        nickname: '访客',
-        role: 'invalid-role' as UserRoleEnum,
-      }),
-    ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      statusCode: 400,
+      statusCode: 409,
       context: expect.objectContaining({
-        field: 'role',
+        field: 'username',
       }),
     });
   });
 
-  it('查询不存在用户时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('returns not found for missing users', async () => {
+    const service = createService(records);
 
     await expect(service.getUserDetail(99999)).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户不存在',
-    });
-  });
-
-  it('更新不存在用户时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
-
-    await expect(
-      service.updateUser(99999, {
-        nickname: '不存在',
+      statusCode: 404,
+      context: expect.objectContaining({
+        field: 'id',
       }),
-    ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户不存在',
     });
   });
 
-  it('删除不存在用户时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
-
-    await expect(service.deleteUser(99999)).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户不存在',
-    });
-  });
-
-  it('更新用户角色时应返回最新角色', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('updates user phone and role assignments', async () => {
+    const assignments = new Map<number, AuthorizationRoleSummary[]>([
+      [
+        1,
+        [{ id: 1, code: 'platform.admin', name: 'Platform Admin' }],
+      ],
+    ]);
+    const service = createService(records, assignments);
 
     const result = await service.updateUser(1, {
-      role: UserRoleEnum.Guest,
+      phone: '13900000001',
+      assignedRoleIds: [30],
     });
 
     expect(result).toEqual(
       expect.objectContaining({
         id: 1,
-        role: UserRoleEnum.Guest,
+        phone: '13900000001',
+        assignedRoles: [{ id: 30, code: 'role.30', name: 'Role 30' }],
       }),
     );
+    expect(result).not.toHaveProperty('role');
   });
 
-  it('登录成功时应返回带角色的脱敏用户信息', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('supports filtered user list queries with roleId and status', async () => {
+    const assignments = new Map<number, AuthorizationRoleSummary[]>([
+      [
+        1,
+        [{ id: 101, code: 'platform.admin', name: 'Platform Admin' }],
+      ],
+      [
+        2,
+        [{ id: 202, code: 'project.viewer', name: 'Project Viewer' }],
+      ],
+    ]);
+    const service = createService(records, assignments);
+
+    const result = await service.getUserList({
+      keyword: 'zhang',
+      roleId: '101',
+      status: '1',
+      page: '1',
+      pageSize: '1',
+    });
+
+    expect(result).toEqual({
+      items: [
+        expect.objectContaining({
+          id: 1,
+          username: 'zhangsan',
+          assignedRoles: [{ id: 101, code: 'platform.admin', name: 'Platform Admin' }],
+        }),
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 1,
+    });
+  });
+
+  it.each<[string, AuthorizationRoleSummary[], CompatibilityUserRole]>([
+    [
+      'admin compatibility role',
+      [{ id: 1, code: 'platform.admin', name: 'Platform Admin' }],
+      'admin',
+    ],
+    [
+      'super-admin compatibility role',
+      [{ id: 8, code: 'super-admin', name: 'Super Admin' }],
+      'admin',
+    ],
+    [
+      'guest compatibility role',
+      [{ id: 2, code: 'project.viewer', name: 'Project Viewer' }],
+      'guest',
+    ],
+    [
+      'employee compatibility role',
+      [{ id: 3, code: 'project.editor', name: 'Project Editor' }],
+      'employee',
+    ],
+  ])('emits %s in jwt payload', async (_label, assignedRoles, expectedRole) => {
+    const service = createService(
+      records,
+      new Map<number, AuthorizationRoleSummary[]>([[1, assignedRoles]]),
+    );
     const publicKey = service.getLoginPublicKey().publicKey;
 
     const result = await service.loginUser({
@@ -234,6 +333,11 @@ describe('UserService', () => {
       passwordCiphertext: encryptPassword(publicKey, TEST_PASSWORD),
     });
 
+    const tokenPayload = JSON.parse(
+      Buffer.from(result.token.split('.')[1] ?? '', 'base64url').toString('utf8'),
+    ) as { role?: CompatibilityUserRole };
+
+    expect(tokenPayload.role).toBe(expectedRole);
     expect(result).toEqual(
       expect.objectContaining({
         token: expect.any(String),
@@ -241,11 +345,10 @@ describe('UserService', () => {
         expiresIn: 7200,
       }),
     );
-    expect(result).not.toHaveProperty('user');
   });
 
-  it('登录凭证错误时应返回统一中文错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
+  it('rejects wrong password and disabled user login', async () => {
+    const service = createService(records);
     const publicKey = service.getLoginPublicKey().publicKey;
 
     await expect(
@@ -254,13 +357,11 @@ describe('UserService', () => {
         passwordCiphertext: encryptPassword(publicKey, 'wrong-password'),
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户名或密码错误',
+      statusCode: 401,
+      context: expect.objectContaining({
+        field: 'credentials',
+      }),
     });
-  });
-
-  it('停用用户登录时应返回中文业务错误', async () => {
-    const service = new UserService(createRepositoryMock(records));
-    const publicKey = service.getLoginPublicKey().publicKey;
 
     await expect(
       service.loginUser({
@@ -268,16 +369,52 @@ describe('UserService', () => {
         passwordCiphertext: encryptPassword(publicKey, DISABLED_USER_PASSWORD),
       }),
     ).rejects.toMatchObject<Partial<UserBusinessError>>({
-      message: '用户已停用，无法登录',
+      statusCode: 403,
+      context: expect.objectContaining({
+        field: 'status',
+      }),
     });
   });
+
+  it('rejects duplicate phone on create and update', async () => {
+    const service = createService(records);
+
+    await expect(
+      service.createUser({
+        username: 'wangwu',
+        nickname: 'duplicate-phone-user',
+        email: 'dup-phone@example.com',
+        phone: '13800000001',
+        status: 1,
+      }),
+    ).rejects.toMatchObject<Partial<UserBusinessError>>({
+      statusCode: 409,
+      context: expect.objectContaining({
+        field: 'phone',
+      }),
+    });
+
+    await expect(
+      service.updateUser(1, {
+        phone: '13800000002',
+      }),
+    ).rejects.toMatchObject<Partial<UserBusinessError>>({
+      statusCode: 409,
+      context: expect.objectContaining({
+        field: 'phone',
+      }),
+    });
+  });
+
   it('falls back to an ephemeral key pair when production keys are placeholders', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.LOGIN_PASSWORD_PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\\nreplace_with_public_key\\n-----END PUBLIC KEY-----';
-    process.env.LOGIN_PASSWORD_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\\nreplace_with_private_key\\n-----END PRIVATE KEY-----';
+    process.env.LOGIN_PASSWORD_PUBLIC_KEY =
+      '-----BEGIN PUBLIC KEY-----\\nreplace_with_public_key\\n-----END PUBLIC KEY-----';
+    process.env.LOGIN_PASSWORD_PRIVATE_KEY =
+      '-----BEGIN PRIVATE KEY-----\\nreplace_with_private_key\\n-----END PRIVATE KEY-----';
     clearCachedLoginEncryptionKeyPair();
 
-    const service = new UserService(createRepositoryMock(records));
+    const service = createService(records);
     const publicKey = service.getLoginPublicKey().publicKey;
     const result = await service.loginUser({
       username: 'zhangsan',
@@ -292,5 +429,26 @@ describe('UserService', () => {
         expiresIn: 7200,
       }),
     );
+  });
+
+  it('hashes password changes before persisting', async () => {
+    let updatedInput: UpdateUserEntityInput | null = null;
+    const repository = createRepositoryMock(records);
+    const originalUpdateUser = repository.updateUser;
+
+    repository.updateUser = async (id, input) => {
+      updatedInput = input;
+      return originalUpdateUser.call(repository, id, input);
+    };
+
+    const service = new UserService(repository, createAuthorizationServiceMock());
+    const result = await service.updateUser(1, {
+      password: '654321',
+    });
+
+    expect(updatedInput?.passwordHash).toEqual(expect.any(String));
+    expect(updatedInput?.passwordHash).not.toBe('654321');
+    expect(verifyPassword('654321', updatedInput!.passwordHash!)).toBe(true);
+    expect(result).not.toHaveProperty('passwordHash');
   });
 });

@@ -1,10 +1,12 @@
 # Backend Conventions Reference
 
-Use this file after `backend-dev-guard` triggers and the task touches backend structure, shared-server infrastructure, observability, alerting, runtime lifecycle, or test-entry behavior.
+在 `backend-dev-guard` 触发后，如果任务涉及后端结构、shared-server 基础设施、运行时、日志、安全、测试入口或权限路由编排，读取本文件。
 
-## Module Layout
+如果任务涉及新增或修改接口、路由、上传下载、管理操作或用户敏感信息读取，还要同时读取 `references/permission-integration.md`。
 
-Business domains should prefer:
+## 模块结构
+
+优先结构：
 
 ```text
 src/<domain>/
@@ -16,158 +18,75 @@ src/<domain>/
   <domain>.entity.ts
 ```
 
-Legacy modules may keep current layout, but touched logic should still respect the same layer boundaries.
+旧模块可以保留现有目录，但触达的代码仍要遵守同样的层次边界。
 
-## Layer Responsibilities
+## 分层职责
 
 `router`
 
-- Declare routes and route-level middleware.
-- Mount anonymous routes explicitly before auth middleware when needed.
-- Do not contain business logic.
+- 声明路由和路由级中间件
+- 显式挂匿名入口
+- 负责鉴权和权限中间件编排
 
 `controller`
 
-- Parse HTTP inputs.
-- Validate or normalize DTOs.
-- Call services.
-- Return shared response envelopes.
-- Map domain errors to stable Chinese messages.
+- 解析 HTTP 输入
+- 做 DTO 级校验和归一化
+- 调 service
+- 返回统一响应结构
 
 `service`
 
-- Own business rules and orchestration.
-- Coordinate repositories, cache, external clients, and transactions.
-- Do not depend on Express `req` or `res`.
+- 负责业务规则和编排
+- 协调 repository、cache、第三方客户端和事务
+- 不依赖 Express `req` / `res`
 
 `repository`
 
-- Own persistence access.
-- Hide ORM or SQL details.
-- Return typed entities or DTOs.
+- 负责持久化访问
+- 屏蔽 ORM / SQL 细节
+- 返回明确类型
 
-`dto`
+## Shared Server 能力
 
-- Define request, response, query, command, and view-model types.
-- Avoid `any` and loose dictionaries.
+优先复用：
 
-## Shared Server Infrastructure
+- `createHttpApp`
+- `createResponseMiddleware`
+- `createErrorMiddleware`
+- `createRequestLoggerMiddleware`
+- `createServiceRuntime`
+- `createRequestContextMiddleware`
+- `getRequestContext`
+- `createExceptionEmailReporterFromEnv`
+- `createDevExceptionTestRouter`
+- `loadProfileEnv`
+- `loadServerConfig`
+- `getDatabaseConfig`
+- `SharedRedisService`
+- `SharedAxiosService`
+- `BatchProcessor`
+- `sanitizeLogValue`
 
-Check these first before writing app-local infrastructure:
+`main.ts`、`app.ts`、`utils/Logger.ts`、`utils/Redis.ts` 应尽量只是把本地配置接到 shared primitive 上的薄适配层。
 
-- HTTP app factory: `createHttpApp`
-- Response envelope: `createResponseMiddleware`
-- Error middleware: `createErrorMiddleware`
-- Request logger: `createRequestLoggerMiddleware`
-- Runtime lifecycle: `createServiceRuntime`
-- Request context: `createRequestContextMiddleware`, `getRequestContext`
-- Exception email reporter: `createExceptionEmailReporterFromEnv`
-- Development exception test router: `createDevExceptionTestRouter`
-- Typed env loading: `loadProfileEnv`
-- App config: `loadServerConfig`
-- Database config: `getDatabaseConfig`
-- Redis wrapper: `SharedRedisService`
-- Axios wrapper: `SharedAxiosService`
-- Async batching: `BatchProcessor`
-- Log sanitization: `sanitizeLogValue`
+## 运行时
 
-App-local files such as `main.ts`, `app.ts`, `utils/Logger.ts`, and `utils/Redis.ts` should usually be thin adapters that wire local config into shared primitives.
+- 先加载 `.env.*`
+- 再创建 runtime / reporter / logger
+- 健康检查、优雅退出、异常上报优先走 shared runtime
+- `/live`、`/ready`、`/metrics` 默认是内部探针，不是公开产品 API
 
-## Runtime Lifecycle
+## 日志与异常
 
-Backend services should prefer the shared runtime for:
+- 统一走结构化日志
+- 请求、响应、审计参数和上游错误先脱敏再记录
+- 不记录密码、token、cookie、授权头、私钥和大 payload
+- 不把 stack、SQL 错误、ORM 内部细节直接返回给前端
 
-- process signal handling
-- graceful shutdown
-- shutdown task ordering
-- request drain timeout
-- process-level exception reporting
-- dependency health checks
-- metrics rendering
+## API 契约与鉴权
 
-Rules:
-
-- Load `.env.*` before creating runtime, reporters, or config-dependent adapters.
-- Register shutdown tasks explicitly and keep release order deterministic.
-- Keep readiness dependent on runtime state plus required dependency checks.
-- `/live`, `/ready`, `/metrics` are internal probe endpoints by default, not public product APIs.
-
-## Exception Reporting and Alerting
-
-All exception reporting should flow through `runtime.reportException(...)`.
-
-Canonical event types:
-
-- `request_error`
-- `bootstrap_error`
-- `unhandled_rejection`
-- `uncaught_exception`
-- `shutdown_error`
-
-Severity mapping:
-
-- `P0`: `bootstrap_error`, `uncaught_exception`
-- `P1`: `unhandled_rejection`, `shutdown_error`
-- `P2`: `request_error`
-
-Rules:
-
-- Default email alert threshold is `P0`.
-- Reporter failure must not break the main request or shutdown flow.
-- Email subjects and bodies should be Chinese by default.
-- Keep reporter registration centralized in the service bootstrap path.
-
-## Development Exception Test Entry
-
-When a development-only exception test route is needed:
-
-- reuse `createDevExceptionTestRouter`
-- mount it only when `NODE_ENV=development`
-- keep the path explicit, e.g. `/api/__dev__/exception-email-test`
-- if the service normally applies JWT to all API routes, bypass JWT only for this explicit dev path
-- never mount dev test routes in production
-
-The route may accept both machine codes and Chinese aliases, but should return a stable envelope plus localized display fields.
-
-## Config
-
-- Config loading order should be: safe defaults -> optional config file -> profile env file -> process env overrides.
-- Config objects should be typed.
-- Missing optional config files should not break tests.
-- Secrets should come from protected config or environment variables.
-- Do not scatter raw `process.env` reads across business code.
-
-## Logging
-
-Recommended structured fields:
-
-- timestamp
-- level
-- service
-- env
-- requestId
-- module
-- operation
-- method
-- path
-- statusCode
-- durationMs
-
-Never log:
-
-- password
-- password hash or ciphertext
-- token
-- authorization header
-- cookie
-- private key
-- full large payloads
-
-Use sanitization and truncation for request bodies, response bodies, audit params, and upstream response data.
-
-## API Contract and Auth
-
-Response body shape:
+统一响应结构：
 
 ```ts
 type ResultVO<T> = {
@@ -178,23 +97,21 @@ type ResultVO<T> = {
 }
 ```
 
-Rules:
+规则：
 
-- `msg` should be Chinese by default.
-- Do not leak stack traces, SQL errors, ORM internals, or upstream SDK internals.
-- New APIs default to JWT protection.
-- Anonymous endpoints must be explicit in router composition, not hidden in auth middleware internals.
+- `msg` 默认中文
+- 新 API 默认启用 JWT
+- 匿名接口必须在 router 中显式挂出
+- 受保护接口除了 JWT，还应有显式权限中间件
+- 新权限码应进入 `@super-pro/shared-types`，不要写死在业务文件里
 
-## Validation Commands
-
-Use the smallest relevant checks first:
+## 最小验证命令
 
 ```bash
 pnpm --filter @super-pro/shared-server build
-pnpm --filter @super-pro/shared-server exec vitest run <targeted-tests>
 pnpm --filter @super-pro/server build
 pnpm --filter @super-pro/agent-server build
 pnpm --filter @super-pro/reimburse-server build
 ```
 
-When touching service behavior, also run targeted Jest integration tests in that service.
+改服务行为时，再补最相关的 Jest 单测或集成测试。

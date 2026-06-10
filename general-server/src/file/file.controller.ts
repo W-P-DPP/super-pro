@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
 import type { Request, Response } from 'express'
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts'
+import { HttpStatus } from '@super-pro/shared-constants'
 import type {
   CompleteChunkUploadBatchRequestDto,
   CompleteChunkUploadRequestDto,
@@ -124,6 +124,9 @@ function parseRangeHeader(rangeHeader: string, fileSize: number): ByteRange | nu
 const getFileTree = async (req: Request, res: Response) => {
   try {
     const tree = await fileService.getFileTree()
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
     res.sendSuccess(tree, '获取文件树成功')
   } catch (error) {
     if (error instanceof FileBusinessError) {

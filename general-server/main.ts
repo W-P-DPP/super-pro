@@ -3,6 +3,7 @@ import RedisService from './utils/Redis.ts';
 import initDataBase from './utils/mysql.ts';
 import './eventRegister.ts';
 import { initSiteMenuModule } from './src/siteMenu/siteMenu.repository.ts';
+import { authorizationRepository } from './src/authorization/authorization.repository.ts';
 import {
   BOOTSTRAP_FAILURE_EXIT_CODE,
   createExceptionEmailReporterFromEnv,
@@ -57,6 +58,7 @@ async function bootstrap() {
       order: 200,
     });
 
+    await authorizationRepository.ensureSeedData();
     await initSiteMenuModule();
     const app = createApp({
       runtime,

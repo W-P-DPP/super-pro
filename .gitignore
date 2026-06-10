@@ -9,7 +9,7 @@ dist
 coverage
 logs
 
-.codex
+# .codex
 .claude
 
 
@@ -17,3 +17,5 @@ logs
 *.log
 
 openspec
+
+.codegraph

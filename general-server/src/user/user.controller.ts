@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import type {
   CreateUserRequestDto,
   LoginUserRequestDto,
@@ -10,7 +10,7 @@ import { UserBusinessError, userService } from './user.service.ts';
 
 const getUser = async (req: Request, res: Response) => {
   try {
-    const users = await userService.getUserList();
+    const users = await userService.getUserList(req.query as Record<string, unknown>);
     res.sendSuccess(users, '获取用户列表成功');
   } catch (error) {
     if (error instanceof UserBusinessError) {

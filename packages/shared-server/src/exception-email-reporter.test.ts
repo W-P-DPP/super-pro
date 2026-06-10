@@ -100,4 +100,33 @@ describe('shared-server exception email reporter', () => {
 
     expect(reporter).toBeTruthy();
   });
+
+  it('disables the reporter by default in development', () => {
+    const reporter = createExceptionEmailReporterFromEnv({
+      NODE_ENV: 'development',
+      MAILER_HOST: 'smtp.qq.com',
+      MAILER_PORT: '465',
+      MAILER_SECURE: 'true',
+      MAILER_USER: 'bot@qq.com',
+      MAILER_PASS: 'auth-code',
+      EXCEPTION_EMAIL_TO: 'owner1@qq.com, owner2@qq.com',
+    });
+
+    expect(reporter).toBeUndefined();
+  });
+
+  it('allows explicit enablement in development', () => {
+    const reporter = createExceptionEmailReporterFromEnv({
+      NODE_ENV: 'development',
+      EXCEPTION_EMAIL_ENABLED: 'true',
+      MAILER_HOST: 'smtp.qq.com',
+      MAILER_PORT: '465',
+      MAILER_SECURE: 'true',
+      MAILER_USER: 'bot@qq.com',
+      MAILER_PASS: 'auth-code',
+      EXCEPTION_EMAIL_TO: 'owner1@qq.com, owner2@qq.com',
+    });
+
+    expect(reporter).toBeTruthy();
+  });
 });

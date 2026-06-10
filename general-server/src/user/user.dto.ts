@@ -12,7 +12,11 @@ export interface UserResponseDto {
   email: string
   phone: string
   status: number
-  role: UserRoleEnum
+  assignedRoles?: Array<{
+    id: number
+    code: string
+    name: string
+  }>
   createBy?: string
   createTime?: string
   updateBy?: string
@@ -20,7 +24,20 @@ export interface UserResponseDto {
   remark?: string
 }
 
-export type UserListDto = UserResponseDto[]
+export interface UserListQueryDto {
+  keyword?: string
+  roleId?: number
+  status?: number
+  page?: number
+  pageSize?: number
+}
+
+export interface UserListDto {
+  items: UserResponseDto[]
+  total: number
+  page: number
+  pageSize: number
+}
 
 export interface UserValidationErrorContextDto {
   nodePath: string
@@ -39,7 +56,7 @@ export interface CreateUserRequestDto {
   email?: string
   phone?: string
   status?: number
-  role?: UserRoleEnum
+  assignedRoleIds?: number[]
   remark?: string
   password?: string
 }
@@ -50,8 +67,9 @@ export interface UpdateUserRequestDto {
   email?: string
   phone?: string
   status?: number
-  role?: UserRoleEnum
+  assignedRoleIds?: number[]
   remark?: string
+  password?: string
 }
 
 export interface LoginUserRequestDto {

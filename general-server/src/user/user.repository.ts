@@ -1,7 +1,8 @@
 import type { EntityManager, Repository } from 'typeorm';
 import initDataBase, { getDataSource } from '../../utils/mysql.ts';
+import { UserRoleAssignmentEntity } from '../authorization/authorization.entity.ts';
 import { UserEntity } from './user.entity.ts';
-import type { UserRoleEnum } from './user.dto.ts';
+import type { UserListQueryDto } from './user.dto.ts';
 
 export interface CreateUserEntityInput {
   username: string
@@ -9,7 +10,6 @@ export interface CreateUserEntityInput {
   email: string
   phone: string
   status: number
-  role: UserRoleEnum
   passwordHash: string
   remark?: string
 }
@@ -20,14 +20,22 @@ export interface UpdateUserEntityInput {
   email?: string
   phone?: string
   status?: number
-  role?: UserRoleEnum
   remark?: string
+  passwordHash?: string
+}
+
+export interface UserListRepositoryResult {
+  items: UserEntity[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export interface UserRepositoryPort {
-  getUserList(): Promise<UserEntity[]>
+  getUserList(query: UserListQueryDto): Promise<UserListRepositoryResult>
   getUserById(id: number): Promise<UserEntity | null>
   getUserByUsername(username: string): Promise<UserEntity | null>
+  getUserByPhone(phone: string): Promise<UserEntity | null>
   getUserAuthByUsername(username: string): Promise<UserEntity | null>
   createUser(input: CreateUserEntityInput): Promise<UserEntity | null>
   updateUser(id: number, input: UpdateUserEntityInput): Promise<UserEntity | null>
@@ -54,26 +62,86 @@ export class UserRepository implements UserRepositoryPort {
     return manager.getRepository(UserEntity);
   }
 
-  async getUserList(): Promise<UserEntity[]> {
+  async getUserList(query: UserListQueryDto): Promise<UserListRepositoryResult> {
     const repository = await this.getRepository();
-    return repository.find({
-      order: {
-        id: 'ASC',
-      },
-    });
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const queryBuilder = repository
+      .createQueryBuilder('user')
+      .where('user.deleteFlag = :deleteFlag', {
+        deleteFlag: 0,
+      });
+
+    if (query.keyword) {
+      queryBuilder.andWhere(
+        '(user.username LIKE :keyword OR user.nickname LIKE :keyword OR user.phone LIKE :keyword)',
+        {
+          keyword: `%${query.keyword}%`,
+        },
+      );
+    }
+
+    if (query.roleId !== undefined) {
+      const roleFilterSubQuery = queryBuilder
+        .subQuery()
+        .select('1')
+        .from(UserRoleAssignmentEntity, 'userRole')
+        .where('userRole.userId = user.id')
+        .andWhere('userRole.roleId = :roleId')
+        .andWhere('userRole.deleteFlag = :userRoleDeleteFlag')
+        .getQuery();
+
+      queryBuilder.andWhere(`EXISTS (${roleFilterSubQuery})`, {
+        roleId: query.roleId,
+        userRoleDeleteFlag: 0,
+      });
+    }
+
+    if (query.status !== undefined) {
+      queryBuilder.andWhere('user.status = :status', {
+        status: query.status,
+      });
+    }
+
+    const total = await queryBuilder.getCount();
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const items =
+      total === 0
+        ? []
+        : await queryBuilder
+            .clone()
+            .orderBy('user.id', 'ASC')
+            .skip((currentPage - 1) * pageSize)
+            .take(pageSize)
+            .getMany();
+
+    return {
+      items,
+      total,
+      page: currentPage,
+      pageSize,
+    };
   }
 
   async getUserById(id: number): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     return repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
   }
 
   async getUserByUsername(username: string): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     return repository.findOne({
-      where: { username },
+      where: { username, deleteFlag: 0 },
+    });
+  }
+
+  async getUserByPhone(phone: string): Promise<UserEntity | null> {
+    const repository = await this.getRepository();
+    return repository.findOne({
+      where: { phone, deleteFlag: 0 },
     });
   }
 
@@ -83,6 +151,7 @@ export class UserRepository implements UserRepositoryPort {
       .createQueryBuilder('user')
       .addSelect('user.passwordHash')
       .where('user.username = :username', { username })
+      .andWhere('user.deleteFlag = :deleteFlag', { deleteFlag: 0 })
       .getOne();
   }
 
@@ -94,7 +163,6 @@ export class UserRepository implements UserRepositoryPort {
       email: input.email,
       phone: input.phone,
       status: input.status,
-      role: input.role,
       passwordHash: input.passwordHash,
       createBy: 'system',
       updateBy: 'system',
@@ -103,14 +171,14 @@ export class UserRepository implements UserRepositoryPort {
 
     const saved = await repository.save(entity);
     return repository.findOne({
-      where: { id: saved.id },
+      where: { id: saved.id, deleteFlag: 0 },
     });
   }
 
   async updateUser(id: number, input: UpdateUserEntityInput): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     const current = await repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
@@ -132,32 +200,34 @@ export class UserRepository implements UserRepositoryPort {
     if (input.status !== undefined) {
       current.status = input.status;
     }
-    if (input.role !== undefined) {
-      current.role = input.role;
-    }
     if (input.remark !== undefined) {
       current.remark = input.remark;
+    }
+    if (input.passwordHash !== undefined) {
+      current.passwordHash = input.passwordHash;
     }
 
     current.updateBy = 'system';
     await repository.save(current);
 
     return repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
   }
 
   async deleteUser(id: number): Promise<UserEntity | null> {
     const repository = await this.getRepository();
     const current = await repository.findOne({
-      where: { id },
+      where: { id, deleteFlag: 0 },
     });
 
     if (!current) {
       return null;
     }
 
-    await repository.remove(current);
+    current.deleteFlag = 1;
+    current.updateBy = 'system';
+    await repository.save(current);
     return current;
   }
 }

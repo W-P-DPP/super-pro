@@ -156,6 +156,7 @@ export class SiteMenuRepository implements SiteMenuRepositoryPort {
         'siteMenu.updateTime',
         'siteMenu.remark',
       ])
+      .where('siteMenu.deleteFlag = :deleteFlag', { deleteFlag: 0 })
       .orderBy('siteMenu.sort', 'ASC')
       .addOrderBy('siteMenu.id', 'ASC')
       .getMany();
@@ -335,7 +336,12 @@ export class SiteMenuRepository implements SiteMenuRepositoryPort {
           .sort((left, right) => left.sort - right.sort || left.id - right.id),
       );
 
-      await repository.delete(deletedIds);
+      for (const deletedNode of deletedNodes) {
+        deletedNode.deleteFlag = 1;
+        deletedNode.updateBy = 'system';
+      }
+
+      await repository.save(deletedNodes);
       if (siblings.length > 0) {
         await repository.save(siblings);
       }

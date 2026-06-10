@@ -43,6 +43,17 @@ type UserRow = {
   remark: string | null
 }
 
+type ProjectRow = {
+  id: number
+  project_name: string
+  project_code: string
+  create_by: string | null
+  create_time: Date | string | null
+  update_by: string | null
+  update_time: Date | string | null
+  remark: string | null
+}
+
 const SITE_MENU_TABLE_NAME = 'sys_site_menu';
 const SITE_MENU_TABLE_COLUMNS = [
   'id',
@@ -71,6 +82,18 @@ const USER_TABLE_COLUMNS = [
   'status',
   'role',
   'password_hash',
+  'create_by',
+  'create_time',
+  'update_by',
+  'update_time',
+  'remark',
+].join(', ');
+
+const PROJECT_TABLE_NAME = 'sys_project';
+const PROJECT_TABLE_COLUMNS = [
+  'id',
+  'project_name',
+  'project_code',
   'create_by',
   'create_time',
   'update_by',
@@ -133,9 +156,33 @@ const USER_SEED_ROWS: UserRow[] = [
   },
 ];
 
+const PROJECT_SEED_ROWS: ProjectRow[] = [
+  {
+    id: 1,
+    project_name: '用户中台',
+    project_code: 'user-center',
+    create_by: 'system',
+    create_time: '2026-04-09 10:00:00',
+    update_by: 'system',
+    update_time: '2026-04-09 10:00:00',
+    remark: '用户与权限主项目',
+  },
+  {
+    id: 2,
+    project_name: '结算系统',
+    project_code: 'finance-core',
+    create_by: 'system',
+    create_time: '2026-04-09 10:00:00',
+    update_by: 'system',
+    update_time: '2026-04-09 10:00:00',
+    remark: '订单结算项目',
+  },
+];
+
 let app: Express;
 let originalSiteMenuRows: SiteMenuRow[] = [];
 let originalUserRows: UserRow[] = [];
+let originalProjectRows: ProjectRow[] = [];
 let originalSiteMenuFileContent = '';
 
 async function getSiteMenuRows(): Promise<SiteMenuRow[]> {
@@ -263,18 +310,77 @@ async function resetUserSeed(): Promise<void> {
   await insertUserRows(USER_SEED_ROWS);
 }
 
+async function getProjectRows(): Promise<ProjectRow[]> {
+  const dataSource = getDataSource();
+  if (!dataSource?.isInitialized) {
+    throw new Error('测试数据库尚未初始化');
+  }
+
+  return dataSource.query(
+    `SELECT ${PROJECT_TABLE_COLUMNS} FROM ${PROJECT_TABLE_NAME} ORDER BY id ASC`,
+  ) as Promise<ProjectRow[]>;
+}
+
+async function clearProjectTable(): Promise<void> {
+  const dataSource = getDataSource();
+  if (!dataSource?.isInitialized) {
+    throw new Error('测试数据库尚未初始化');
+  }
+
+  await dataSource.query(`DELETE FROM ${PROJECT_TABLE_NAME}`);
+}
+
+async function insertProjectRows(rows: ProjectRow[]): Promise<void> {
+  const dataSource = getDataSource();
+  if (!dataSource?.isInitialized) {
+    throw new Error('测试数据库尚未初始化');
+  }
+
+  for (const row of rows) {
+    await dataSource.query(
+      `
+        REPLACE INTO ${PROJECT_TABLE_NAME}
+          (${PROJECT_TABLE_COLUMNS})
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        row.id,
+        row.project_name,
+        row.project_code,
+        row.create_by,
+        row.create_time,
+        row.update_by,
+        row.update_time,
+        row.remark,
+      ],
+    );
+  }
+}
+
+async function restoreOriginalProjectRows(): Promise<void> {
+  await clearProjectTable();
+  await insertProjectRows(originalProjectRows);
+}
+
+async function resetProjectSeed(): Promise<void> {
+  await clearProjectTable();
+  await insertProjectRows(PROJECT_SEED_ROWS);
+}
+
 beforeAll(async () => {
   await initDataBase();
   app = createApp();
   originalSiteMenuFileContent = await readFile(siteMenuFilePath, 'utf8');
   originalSiteMenuRows = await getSiteMenuRows();
   originalUserRows = await getUserRows();
+  originalProjectRows = await getProjectRows();
 });
 
 beforeEach(async () => {
   await saveSiteMenuSource(JSON.parse(originalSiteMenuFileContent));
   await resetSiteMenuSeed();
   await resetUserSeed();
+  await resetProjectSeed();
   process.env.JWT_ENABLED = 'false';
 });
 
@@ -282,6 +388,7 @@ afterAll(async () => {
   await saveSiteMenuSource(JSON.parse(originalSiteMenuFileContent));
   await restoreOriginalSiteMenuRows();
   await restoreOriginalUserRows();
+  await restoreOriginalProjectRows();
   process.env.JWT_ENABLED = 'false';
   const dataSource = getDataSource();
   if (dataSource?.isInitialized) {
@@ -776,21 +883,52 @@ describe('siteMenu 文件上传导入接口', () => {
 });
 
 describe('user CRUD role integration', () => {
-  it('GET /api/user/getUser returns role field', async () => {
+  it('GET /api/user/getUser returns paginated data with role field', async () => {
     const res = await request(app).get('/api/user/getUser');
 
     expect(res.status).toBe(200);
     expect(res.body.code).toBe(200);
     expect(res.body.data).toEqual(
-      expect.arrayContaining([
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            id: 1,
+            username: 'zhangsan',
+            role: UserRoleEnum.Admin,
+          }),
+        ]),
+        total: expect.any(Number),
+        page: 1,
+        pageSize: 10,
+      }),
+    );
+    expect(res.body.data.items[0]).not.toHaveProperty('passwordHash');
+  });
+
+  it('GET /api/user/getUser supports keyword, status and pageSize filters', async () => {
+    const res = await request(app).get('/api/user/getUser').query({
+      keyword: 'zhang',
+      role: UserRoleEnum.Admin,
+      status: 1,
+      page: 1,
+      pageSize: 1,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toEqual({
+      items: [
         expect.objectContaining({
           id: 1,
           username: 'zhangsan',
           role: UserRoleEnum.Admin,
+          status: 1,
         }),
-      ]),
-    );
-    expect(res.body.data[0]).not.toHaveProperty('passwordHash');
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 1,
+    });
   });
 
   it('GET /api/user/getUser/:id returns role field', async () => {
@@ -828,7 +966,7 @@ describe('user CRUD role integration', () => {
     );
   });
 
-  it('POST /api/user/createUser defaults role to guest', async () => {
+  it('POST /api/user/createUser defaults role to employee', async () => {
     const res = await request(app).post('/api/user/createUser').send({
       username: 'zhaoliu',
       nickname: 'zhaoliu',
@@ -841,7 +979,7 @@ describe('user CRUD role integration', () => {
     expect(res.body.data).toEqual(
       expect.objectContaining({
         username: 'zhaoliu',
-        role: UserRoleEnum.Guest,
+        role: UserRoleEnum.Employee,
       }),
     );
   });
@@ -884,7 +1022,7 @@ describe('user CRUD role integration', () => {
     expect(res.body.code).toBe(200);
 
     const listRes = await request(app).get('/api/user/getUser');
-    const ids = (listRes.body.data as Array<{ id: number }>).map((item) => item.id);
+    const ids = (listRes.body.data.items as Array<{ id: number }>).map((item) => item.id);
     expect(ids).not.toContain(1);
   });
 
@@ -892,6 +1030,118 @@ describe('user CRUD role integration', () => {
     const detailRes = await request(app).get('/api/user/getUser/99999');
     const updateRes = await request(app).put('/api/user/updateUser/99999').send({ nickname: 'none' });
     const deleteRes = await request(app).delete('/api/user/deleteUser/99999');
+
+    expect(detailRes.status).toBe(404);
+    expect(updateRes.status).toBe(404);
+    expect(deleteRes.status).toBe(404);
+  });
+});
+
+describe('project CRUD integration', () => {
+  it('GET /api/project/getProject returns paginated project data', async () => {
+    const res = await request(app).get('/api/project/getProject');
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            id: 1,
+            projectName: '用户中台',
+            projectCode: 'user-center',
+          }),
+        ]),
+        total: expect.any(Number),
+        page: 1,
+        pageSize: 10,
+      }),
+    );
+  });
+
+  it('GET /api/project/getProject supports keyword and pageSize filters', async () => {
+    const res = await request(app).get('/api/project/getProject').query({
+      keyword: 'finance',
+      page: 1,
+      pageSize: 1,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toEqual({
+      items: [
+        expect.objectContaining({
+          id: 2,
+          projectName: '结算系统',
+          projectCode: 'finance-core',
+        }),
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 1,
+    });
+  });
+
+  it('POST /api/project/createProject creates a project', async () => {
+    const res = await request(app).post('/api/project/createProject').send({
+      projectName: '管理后台',
+      projectCode: 'admin-console',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.objectContaining({
+        projectName: '管理后台',
+        projectCode: 'admin-console',
+      }),
+    );
+  });
+
+  it('POST /api/project/createProject rejects duplicate code', async () => {
+    const res = await request(app).post('/api/project/createProject').send({
+      projectName: '重复编码项目',
+      projectCode: 'user-center',
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe(409);
+  });
+
+  it('PUT /api/project/updateProject/:id updates project fields', async () => {
+    const res = await request(app).put('/api/project/updateProject/1').send({
+      projectName: '用户平台',
+      projectCode: 'user-platform',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.objectContaining({
+        id: 1,
+        projectName: '用户平台',
+        projectCode: 'user-platform',
+      }),
+    );
+  });
+
+  it('DELETE /api/project/deleteProject/:id deletes project', async () => {
+    const res = await request(app).delete('/api/project/deleteProject/1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBe(200);
+
+    const rows = await getProjectRows();
+    const ids = rows.map((item) => item.id);
+    expect(ids).not.toContain(1);
+  });
+
+  it('missing project still returns 404', async () => {
+    const detailRes = await request(app).get('/api/project/getProject/99999');
+    const updateRes = await request(app).put('/api/project/updateProject/99999').send({
+      projectName: 'none',
+    });
+    const deleteRes = await request(app).delete('/api/project/deleteProject/99999');
 
     expect(detailRes.status).toBe(404);
     expect(updateRes.status).toBe(404);
@@ -978,8 +1228,8 @@ describe('JWT 中间件（中文返回）', () => {
   });
 
   it('有效 token 应保持查询成功', async () => {
-    const { generateToken } = await import('../../utils/middleware/jwtMiddleware.ts');
-    const token = generateToken({ userId: 1 });
+    const { generateJwtToken } = await import('@super-pro/shared-server');
+    const token = generateJwtToken({ userId: 1 });
     const res = await request(app)
       .get('/api/site-menu/getMenu')
       .set('Authorization', `Bearer ${token}`);
@@ -1015,6 +1265,7 @@ describe('JWT route mounting', () => {
 
   it('protects user CRUD routes while keeping login anonymous', async () => {
     const unauthorizedRes = await request(app).get('/api/user/getUser');
+    const unauthorizedProjectRes = await request(app).get('/api/project/getProject');
 
     expect(unauthorizedRes.status).toBe(401);
     expect(unauthorizedRes.body).toMatchObject({
@@ -1029,14 +1280,21 @@ describe('JWT route mounting', () => {
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.code).toBe(200);
 
-    const { generateToken } = await import('../../utils/middleware/jwtMiddleware.ts');
-    const token = generateToken({ userId: 1, username: 'zhangsan' });
+    const { generateJwtToken } = await import('@super-pro/shared-server');
+    const token = generateJwtToken({ userId: 1, username: 'zhangsan' });
     const authorizedRes = await request(app)
       .get('/api/user/getUser')
+      .set('Authorization', `Bearer ${token}`);
+    const authorizedProjectRes = await request(app)
+      .get('/api/project/getProject')
       .set('Authorization', `Bearer ${token}`);
 
     expect(authorizedRes.status).toBe(200);
     expect(authorizedRes.body.code).toBe(200);
+    expect(unauthorizedProjectRes.status).toBe(401);
+    expect(unauthorizedProjectRes.body.code).toBe(401);
+    expect(authorizedProjectRes.status).toBe(200);
+    expect(authorizedProjectRes.body.code).toBe(200);
   });
 
   it('allows anonymous register and then login with the new account', async () => {
@@ -1052,7 +1310,7 @@ describe('JWT route mounting', () => {
       data: expect.objectContaining({
         username: 'register-user',
         nickname: 'register-user',
-        role: UserRoleEnum.Guest,
+        role: UserRoleEnum.Employee,
       }),
     });
 
@@ -1068,6 +1326,69 @@ describe('JWT route mounting', () => {
         token: expect.any(String),
         tokenType: 'Bearer',
       }),
+    });
+  });
+
+  it('keeps todo suggestion submission anonymous while private todo list stays protected', async () => {
+    await clearProjectTable();
+    await insertProjectRows([
+      {
+        id: 11,
+        project_name: '后台管理系统',
+        project_code: 'admin-console',
+        create_by: 'system',
+        create_time: '2026-04-09 10:00:00',
+        update_by: 'system',
+        update_time: '2026-04-09 10:00:00',
+        remark: '后台建议归属项目',
+      },
+      {
+        id: 12,
+        project_name: '公开站点',
+        project_code: 'zwpsite',
+        create_by: 'system',
+        create_time: '2026-04-09 10:00:00',
+        update_by: 'system',
+        update_time: '2026-04-09 10:00:00',
+        remark: '公开站建议归属项目',
+      },
+      {
+        id: 13,
+        project_name: '登录系统',
+        project_code: 'login',
+        create_by: 'system',
+        create_time: '2026-04-09 10:00:00',
+        update_by: 'system',
+        update_time: '2026-04-09 10:00:00',
+        remark: '登录建议归属项目',
+      },
+    ]);
+
+    const suggestionRes = await request(app).post('/api/todo/submitSuggestion').send({
+      sourceApp: 'BMS',
+      title: '建议增加反馈入口',
+      description: '方便业务同学直接提需求',
+      pageUrl: 'http://localhost:5173/#/dashboard',
+    });
+    const privateTodoRes = await request(app).get('/api/todo/getTodo');
+
+    expect(suggestionRes.status).toBe(200);
+    expect(suggestionRes.body).toMatchObject({
+      code: 200,
+      msg: '提交建议成功',
+      data: expect.objectContaining({
+        title: '建议增加反馈入口',
+        status: 'pending_review',
+        priority: 'medium',
+        project: expect.objectContaining({
+          projectCode: 'admin-console',
+        }),
+      }),
+    });
+    expect(privateTodoRes.status).toBe(401);
+    expect(privateTodoRes.body).toMatchObject({
+      code: 401,
+      msg: '缺少授权信息或授权格式错误',
     });
   });
 });

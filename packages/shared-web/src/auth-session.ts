@@ -2,12 +2,12 @@ import type { StoredAuthSession } from '@super-pro/shared-types';
 
 type AuthSessionOptions = {
   storageKey: string;
-  directTokenStorageKey?: string;
-  handoffWindowNameKey?: string;
-  handoffQueryKey?: string;
-  enableQueryHandoff?: boolean;
-  enableWindowNameHandoff?: boolean;
+  directTokenStorageKey?: string | false;
+  cookieStorageKey?: string | false;
+  storageMode?: 'hybrid' | 'cookie';
 };
+
+const DEFAULT_AUTH_SESSION_COOKIE_KEY = 'super-pro.auth-session';
 
 function isExpiredAuthSession(session: StoredAuthSession) {
   return (
@@ -25,6 +25,70 @@ function getStorage() {
   return window.localStorage;
 }
 
+function readCookieValue(cookieKey: string) {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const cookieEntries = document.cookie
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  for (const entry of cookieEntries) {
+    const separatorIndex = entry.indexOf('=');
+    const key =
+      separatorIndex >= 0 ? entry.slice(0, separatorIndex).trim() : entry.trim();
+
+    if (key !== cookieKey) {
+      continue;
+    }
+
+    return separatorIndex >= 0 ? entry.slice(separatorIndex + 1) : '';
+  }
+
+  return null;
+}
+
+function clearAuthSessionCookie(cookieKey: string) {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  document.cookie = `${cookieKey}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+}
+
+function readCookieAuthSession(cookieKey: string) {
+  const rawValue = readCookieValue(cookieKey)?.trim();
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(rawValue)) as unknown;
+    if (isStoredAuthSession(parsed)) {
+      return parsed;
+    }
+  } catch {}
+
+  clearAuthSessionCookie(cookieKey);
+  return null;
+}
+
+function writeAuthSessionCookie(cookieKey: string, session: StoredAuthSession) {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const serialized = encodeURIComponent(JSON.stringify(session));
+  const expires =
+    typeof session.expiresAt === 'number' && Number.isFinite(session.expiresAt)
+      ? `; expires=${new Date(session.expiresAt).toUTCString()}`
+      : '';
+
+  document.cookie = `${cookieKey}=${serialized}; path=/; SameSite=Lax${expires}`;
+}
+
 export function isStoredAuthSession(value: unknown): value is StoredAuthSession {
   if (!value || typeof value !== 'object') {
     return false;
@@ -39,81 +103,89 @@ export function isStoredAuthSession(value: unknown): value is StoredAuthSession 
   );
 }
 
-function consumeWindowNameAuthSession(options: Required<AuthSessionOptions>) {
-  if (typeof window === 'undefined' || !options.enableWindowNameHandoff) {
-    return null;
-  }
-
-  const rawValue = window.name?.trim();
-  if (!rawValue) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue) as { key?: string; session?: unknown };
-
-    if (
-      parsed.key !== options.handoffWindowNameKey ||
-      !isStoredAuthSession(parsed.session)
-    ) {
-      return null;
-    }
-
-    window.name = '';
-    return parsed.session;
-  } catch {
-    return null;
-  }
-}
-
-function consumeQueryAuthSession(options: Required<AuthSessionOptions>) {
-  if (typeof window === 'undefined' || !options.enableQueryHandoff) {
-    return null;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const rawValue = params.get(options.handoffQueryKey)?.trim();
-  if (!rawValue) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue) as { key?: string; session?: unknown };
-
-    if (
-      parsed.key !== options.handoffWindowNameKey ||
-      !isStoredAuthSession(parsed.session)
-    ) {
-      return null;
-    }
-
-    params.delete(options.handoffQueryKey);
-    const nextSearch = params.toString();
-    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
-    window.history.replaceState(null, '', nextUrl);
-    return parsed.session;
-  } catch {
-    return null;
-  }
-}
-
 export function createAuthSessionStore(options: AuthSessionOptions) {
-  const normalizedOptions: Required<AuthSessionOptions> = {
+  const normalizedOptions = {
     directTokenStorageKey: 'token',
-    enableQueryHandoff: false,
-    enableWindowNameHandoff: false,
-    handoffWindowNameKey: 'super-pro.auth-handoff',
-    handoffQueryKey: 'spauth',
+    cookieStorageKey: DEFAULT_AUTH_SESSION_COOKIE_KEY,
+    storageMode: 'hybrid',
     ...options,
+  } satisfies Omit<
+    Required<AuthSessionOptions>,
+    'directTokenStorageKey' | 'cookieStorageKey'
+  > & {
+    directTokenStorageKey: string | false;
+    cookieStorageKey: string | false;
   };
+
+  function clearLegacyLocalAuthArtifacts(storage: Storage | null) {
+    if (!storage) {
+      return;
+    }
+
+    storage.removeItem(normalizedOptions.storageKey);
+    storage.removeItem(
+      normalizedOptions.directTokenStorageKey || 'token',
+    );
+  }
+
+  function writeReusableAuthSession(session: StoredAuthSession) {
+    const storage = getStorage();
+
+    if (isExpiredAuthSession(session)) {
+      clearReusableAuthSession();
+      return null;
+    }
+
+    if (normalizedOptions.storageMode === 'cookie') {
+      clearLegacyLocalAuthArtifacts(storage);
+    } else {
+      storage?.setItem(normalizedOptions.storageKey, JSON.stringify(session));
+    }
+
+    if (normalizedOptions.cookieStorageKey) {
+      writeAuthSessionCookie(normalizedOptions.cookieStorageKey, session);
+    }
+
+    return session;
+  }
 
   function readReusableAuthSession() {
     const storage = getStorage();
-    if (!storage) {
+    if (
+      !normalizedOptions.cookieStorageKey &&
+      normalizedOptions.storageMode === 'cookie'
+    ) {
+      clearLegacyLocalAuthArtifacts(storage);
       return null;
     }
 
-    const rawValue = storage.getItem(normalizedOptions.storageKey);
+    if (!storage && !normalizedOptions.cookieStorageKey) {
+      return null;
+    }
+
+    if (normalizedOptions.cookieStorageKey) {
+      const cookieSession = readCookieAuthSession(normalizedOptions.cookieStorageKey);
+
+      if (cookieSession && !isExpiredAuthSession(cookieSession)) {
+        if (normalizedOptions.storageMode === 'cookie') {
+          clearLegacyLocalAuthArtifacts(storage);
+        } else {
+          storage?.setItem(normalizedOptions.storageKey, JSON.stringify(cookieSession));
+        }
+        return cookieSession;
+      }
+
+      if (cookieSession) {
+        clearAuthSessionCookie(normalizedOptions.cookieStorageKey);
+      }
+    }
+
+    if (normalizedOptions.storageMode === 'cookie') {
+      clearLegacyLocalAuthArtifacts(storage);
+      return null;
+    }
+
+    const rawValue = storage?.getItem(normalizedOptions.storageKey);
     if (rawValue) {
       try {
         const parsed = JSON.parse(rawValue) as unknown;
@@ -122,35 +194,23 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
         }
       } catch {}
 
-      storage.removeItem(normalizedOptions.storageKey);
+      storage?.removeItem(normalizedOptions.storageKey);
     }
 
-    const querySession = consumeQueryAuthSession(normalizedOptions);
-    if (querySession && !isExpiredAuthSession(querySession)) {
-      storage.setItem(normalizedOptions.storageKey, JSON.stringify(querySession));
-      return querySession;
+    if (normalizedOptions.directTokenStorageKey) {
+      const directToken = storage?.getItem(normalizedOptions.directTokenStorageKey)?.trim();
+      if (directToken) {
+        return {
+          token: directToken,
+          tokenType: 'Bearer' as const,
+        };
+      }
     }
 
-    const handoffSession = consumeWindowNameAuthSession(normalizedOptions);
-    if (!handoffSession || isExpiredAuthSession(handoffSession)) {
-      return null;
-    }
-
-    storage.setItem(normalizedOptions.storageKey, JSON.stringify(handoffSession));
-    return handoffSession;
+    return null;
   }
 
   function getReusableAuthToken() {
-    const storage = getStorage();
-    if (!storage) {
-      return null;
-    }
-
-    const directToken = storage.getItem(normalizedOptions.directTokenStorageKey)?.trim();
-    if (directToken) {
-      return directToken;
-    }
-
     return readReusableAuthSession()?.token ?? null;
   }
 
@@ -161,15 +221,22 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
   function clearReusableAuthSession() {
     const storage = getStorage();
     if (!storage) {
+      if (normalizedOptions.cookieStorageKey) {
+        clearAuthSessionCookie(normalizedOptions.cookieStorageKey);
+      }
       return;
     }
 
-    storage.removeItem(normalizedOptions.storageKey);
-    storage.removeItem(normalizedOptions.directTokenStorageKey);
+    clearLegacyLocalAuthArtifacts(storage);
+
+    if (normalizedOptions.cookieStorageKey) {
+      clearAuthSessionCookie(normalizedOptions.cookieStorageKey);
+    }
   }
 
   return {
     readReusableAuthSession,
+    writeReusableAuthSession,
     getReusableAuthToken,
     hasReusableAuthToken,
     clearReusableAuthSession,

@@ -2,7 +2,7 @@ import {
   createSmtpMailerFromEnv,
   splitEmailRecipients,
 } from '@super-pro/shared-server';
-import { HttpStatus } from '../../utils/constant/HttpStatus.ts';
+import { HttpStatus } from '@super-pro/shared-constants';
 import type {
   ContactMessageResponseDto,
   ContactValidationErrorContextDto,

@@ -2,9 +2,19 @@ import 'reflect-metadata';
 import { getDatabaseConfig } from '@super-pro/shared-server';
 import { DataSource } from 'typeorm';
 import config from '../src/config.ts';
+import { AdminMenuEntitySchema } from '../src/adminMenu/adminMenu.entity.ts';
 import { ContactMessageEntitySchema } from '../src/contact/contact.entity.ts';
+import {
+    PermissionEntitySchema,
+    RoleEntitySchema,
+    RolePermissionAssignmentEntitySchema,
+    RoleProjectAssignmentEntitySchema,
+    UserRoleAssignmentEntitySchema,
+} from '../src/authorization/authorization.entity.ts';
 import { OperationLogEntity } from '../src/operationLog/operationLog.entity.ts';
+import { ProjectEntitySchema } from '../src/project/project.entity.ts';
 import { SiteMenuEntitySchema } from '../src/siteMenu/siteMenu.entity.ts';
+import { TodoEntitySchema } from '../src/todo/todo.entity.ts';
 import { UserEntitySchema } from '../src/user/user.entity.ts';
 import { Logger } from './index.ts';
 
@@ -43,7 +53,20 @@ export default async function initDataBase() {
         timezone: databaseConfig.timezone,
         charset: databaseConfig.charset,
 
-        entities: [OperationLogEntity, SiteMenuEntitySchema, UserEntitySchema, ContactMessageEntitySchema],
+        entities: [
+            OperationLogEntity,
+            AdminMenuEntitySchema,
+            ProjectEntitySchema,
+            SiteMenuEntitySchema,
+            TodoEntitySchema,
+            UserEntitySchema,
+            ContactMessageEntitySchema,
+            RoleEntitySchema,
+            PermissionEntitySchema,
+            UserRoleAssignmentEntitySchema,
+            RolePermissionAssignmentEntitySchema,
+            RoleProjectAssignmentEntitySchema,
+        ],
         migrations: ['src/**/*.migration.ts']
     });
 
