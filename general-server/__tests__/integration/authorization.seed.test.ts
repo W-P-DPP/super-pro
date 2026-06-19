@@ -201,6 +201,27 @@ const EXISTING_TODOS_ROW = {
   remark: 'keep todo structure',
 } as const;
 
+const EXISTING_GLOBAL_CONFIG_ROW = {
+  id: 304,
+  parent_id: EXISTING_ADMIN_GROUP_ROW.id,
+  name: '历史全局配置',
+  short_title: '历史配置',
+  slug: 'global-config',
+  icon_key: 'settings-2',
+  menu_type: 'item',
+  status: 1,
+  sort: 6,
+  description: 'legacy global config description',
+  badge: 'LegacyConfig',
+  permission_code: 'legacy.global-config.permission',
+  create_by: 'tester',
+  create_time: '2026-04-09 10:00:00',
+  update_by: 'tester',
+  update_time: '2026-04-09 10:00:00',
+  delete_flag: 0,
+  remark: 'keep global config structure',
+} as const;
+
 const EDITOR_LIKE_ROLE_ROW = {
   id: 201,
   code: 'ops.editor',
@@ -513,6 +534,73 @@ describe('admin menu seed bootstrap', () => {
         badge: EXISTING_TODOS_ROW.badge,
         remark: EXISTING_TODOS_ROW.remark,
         permission_code: ADMIN_CONSOLE_PERMISSION_CODES.todosMenuView,
+      }),
+    );
+
+    await expect(repository.ensureInitialized()).resolves.toBeUndefined();
+
+    const secondRows = await getTableRows(ADMIN_MENU_TABLE.name, ADMIN_MENU_TABLE.columns);
+
+    expect(secondRows).toEqual(firstRows);
+  });
+
+  it('backfills system management / global config for non-empty tables', async () => {
+    await replaceRows(ADMIN_MENU_TABLE.name, ADMIN_MENU_TABLE.columns, [
+      EXISTING_ADMIN_GROUP_ROW,
+      EXISTING_ADMIN_ITEM_ROW,
+    ]);
+
+    const repository = new AdminMenuRepository();
+
+    await expect(repository.ensureInitialized()).resolves.toBeUndefined();
+
+    const rows = await getTableRows(ADMIN_MENU_TABLE.name, ADMIN_MENU_TABLE.columns);
+    const systemGroupRow = rows.find((row) => row.name === '系统管理');
+    const globalConfigRow = rows.find((row) => row.slug === 'global-config');
+
+    expect(systemGroupRow).toEqual(
+      expect.objectContaining({
+        icon_key: 'settings-2',
+        menu_type: 'group',
+        delete_flag: 0,
+      }),
+    );
+    expect(globalConfigRow).toEqual(
+      expect.objectContaining({
+        parent_id: systemGroupRow?.id,
+        name: '全局配置',
+        short_title: '配置',
+        icon_key: 'settings-2',
+        permission_code: ADMIN_CONSOLE_PERMISSION_CODES.globalConfigMenuView,
+        delete_flag: 0,
+      }),
+    );
+  });
+
+  it('repairs existing global config permission code without moving the node, and remains idempotent', async () => {
+    await replaceRows(ADMIN_MENU_TABLE.name, ADMIN_MENU_TABLE.columns, [
+      EXISTING_ADMIN_GROUP_ROW,
+      EXISTING_GLOBAL_CONFIG_ROW,
+    ]);
+
+    const repository = new AdminMenuRepository();
+
+    await expect(repository.ensureInitialized()).resolves.toBeUndefined();
+
+    const firstRows = await getTableRows(ADMIN_MENU_TABLE.name, ADMIN_MENU_TABLE.columns);
+    const firstGlobalConfigRow = firstRows.find(
+      (row) => row.id === EXISTING_GLOBAL_CONFIG_ROW.id,
+    );
+
+    expect(firstGlobalConfigRow).toEqual(
+      expect.objectContaining({
+        parent_id: EXISTING_GLOBAL_CONFIG_ROW.parent_id,
+        sort: EXISTING_GLOBAL_CONFIG_ROW.sort,
+        name: EXISTING_GLOBAL_CONFIG_ROW.name,
+        description: EXISTING_GLOBAL_CONFIG_ROW.description,
+        badge: EXISTING_GLOBAL_CONFIG_ROW.badge,
+        remark: EXISTING_GLOBAL_CONFIG_ROW.remark,
+        permission_code: ADMIN_CONSOLE_PERMISSION_CODES.globalConfigMenuView,
       }),
     );
 

@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 import config from '../src/config.ts';
 import { AdminMenuEntitySchema } from '../src/adminMenu/adminMenu.entity.ts';
 import { ContactMessageEntitySchema } from '../src/contact/contact.entity.ts';
+import { GlobalConfigEntitySchema } from '../src/globalConfig/global-config.entity.ts';
 import {
     PermissionEntitySchema,
     RoleEntitySchema,
@@ -57,6 +58,7 @@ export default async function initDataBase() {
             OperationLogEntity,
             AdminMenuEntitySchema,
             ProjectEntitySchema,
+            GlobalConfigEntitySchema,
             SiteMenuEntitySchema,
             TodoEntitySchema,
             UserEntitySchema,

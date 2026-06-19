@@ -12,5 +12,6 @@ export type StoredAuthSession = {
 
 export * from './admin-menu.ts';
 export * from './auth.ts';
+export * from './global-config.ts';
 export * from './screen.ts';
 export * from './todo.ts';

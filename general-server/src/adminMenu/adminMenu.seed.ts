@@ -80,18 +80,17 @@ export const ADMIN_MENU_SEED_NODES: readonly AdminMenuSeedNode[] = [
     ],
   },
   {
-    name: '\u5e94\u7528',
+    name: '应用',
     iconKey: 'sparkles',
     menuType: 'group',
     children: [
       {
-        name: '\u5f85\u529e\u7ba1\u7406',
-        shortTitle: '\u5f85\u529e',
+        name: '待办管理',
+        shortTitle: '待办',
         slug: 'todos',
         iconKey: 'file-text',
         menuType: 'item',
-        description:
-          '\u7edf\u4e00\u7ba1\u7406\u56e2\u961f\u5f85\u529e\u4efb\u52a1\uff0c\u652f\u6301\u5f85\u5ba1\u6838\u3001\u8fdb\u884c\u4e2d\u3001\u5df2\u5b8c\u6210\u7b49\u72b6\u6001\u7684\u521b\u5efa\u3001\u67e5\u8be2\u3001\u7f16\u8f91\u4e0e\u5220\u9664\u3002',
+        description: '统一管理团队待办任务，支持待审核、进行中、已完成等状态的创建、查询、编辑与删除。',
         permissionCode: ADMIN_CONSOLE_PERMISSION_CODES.todosMenuView,
       },
     ],
@@ -109,6 +108,15 @@ export const ADMIN_MENU_SEED_NODES: readonly AdminMenuSeedNode[] = [
         menuType: 'item',
         description: '维护 BMS 端菜单结构、显示顺序、入口状态与权限挂载关系。',
         permissionCode: ADMIN_CONSOLE_PERMISSION_CODES.reportsMenuView,
+      },
+      {
+        name: '全局配置',
+        shortTitle: '配置',
+        slug: 'global-config',
+        iconKey: 'settings-2',
+        menuType: 'item',
+        description: '按项目维度维护全局配置项，支持文本、数字和布尔类型。',
+        permissionCode: ADMIN_CONSOLE_PERMISSION_CODES.globalConfigMenuView,
       },
       {
         name: '站点菜单',

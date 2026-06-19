@@ -4,6 +4,7 @@ import { AppLayout } from './components/AppLayout'
 import { Spinner } from './components/ui'
 import { useAdminMenu } from './contexts/admin-menu-context'
 import { DashboardPage } from './pages/admin/DashboardPage'
+import { GlobalConfigPage } from './pages/admin/GlobalConfigPage'
 import { ModuleRoutePage } from './pages/admin/ModuleRoutePage'
 import {
   ADMIN_PAGE_SCROLL_LAYOUT_CLASS,
@@ -125,6 +126,14 @@ function App() {
           element={
             <AdminRouteGuard moduleSlug="reports">
               <ReportsPage />
+            </AdminRouteGuard>
+          }
+        />
+        <Route
+          path="global-config"
+          element={
+            <AdminRouteGuard moduleSlug="global-config">
+              <GlobalConfigPage />
             </AdminRouteGuard>
           }
         />
