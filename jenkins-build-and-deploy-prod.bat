@@ -5,14 +5,14 @@ set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 set "REPO_DIR=%SCRIPT_DIR%"
 
-set "COMPOSE_PROJECT_NAME=super-pro-test"
-set "PUBLIC_HTTP_PORT=29999"
-set "DOCKER_RUNTIME_DIR=D:/super-pro_test"
-set "MYSQL_HOST_PORT=23306"
-set "REDIS_HOST_PORT=26379"
-set "APP_NODE_ENV=development"
+set "COMPOSE_PROJECT_NAME=super-pro-prod"
+set "PUBLIC_HTTP_PORT=9999"
+set "DOCKER_RUNTIME_DIR=D:/super-pro_pro"
+set "MYSQL_HOST_PORT=13306"
+set "REDIS_HOST_PORT=16379"
+set "APP_NODE_ENV=production"
 
-echo [INFO] Jenkins deploy environment : test
+echo [INFO] Jenkins deploy environment : production
 echo [INFO] Repo dir                   : %REPO_DIR%
 echo [INFO] Compose file               : %REPO_DIR%\docker\.generated\docker-compose.yml
 echo [INFO] Compose project            : %COMPOSE_PROJECT_NAME%
@@ -25,16 +25,16 @@ echo.
 
 pushd "%REPO_DIR%" >nul
 
-echo [INFO] Starting test docker compose deployment...
-call pnpm docker:test:deploy
+echo [INFO] Starting production docker compose deployment...
+call pnpm docker:prod:deploy
 if errorlevel 1 (
   popd >nul
-  echo [ERROR] Test Docker deployment failed.
+  echo [ERROR] Production Docker deployment failed.
   exit /b 1
 )
 
-echo [INFO] Current test service status:
-node scripts/docker-compose-run.cjs test ps
+echo [INFO] Current production service status:
+node scripts/docker-compose-run.cjs prod ps
 set "EXIT_CODE=%ERRORLEVEL%"
 
 popd >nul
