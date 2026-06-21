@@ -1,0 +1,19 @@
+{
+  "extends": "../packages/tsconfig/server.json",
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@": ["src"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "utils/**/*",
+    "utils/*",
+    "utils/types/*.d.ts",
+    "config.json"
+  ]
+}

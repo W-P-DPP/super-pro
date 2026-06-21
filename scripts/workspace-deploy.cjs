@@ -1,0 +1,721 @@
+const fs = require('node:fs')
+const http = require('node:http')
+const os = require('node:os')
+const path = require('node:path')
+const { spawn, spawnSync } = require('node:child_process')
+
+const BOOTSTRAP_FAILURE_EXIT_CODE = 78
+
+function parseArgs(argv) {
+  const [, , command = 'all', ...rest] = argv
+  const options = {}
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index]
+    if (!token.startsWith('--')) continue
+
+    const eqIndex = token.indexOf('=')
+    if (eqIndex >= 0) {
+      options[token.slice(2, eqIndex)] = token.slice(eqIndex + 1)
+      continue
+    }
+
+    const key = token.slice(2)
+    const next = rest[index + 1]
+    if (!next || next.startsWith('--')) {
+      options[key] = 'true'
+      continue
+    }
+
+    options[key] = next
+    index += 1
+  }
+
+  return { command, options }
+}
+
+function toPosixPath(value) {
+  return value.split(path.sep).join('/')
+}
+
+function normalizeSlashPath(value) {
+  if (!value) return ''
+  return value.replace(/^\/+|\/+$/g, '')
+}
+
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+}
+
+function walkForPackages(repoDir) {
+  const packageDirs = []
+  const skipNames = new Set(['.git', '.turbo', '.claude', '.codex', 'node_modules', 'dist', 'coverage'])
+
+  function visit(currentDir) {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+    const hasPackageJson = entries.some((entry) => entry.isFile() && entry.name === 'package.json')
+
+    if (hasPackageJson && currentDir !== repoDir) {
+      packageDirs.push(currentDir)
+      return
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (skipNames.has(entry.name)) continue
+      visit(path.join(currentDir, entry.name))
+    }
+  }
+
+  visit(repoDir)
+  return packageDirs.sort((left, right) => left.localeCompare(right))
+}
+
+function loadWorkspacePackages(repoDir) {
+  return walkForPackages(repoDir).map((packageDir) => {
+    const packageJsonPath = path.join(packageDir, 'package.json')
+    const packageJson = readJson(packageJsonPath)
+    const relativeDir = path.relative(repoDir, packageDir)
+    const deployConfig = packageJson.superPro?.deploy || {}
+    const scripts = packageJson.scripts || {}
+
+    return {
+      dir: packageDir,
+      dirName: path.basename(packageDir),
+      relativeDir,
+      packageJson,
+      packageJsonPath,
+      scripts,
+      deployConfig,
+    }
+  })
+}
+
+function isServerPackage(pkg) {
+  if (pkg.deployConfig.enabled === false) return false
+  if (pkg.deployConfig.type === 'server') return true
+  const startScript = pkg.scripts.start || ''
+  return /(?:^|\s)node(?:\.exe)?\s+.*dist[\\/].*main\.(?:cjs|mjs|js)\b/i.test(startScript)
+}
+
+function isFrontendPackage(pkg) {
+  if (pkg.deployConfig.enabled === false) return false
+  if (pkg.deployConfig.type === 'frontend') return true
+  if (!pkg.scripts.build) return false
+  if (pkg.relativeDir.startsWith(`packages${path.sep}`)) return false
+  return !isServerPackage(pkg)
+}
+
+function loadDeploymentPlan(repoDir) {
+  const packages = loadWorkspacePackages(repoDir)
+  const frontends = packages.filter(isFrontendPackage)
+  const servers = packages.filter(isServerPackage)
+
+  return {
+    packages,
+    frontends,
+    servers,
+  }
+}
+
+function parseFrontendSubdirFromDist(pkg) {
+  const indexHtmlPath = path.join(pkg.dir, 'dist', 'index.html')
+  if (!fs.existsSync(indexHtmlPath)) {
+    throw new Error(`dist/index.html not found for ${pkg.packageJson.name}`)
+  }
+
+  const html = fs.readFileSync(indexHtmlPath, 'utf8')
+  const assetMatches = [...html.matchAll(/(?:src|href)=["']\/([^"']+\/assets\/[^"']+)["']/g)]
+  for (const match of assetMatches) {
+    const normalized = normalizeSlashPath(match[1])
+    const assetIndex = normalized.indexOf('/assets/')
+    if (assetIndex >= 0) {
+      return normalizeSlashPath(normalized.slice(0, assetIndex))
+    }
+    if (normalized.startsWith('assets/')) {
+      return ''
+    }
+  }
+
+  const absoluteMatches = [...html.matchAll(/(?:src|href)=["']\/([^"']+)["']/g)]
+  for (const match of absoluteMatches) {
+    const normalized = normalizeSlashPath(match[1])
+    if (!normalized) return ''
+    const segments = normalized.split('/')
+    if (segments[0] === 'assets') return ''
+    return normalizeSlashPath(segments[0])
+  }
+
+  return normalizeSlashPath(pkg.deployConfig.nginxSubdir || pkg.dirName)
+}
+
+function getFrontendTargetSubdir(pkg) {
+  const configured = normalizeSlashPath(pkg.deployConfig.nginxSubdir)
+  if (configured || pkg.deployConfig.nginxSubdir === '') {
+    return configured
+  }
+  return parseFrontendSubdirFromDist(pkg)
+}
+
+function buildPm2Apps(repoDir) {
+  return loadDeploymentPlan(repoDir).servers.map((pkg) => ({
+    name: pkg.deployConfig.pm2Name || `super-pro-${pkg.dirName}`,
+    cwd: `./${toPosixPath(pkg.relativeDir)}`,
+    script: pkg.deployConfig.script || './dist/main.cjs',
+    interpreter: pkg.deployConfig.interpreter || 'node',
+    instances: Number.isInteger(pkg.deployConfig.instances) ? pkg.deployConfig.instances : 1,
+    exec_mode: pkg.deployConfig.execMode || 'fork',
+    autorestart: pkg.deployConfig.autorestart ?? true,
+    watch: pkg.deployConfig.watch ?? false,
+    kill_timeout: Number.isInteger(pkg.deployConfig.killTimeoutMs) ? pkg.deployConfig.killTimeoutMs : 20000,
+    max_restarts: Number.isInteger(pkg.deployConfig.maxRestarts) ? pkg.deployConfig.maxRestarts : 10,
+    stop_exit_codes: Array.isArray(pkg.deployConfig.stopExitCodes)
+      ? pkg.deployConfig.stopExitCodes
+      : [BOOTSTRAP_FAILURE_EXIT_CODE],
+    env: {
+      NODE_ENV: 'production',
+      ...(pkg.deployConfig.env || {}),
+    },
+  }))
+}
+
+function parseEnvFile(envFilePath) {
+  if (!fs.existsSync(envFilePath)) {
+    return {}
+  }
+
+  const result = {}
+  const lines = fs.readFileSync(envFilePath, 'utf8').split(/\r?\n/)
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+
+    const separatorIndex = trimmed.indexOf('=')
+    if (separatorIndex <= 0) continue
+
+    const key = trimmed.slice(0, separatorIndex).trim()
+    let value = trimmed.slice(separatorIndex + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"'))
+      || (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+
+    result[key] = value
+  }
+
+  return result
+}
+
+function getCleanupMetadata(repoDir) {
+  const apps = buildPm2Apps(repoDir)
+  const uniquePorts = new Set()
+
+  for (const app of apps) {
+    const appDir = path.resolve(repoDir, app.cwd.replace(/^[.][/\\]/, ''))
+    const envFilePath = path.join(appDir, '.env.production')
+    const envValues = parseEnvFile(envFilePath)
+    const port = Number(envValues.PORT)
+    if (Number.isFinite(port) && port > 0) {
+      uniquePorts.add(String(port))
+    }
+  }
+
+  return {
+    pm2Apps: apps.map((app) => app.name),
+    backendPorts: [...uniquePorts].sort((left, right) => Number(left) - Number(right)),
+  }
+}
+
+function ensureDirectory(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true })
+}
+
+function sleepAsync(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+function quoteCmdArg(value) {
+  if (value === '') return '""'
+  if (!/[\s"&^<>|()]/.test(value)) return value
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+function runCommand(command, args, options = {}) {
+  const baseOptions = {
+    stdio: 'inherit',
+    cwd: options.cwd,
+    env: options.env || process.env,
+  }
+
+  const isCmdWrapper = process.platform === 'win32' && /\.(cmd|bat)$/i.test(command)
+  const result = isCmdWrapper
+    ? spawnSync(
+        `"${command}" ${args.map(quoteCmdArg).join(' ')}`,
+        [],
+        {
+          ...baseOptions,
+          shell: process.env.ComSpec || true,
+        },
+      )
+    : spawnSync(command, args, baseOptions)
+
+  if (result.error) {
+    throw result.error
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Command failed (${result.status}): ${command} ${args.join(' ')}`)
+  }
+}
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+function syncDirectory(sourceDir, targetDir) {
+  if (!fs.existsSync(sourceDir)) {
+    throw new Error(`Source directory not found: ${sourceDir}`)
+  }
+
+  const parentDir = path.dirname(targetDir)
+  const targetName = path.basename(targetDir)
+  const nonce = `${Date.now()}-${process.pid}`
+  const tempTargetDir = path.join(parentDir, `${targetName}.__deploying__.${nonce}`)
+  const backupTargetDir = path.join(parentDir, `${targetName}.__backup__.${nonce}`)
+
+  ensureDirectory(parentDir)
+  fs.rmSync(tempTargetDir, { recursive: true, force: true })
+  fs.rmSync(backupTargetDir, { recursive: true, force: true })
+  fs.cpSync(sourceDir, tempTargetDir, { recursive: true })
+
+  const hadExistingTarget = fs.existsSync(targetDir)
+
+  try {
+    if (hadExistingTarget) {
+      fs.renameSync(targetDir, backupTargetDir)
+    }
+
+    fs.renameSync(tempTargetDir, targetDir)
+    fs.rmSync(backupTargetDir, { recursive: true, force: true })
+  } catch (error) {
+    fs.rmSync(tempTargetDir, { recursive: true, force: true })
+
+    if (!fs.existsSync(targetDir) && fs.existsSync(backupTargetDir)) {
+      fs.renameSync(backupTargetDir, targetDir)
+    }
+
+    throw error
+  }
+}
+
+function installDependencies(repoDir, pnpmCmd) {
+  console.log('[STEP 1/7] Install workspace dependencies')
+  runCommand(pnpmCmd, ['--dir', repoDir, 'install', '--frozen-lockfile', '--prod=false'])
+  console.log()
+}
+
+function buildFrontends(repoDir, pnpmCmd, frontends) {
+  console.log('[STEP 2/7] Build frontend apps')
+  for (const pkg of frontends) {
+    console.log(`  [BUILD] ${pkg.packageJson.name}`)
+    runCommand(pnpmCmd, ['--dir', repoDir, '--filter', pkg.packageJson.name, 'build'])
+  }
+  console.log()
+}
+
+function syncFrontends(deployRoot, frontends) {
+  console.log('[STEP 3/7] Sync frontend bundles to nginx html')
+  for (const pkg of frontends) {
+    const targetSubdir = getFrontendTargetSubdir(pkg)
+    const sourceDir = path.join(pkg.dir, 'dist')
+    const targetDir = targetSubdir ? path.join(deployRoot, targetSubdir) : deployRoot
+    console.log(`  [SYNC ] ${pkg.relativeDir}\\dist -> ${targetSubdir || '.'}`)
+    syncDirectory(sourceDir, targetDir)
+  }
+  console.log()
+}
+
+function syncSharedPublicAssets(repoDir, deployRoot) {
+  const publicSourceDir = path.join(repoDir, 'general-server', 'public')
+  if (!fs.existsSync(publicSourceDir)) {
+    console.log('[STEP 4/7] Sync shared public assets')
+    console.log('  [SKIP ] general-server/public not found')
+    console.log()
+    return
+  }
+
+  console.log('[STEP 4/7] Sync shared public assets')
+  const publicTargetDir = path.join(deployRoot, 'public')
+  console.log('  [SYNC ] general-server\\public -> public')
+  syncDirectory(publicSourceDir, publicTargetDir)
+  console.log()
+}
+
+function buildServers(repoDir, pnpmCmd, servers) {
+  console.log('[STEP 5/7] Build backend services')
+  for (const pkg of servers) {
+    console.log(`  [BUILD] ${pkg.packageJson.name}`)
+    runCommand(pnpmCmd, ['--dir', repoDir, '--filter', pkg.packageJson.name, 'build'])
+  }
+  console.log()
+}
+
+function getPortProbeUrl(port, endpoint = '/ready') {
+  return `http://127.0.0.1:${port}${endpoint}`
+}
+
+async function probeHttpEndpoint(port, endpoint = '/ready', timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    const request = http.get({
+      host: '127.0.0.1',
+      port,
+      path: endpoint,
+      timeout: timeoutMs,
+    }, (response) => {
+      let body = ''
+      response.setEncoding('utf8')
+      response.on('data', (chunk) => {
+        if (body.length >= 512) return
+        body += chunk.slice(0, Math.max(0, 512 - body.length))
+      })
+      response.on('end', () => {
+        resolve({
+          ok: response.statusCode === 200,
+          statusCode: response.statusCode ?? 0,
+          body: body.trim(),
+        })
+      })
+    })
+
+    request.on('timeout', () => {
+      request.destroy(new Error('timeout'))
+    })
+
+    request.on('error', (error) => {
+      resolve({
+        ok: false,
+        statusCode: 0,
+        body: '',
+        error: error.message,
+      })
+    })
+  })
+}
+
+async function waitForReadyEndpoint(port, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 30000
+  const intervalMs = options.intervalMs ?? 1000
+  const startedAt = Date.now()
+  let lastProbe = null
+
+  while (Date.now() - startedAt < timeoutMs) {
+    lastProbe = await probeHttpEndpoint(port, '/ready', options.requestTimeoutMs)
+    if (lastProbe.ok) {
+      return lastProbe
+    }
+    await sleepAsync(intervalMs)
+  }
+
+  const detail = lastProbe?.error
+    || (lastProbe?.statusCode ? `status=${lastProbe.statusCode}` : 'no response')
+  const bodySuffix = lastProbe?.body ? ` body=${JSON.stringify(lastProbe.body)}` : ''
+  throw new Error(`${getPortProbeUrl(port)} did not become ready within ${timeoutMs}ms (${detail})${bodySuffix}`)
+}
+
+async function verifyBackendReadiness(backendPorts) {
+  if (!backendPorts.length) {
+    console.log('  [SKIP ] No backend ports found for readiness check.')
+    return
+  }
+
+  for (const port of backendPorts) {
+    console.log(`  [CHECK] ${getPortProbeUrl(port)}`)
+    await waitForReadyEndpoint(Number(port))
+    console.log(`  [READY] ${getPortProbeUrl(port)}`)
+  }
+}
+
+function listListeningPidsForPort(port) {
+  if (process.platform !== 'win32') {
+    return []
+  }
+
+  const result = spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      `$connections = Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue; if ($connections) { $connections | Select-Object -ExpandProperty OwningProcess -Unique }`,
+    ],
+    {
+      encoding: 'utf8',
+      windowsHide: true,
+    },
+  )
+
+  if (result.error) {
+    throw result.error
+  }
+
+  if ((result.status ?? 0) !== 0) {
+    return []
+  }
+
+  return [...new Set(
+    result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  )]
+}
+
+function cleanupBackendRuntime(repoDir, pm2Cmd, cleanupMetadata) {
+  const pm2Apps = cleanupMetadata.pm2Apps || []
+  const backendPorts = cleanupMetadata.backendPorts || []
+
+  console.log('  [CLEAN] Stopping PM2 apps and releasing backend ports')
+
+  if (pm2Apps.length) {
+    console.log(`  [PM2  ] ${pm2Apps.join(' ')}`)
+    try {
+      runCommand(pm2Cmd, ['delete', ...pm2Apps], { cwd: repoDir })
+    } catch (error) {
+      console.log('  [WARN ] PM2 delete failed, retrying with stop.')
+      try {
+        runCommand(pm2Cmd, ['stop', ...pm2Apps], { cwd: repoDir })
+      } catch (stopError) {
+        console.log(`  [WARN ] PM2 stop failed: ${stopError.message}`)
+      }
+    }
+  }
+
+  for (const port of backendPorts) {
+    console.log(`  [PORT ] ${port}`)
+    const pids = listListeningPidsForPort(port)
+    for (const pid of pids) {
+      console.log(`  [KILL ] PID ${pid} on port ${port}`)
+      try {
+        runCommand('taskkill.exe', ['/F', '/PID', pid])
+      } catch (error) {
+        console.log(`  [WARN ] Failed to kill PID ${pid}: ${error.message}`)
+      }
+    }
+  }
+}
+
+async function reloadPm2(repoDir, pm2Cmd, cleanupMetadata) {
+  console.log('[STEP 6/7] Reload backend services with PM2')
+  const ecosystemPath = path.join(repoDir, 'ecosystem.config.cjs')
+  const reloadArgs = ['startOrReload', ecosystemPath, '--update-env']
+
+  try {
+    runCommand(pm2Cmd, reloadArgs, { cwd: repoDir })
+    await verifyBackendReadiness(cleanupMetadata.backendPorts)
+  } catch (error) {
+    console.log(`[WARN] PM2 reload or readiness check failed: ${error.message}`)
+    console.log('  [RETRY] Attempting one clean backend restart.')
+    cleanupBackendRuntime(repoDir, pm2Cmd, cleanupMetadata)
+    runCommand(pm2Cmd, reloadArgs, { cwd: repoDir })
+    await verifyBackendReadiness(cleanupMetadata.backendPorts)
+  }
+
+  runCommand(pm2Cmd, ['save'], { cwd: repoDir })
+
+  console.log('[OK] PM2 services reloaded.')
+  console.log()
+}
+
+function startDetachedProcess(command, args, options = {}) {
+  const child = spawn(command, args, {
+    cwd: options.cwd,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  })
+  child.unref()
+  return child.pid
+}
+
+function getCommandStatus(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd,
+    stdio: 'ignore',
+    windowsHide: true,
+  })
+
+  if (result.error) {
+    throw result.error
+  }
+
+  return result.status ?? 1
+}
+
+function waitForNginxReady(nginxExe, nginxDir, nginxConf, timeoutMs = 5000) {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const reloadStatus = getCommandStatus(
+      nginxExe,
+      ['-p', nginxDir, '-c', nginxConf, '-s', 'reload'],
+      { cwd: nginxDir },
+    )
+
+    if (reloadStatus === 0) {
+      return true
+    }
+
+    sleep(500)
+  }
+
+  return false
+}
+
+function restartNginx(nginxExe, nginxDir, nginxConf) {
+  console.log('[STEP 7/7] Restart nginx')
+  runCommand(nginxExe, ['-t', '-p', nginxDir, '-c', nginxConf])
+  const reloadResult = getCommandStatus(
+    nginxExe,
+    ['-p', nginxDir, '-c', nginxConf, '-s', 'reload'],
+    { cwd: nginxDir },
+  )
+
+  if (reloadResult === 0) {
+    console.log('[OK] nginx reloaded successfully.')
+    console.log()
+    return
+  }
+
+  const pid = startDetachedProcess(nginxExe, ['-p', nginxDir, '-c', nginxConf], {
+    cwd: nginxDir,
+  })
+  if (!waitForNginxReady(nginxExe, nginxDir, nginxConf)) {
+    throw new Error(`nginx start command was issued but nginx did not become ready. pid=${pid ?? 'unknown'}`)
+  }
+
+  console.log(`[OK] nginx started successfully. pid=${pid ?? 'unknown'}`)
+  console.log()
+}
+
+function printPlan(plan) {
+  console.log('[INFO] Frontend apps  :', plan.frontends.map((pkg) => pkg.packageJson.name).join(', ') || '(none)')
+  console.log('[INFO] Backend apps   :', plan.servers.map((pkg) => pkg.packageJson.name).join(', ') || '(none)')
+  console.log()
+}
+
+function printCleanupMetadata(cleanupMetadata) {
+  console.log('[INFO] Backend ports   :', cleanupMetadata.backendPorts.join(' ') || '(none)')
+  console.log('[INFO] PM2 apps        :', cleanupMetadata.pm2Apps.join(' ') || '(none)')
+  console.log()
+}
+
+function runFrontendMode(repoDir, deployRoot, pnpmCmd) {
+  const plan = loadDeploymentPlan(repoDir)
+  printPlan(plan)
+  ensureDirectory(deployRoot)
+
+  console.log('[STEP 1/2] Install workspace dependencies')
+  runCommand(pnpmCmd, ['--dir', repoDir, 'install', '--frozen-lockfile', '--prod=false'])
+  console.log()
+
+  console.log('[STEP 2/2] Build and sync frontend apps')
+  for (const pkg of plan.frontends) {
+    console.log(`  [BUILD] ${pkg.packageJson.name}`)
+    runCommand(pnpmCmd, ['--dir', repoDir, '--filter', pkg.packageJson.name, 'build'])
+    const targetSubdir = getFrontendTargetSubdir(pkg)
+    const sourceDir = path.join(pkg.dir, 'dist')
+    const targetDir = targetSubdir ? path.join(deployRoot, targetSubdir) : deployRoot
+    console.log(`  [SYNC ] ${pkg.relativeDir}\\dist -> ${targetSubdir || '.'}`)
+    syncDirectory(sourceDir, targetDir)
+  }
+  console.log()
+  console.log('[OK] All frontend bundles were deployed to nginx successfully.')
+}
+
+async function runAllMode(repoDir, deployRoot, pnpmCmd, pm2Cmd, nginxExe, nginxDir, nginxConf) {
+  const plan = loadDeploymentPlan(repoDir)
+  const cleanupMetadata = getCleanupMetadata(repoDir)
+  printPlan(plan)
+  printCleanupMetadata(cleanupMetadata)
+  ensureDirectory(deployRoot)
+  installDependencies(repoDir, pnpmCmd)
+  buildFrontends(repoDir, pnpmCmd, plan.frontends)
+  syncFrontends(deployRoot, plan.frontends)
+  syncSharedPublicAssets(repoDir, deployRoot)
+  buildServers(repoDir, pnpmCmd, plan.servers)
+  await reloadPm2(repoDir, pm2Cmd, cleanupMetadata)
+  restartNginx(nginxExe, nginxDir, nginxConf)
+  console.log('[OK] Jenkins build and deploy completed successfully.')
+}
+
+async function main() {
+  const { command, options } = parseArgs(process.argv)
+  const repoDir = path.resolve(options['repo-dir'] || process.cwd())
+  const pnpmCmd = options.pnpm
+
+  if (command === 'frontends') {
+    if (!pnpmCmd) {
+      throw new Error('Missing required option: --pnpm')
+    }
+    const deployRoot = path.resolve(options['deploy-root'] || path.join(repoDir, 'dist'))
+    runFrontendMode(repoDir, deployRoot, pnpmCmd)
+    return
+  }
+
+  if (command === 'plan') {
+    const plan = loadDeploymentPlan(repoDir)
+    console.log(JSON.stringify({
+      frontends: plan.frontends.map((pkg) => ({
+        name: pkg.packageJson.name,
+        dir: pkg.relativeDir,
+      })),
+      servers: buildPm2Apps(repoDir),
+    }, null, 2))
+    return
+  }
+
+  if (command === 'cleanup-vars') {
+    const cleanupMetadata = getCleanupMetadata(repoDir)
+    console.log(`BACKEND_PORTS=${cleanupMetadata.backendPorts.join(' ')}`)
+    console.log(`PM2_APPS=${cleanupMetadata.pm2Apps.join(' ')}`)
+    return
+  }
+
+  if (command !== 'all') {
+    throw new Error(`Unsupported command: ${command}`)
+  }
+
+  if (!pnpmCmd) {
+    throw new Error('Missing required option: --pnpm')
+  }
+
+  const deployRoot = path.resolve(options['deploy-root'] || path.join(repoDir, 'dist'))
+  const pm2Cmd = options.pm2
+  const nginxExe = options['nginx-exe']
+  const nginxDir = options['nginx-dir']
+  const nginxConf = options['nginx-conf']
+
+  if (!pm2Cmd || !nginxExe || !nginxDir || !nginxConf) {
+    throw new Error('Missing required options for all mode: --pm2 --nginx-exe --nginx-dir --nginx-conf')
+  }
+
+  await runAllMode(repoDir, deployRoot, pnpmCmd, pm2Cmd, nginxExe, nginxDir, nginxConf)
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('[ERROR]', error.message)
+    process.exit(1)
+  })
+}
+
+module.exports = {
+  buildPm2Apps,
+  getFrontendTargetSubdir,
+  loadDeploymentPlan,
+}

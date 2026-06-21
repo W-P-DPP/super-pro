@@ -1,0 +1,28 @@
+{
+  "name": "super-pro",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev:all": "turbo run dev --parallel",
+    "dev:admin-front": "pnpm --filter @super-pro/admin-front dev",
+    "dev:shared": "turbo run dev --filter=@super-pro/shared-* --parallel",
+    "build:admin-front": "pnpm --filter @super-pro/admin-front build",
+    "dev:front-public": "pnpm --filter @super-pro/front-public dev",
+    "dev:login": "pnpm --filter @super-pro/login dev",
+    "dev:server": "node scripts/kill-port.cjs 31010 && pnpm --filter @super-pro/server dev",
+    "kill:port": "node scripts/kill-port.cjs",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "build:shared": "turbo run build --filter=@super-pro/shared-*",
+    "test": "turbo run test",
+    "test:shared": "turbo run test --filter=@super-pro/shared-*",
+    "test:unit": "pnpm --filter @super-pro/server test:unit",
+    "test:integration": "pnpm --filter @super-pro/server test:integration",
+    "test:coverage": "pnpm --filter @super-pro/server test:coverage",
+    "stress": "pnpm --filter @super-pro/server stress",
+    "typecheck:shared": "turbo run build --filter=@super-pro/tsconfig --filter=@super-pro/shared-*"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.8"
+  }
+}

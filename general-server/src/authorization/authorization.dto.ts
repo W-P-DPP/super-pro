@@ -1,0 +1,102 @@
+import type {
+  AuthorizationPermissionSummary,
+  AuthorizationRoleDetail,
+  AuthorizationRoleSummary,
+  AuthorizationUserProjectPermission,
+} from '@super-pro/shared-types';
+
+export interface AuthorizationValidationErrorContextDto {
+  nodePath: string;
+  field: string;
+  reason: string;
+  value?: unknown;
+}
+
+export interface AuthorizationPermissionResponseDto
+  extends AuthorizationPermissionSummary {}
+
+export interface AuthorizationRoleResponseDto extends AuthorizationRoleDetail {
+  memberCount?: number;
+}
+
+export interface CreateRoleRequestDto {
+  code: string;
+  name: string;
+  description?: string;
+  status?: number;
+  permissionIds?: number[];
+}
+
+export interface CreatePermissionRequestDto {
+  code: string;
+  appCode: string;
+  resourceType: AuthorizationPermissionSummary['resourceType'];
+  resourceCode: string;
+  action: string;
+  name: string;
+  description?: string;
+  status?: number;
+}
+
+export interface UpdateRoleRequestDto {
+  code?: string;
+  name?: string;
+  description?: string;
+  status?: number;
+  permissionIds?: number[];
+}
+
+export interface UpdatePermissionRequestDto {
+  code?: string;
+  appCode?: string;
+  resourceType?: AuthorizationPermissionSummary['resourceType'];
+  resourceCode?: string;
+  action?: string;
+  name?: string;
+  description?: string;
+  status?: number;
+}
+
+export interface AuthorizationPermissionListQueryDto {
+  appCode?: string;
+  keyword?: string;
+  resourceType?: AuthorizationPermissionSummary['resourceType'];
+  status?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AuthorizationRoleListQueryDto {
+  appCode?: string;
+  keyword?: string;
+  status?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AuthorizationRoleListDto {
+  items: AuthorizationRoleResponseDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AuthorizationPermissionListDto {
+  items: AuthorizationPermissionResponseDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AssignedRoleResponseDto extends AuthorizationRoleSummary {}
+
+export interface AuthorizationUserProjectPermissionResponseDto
+  extends AuthorizationUserProjectPermission {}
+
+export interface AuthorizationUserProjectPermissionListDto {
+  items: AuthorizationUserProjectPermissionResponseDto[];
+}
+
+export interface AuthorizationCurrentUserProjectPermissionResponseDto {
+  item: AuthorizationUserProjectPermissionResponseDto | null;
+}

@@ -1,0 +1,21 @@
+node_modules
+.DS_Store
+file
+rubbish
+.turbo
+pnpm-debug.log*
+
+dist
+coverage
+logs
+
+# .codex
+.claude
+
+
+
+*.log
+
+openspec
+
+.codegraph

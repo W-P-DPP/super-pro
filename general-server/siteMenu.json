@@ -1,0 +1,205 @@
+[
+  {
+    "id": 1,
+    "name": "置顶",
+    "path": "/1/port",
+    "icon": "/public/icons/pin.svg",
+    "isTop": true,
+    "strict": false,
+    "hide": false,
+    "remark": "",
+    "children": [
+      {
+        "id": 2,
+        "name": "关于我",
+        "path": "http://www.zwpsite.icu:8082/resume/",
+        "icon": "/public/icons/pin.svg",
+        "isTop": false,
+        "strict": false,
+        "hide": false,
+        "remark": "",
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "git",
+    "path": "/2/port",
+    "icon": "/public/icons/git.svg",
+    "isTop": true,
+    "strict": false,
+    "hide": false,
+    "remark": "",
+    "children": [
+      {
+        "id": 4,
+        "name": "gstack",
+        "path": "https://github.com/garrytan/gstack",
+        "icon": "/public/icons/pin.svg",
+        "isTop": false,
+        "strict": false,
+        "hide": false,
+        "remark": "23 个功能强大的工具，分别扮演 CEO、设计师、工程经理、发布经理、文档工程师和质量保证人员的角色",
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "name": "工具",
+    "path": "/public/icons/tool.svg",
+    "icon": "/public/icons/tool.svg",
+    "isTop": true,
+    "strict": false,
+    "hide": false,
+    "remark": "",
+    "children": [
+      {
+        "id": 6,
+        "name": "JSON解析",
+        "path": "https://www.json.cn/",
+        "icon": "/public/icons/json.ico",
+        "isTop": false,
+        "strict": false,
+        "hide": false,
+        "remark": "",
+        "children": []
+      },
+      {
+        "id": 7,
+        "name": "二维码生成",
+        "path": "https://cli.im/",
+        "icon": "/public/icons/qr.ico",
+        "isTop": false,
+        "strict": false,
+        "hide": false,
+        "remark": "",
+        "children": []
+      },
+      {
+        "id": 8,
+        "name": "weflow",
+        "path": "https://weflow.top/",
+        "icon": "/public/icons/weFlow.png",
+        "isTop": false,
+        "strict": false,
+        "hide": false,
+        "remark": "微信聊天记录导出",
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "name": "应用",
+    "path": "",
+    "icon": "/public/icons/app.svg",
+    "isTop": true,
+    "strict": false,
+    "hide": false,
+    "remark": "",
+    "children": [
+      {
+        "id": 10,
+        "name": "日志记录",
+        "path": "https://www.zwpsite.icu/date-logger/",
+        "icon": "/public/icons/log-color.svg",
+        "isTop": false,
+        "strict": true,
+        "hide": false,
+        "remark": "",
+        "children": []
+      },
+      {
+        "id": 11,
+        "name": "openclaw",
+        "path": "http://www.zwpsite.icu:8082/openclaw/",
+        "icon": "/public/icons/openclaw.svg",
+        "isTop": false,
+        "strict": false,
+        "hide": false,
+        "remark": "小龙虾",
+        "children": []
+      },
+      {
+        "id": 12,
+        "name": "file-server",
+        "path": "http://www.zwpsite.icu:8082/file-server/",
+        "icon": "/public/icons/file_server.svg",
+        "isTop": false,
+        "strict": true,
+        "hide": false,
+        "remark": "文件管理服务",
+        "children": []
+      },
+      {
+        "id": 13,
+        "name": "待办",
+        "path": "http://www.zwpsite.icu:8082/todo/",
+        "icon": "/public/icons/file_server.svg",
+        "isTop": false,
+        "strict": true,
+        "hide": true,
+        "remark": "待办",
+        "children": []
+      },
+      {
+        "id": 14,
+        "name": "SelfAgent",
+        "path": "http://www.zwpsite.icu:8082/todo/",
+        "icon": "/public/icons/file_server.svg",
+        "isTop": false,
+        "strict": true,
+        "hide": true,
+        "remark": "与其蒸馏别人，不如蒸馏自己",
+        "children": []
+      },
+      {
+        "id": 15,
+        "name": "Agent",
+        "path": "http://www.zwpsite.icu:8082/agent/",
+        "icon": "/public/icons/agent.svg",
+        "isTop": false,
+        "strict": true,
+        "hide": false,
+        "remark": "开发中...",
+        "children": []
+      },
+      {
+        "id": 16,
+        "name": "DHJH报销系统",
+        "path": "http://www.zwpsite.icu:8082/reimburse/",
+        "icon": "/public/icons/agent.svg",
+        "isTop": false,
+        "strict": true,
+        "hide": true,
+        "remark": "私单，开发中...",
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": 17,
+    "name": "运维",
+    "path": "",
+    "icon": "/public/icons/yw.svg",
+    "isTop": true,
+    "strict": false,
+    "hide": false,
+    "remark": "",
+    "children": [
+      {
+        "id": 18,
+        "name": "Jenkins",
+        "path": "http://www.zwpsite.icu:8082/jenkins/",
+        "icon": "/public/icons/jenkins.svg",
+        "isTop": false,
+        "strict": false,
+        "hide": false,
+        "remark": "Jenkins CICD自动化搭建",
+        "children": []
+      }
+    ]
+  }
+]

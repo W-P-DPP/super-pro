@@ -1,0 +1,7 @@
+interface:
+  display_name: "Super-Pro 编码守卫"
+  short_description: "面向本仓库真实编码开发的统一动作流，覆盖前端、后端、shared 的新增、修改、删除。"
+  default_prompt: "Use $super-pro-coding-guard to implement code changes in this repository with a scoped workflow for frontend, backend, shared, and cross-layer updates."
+
+policy:
+  allow_implicit_invocation: true

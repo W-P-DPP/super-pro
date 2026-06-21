@@ -1,0 +1,17 @@
+{
+  "watch": [
+    "main.ts",
+    "app.ts",
+    "src",
+    "utils"
+  ],
+  "ext": "ts,json",
+  "ignore": [
+    "dist/**",
+    "logs/**",
+    ".tmp/**",
+    ".turbo/**",
+    "*.log",
+    "siteMenu.json"
+  ]
+}
