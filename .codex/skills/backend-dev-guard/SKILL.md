@@ -33,6 +33,16 @@ description: 约束本仓库的后端工程开发规则。适用于 super-pro �
 5. 改行为就补最相关测试。
 6. 最后运行最小但有效的验证命令。
 
+## 新建后端服务 Dockerfile 规则
+
+- 新建任何可部署后端服务项目时，必须同时在服务根目录生成 `Dockerfile`。
+- Dockerfile 必须从 `assets/templates/Dockerfile.backend.template` 复制，并替换所有 `__PLACEHOLDER__`。
+- 必填标签必须完整：`super-pro.deploy="true"`、`super-pro.service`、`super-pro.kind="api"`、`super-pro.port`、`super-pro.routes`。
+- API 服务默认提供健康检查并设置 `super-pro.health="/ready"`；如果确实没有 `/ready`，必须先说明原因并补齐等价健康检查。
+- 依赖基础设施时必须声明 `super-pro.depends`，例如 `mysql,redis`，让 compose 自动生成依赖和健康等待。
+- 运行时持久目录必须通过 `super-pro.runtimeVolumes` 声明，例如 `logs:/app/logs,file:/data/file`，不要在生成器外手写 compose 服务。
+- 服务 Dockerfile 必须能通过仓库根目录作为 build context 构建，并优先复用 `packages` 与 workspace 依赖。
+
 ## 分层规则
 
 - 优先遵循 `router -> controller -> service -> repository -> entity`
@@ -95,6 +105,7 @@ description: 约束本仓库的后端工程开发规则。适用于 super-pro �
 最终说明里要交代：
 
 - 复用了哪些 shared 能力
+- 新建后端服务时，说明已生成项目级 `Dockerfile`，并列出 `super-pro.*` 部署标签、端口、健康检查和持久卷
 - 哪些权限边界被新增或调整
 - 跑了哪些验证
 - 哪些地方还没验证，以及风险是什么

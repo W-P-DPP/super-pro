@@ -20,6 +20,8 @@
     "test:integration": "pnpm --filter @super-pro/server test:integration",
     "test:coverage": "pnpm --filter @super-pro/server test:coverage",
     "stress": "pnpm --filter @super-pro/server stress",
+    "docker:prod:deploy": "node scripts/docker-compose-run.cjs prod deploy",
+    "docker:test:deploy": "node scripts/docker-compose-run.cjs test deploy",
     "typecheck:shared": "turbo run build --filter=@super-pro/tsconfig --filter=@super-pro/shared-*"
   },
   "devDependencies": {

@@ -19,3 +19,18 @@ logs
 openspec
 
 .codegraph
+.codex
+.claude
+*.test.*
+*.spec.*
+
+!.codex/
+!.codex/skills/
+!.codex/skills/frontend-design-guard/
+!.codex/skills/frontend-design-guard/assets/
+!.codex/skills/frontend-design-guard/assets/templates/
+!.codex/skills/frontend-design-guard/assets/templates/Dockerfile.frontend.template
+!.codex/skills/backend-dev-guard/
+!.codex/skills/backend-dev-guard/assets/
+!.codex/skills/backend-dev-guard/assets/templates/
+!.codex/skills/backend-dev-guard/assets/templates/Dockerfile.backend.template

@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker/docker-compose.prod.yml}"
+DEPLOY_ENV="${DEPLOY_ENV:-prod}"
 
-docker compose -f "$COMPOSE_FILE" down
+node scripts/docker-compose-run.cjs "$DEPLOY_ENV" down

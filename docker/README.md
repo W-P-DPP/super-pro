@@ -1,67 +1,85 @@
-# Docker Production Layout
+# Docker Deployment
 
-这份目录提供 `super-pro` 的一套生产环境 Docker 模板，目标是把当前公网入口迁移成一套 `nginx + static frontends + node apis + mysql + redis` 的容器编排。
+Docker deployment is generated from project-level Dockerfiles.
 
-## 包含内容
+Each deployable project owns a `Dockerfile` with `super-pro.*` labels. The root
+deployment command scans those Dockerfiles, skips missing projects, and writes:
 
-- `docker-compose.prod.yml`
-  生产编排文件，包含 `nginx`、`general-server`、`agent-server`、`reimburse-server`、`mysql`、`redis`
-- `Dockerfile.web`
-  构建并打包所有静态前端，然后交给 `nginx` 提供
-- `Dockerfile.server`
-  通用 Node API 运行镜像，供三个后端复用
-- `nginx/default.conf`
-  生产路由规则，对应当前仓库的 `/zwpsite`、`/login`、`/agent`、`/reimburse`、`/summary-front`、`/resume`、`/file-server`、`/api`、`/agent-api`、`/reimburse-api`
-- `env/*.env`
-  三个后端的生产环境变量模板
-- `config/*.config.json`
-  三个后端挂载到容器内的 `config.json` 模板
+- `docker/.generated/docker-compose.yml`
+- `docker/.generated/nginx/default.conf`
+- `docker/.generated/nginx/Dockerfile`
 
-## 使用方式
+Generated files are ignored by git.
 
-1. 先把 `docker/env/*.env` 里的占位值替换成真实生产值，尤其是：
-   - `JWT_SECRET`
-   - `MAILER_*`
-   - `OPENAI_API_KEY`
-   - `LOGIN_PASSWORD_PUBLIC_KEY`
-   - `LOGIN_PASSWORD_PRIVATE_KEY`
-   - `DB_PASSWORD`
-2. 如果生产库不是容器内 `mysql`，修改：
-   - `docker-compose.prod.yml` 中的 `mysql` 服务
-   - `docker/env/*.env` 和 `docker/config/*.config.json` 中的数据库地址
-3. 启动：
+Frontend projects are built into the generated nginx gateway image and served as
+static files by nginx. They are not deployed as separate containers. API projects
+remain independent services and are reverse proxied by nginx.
+
+## Commands
 
 ```bash
-docker compose -f docker/docker-compose.prod.yml up -d --build
+pnpm docker:prod:deploy
+pnpm docker:test:deploy
 ```
 
-4. 查看合成配置：
+Jenkins entry scripts:
+
+```bat
+jenkins-build-and-deploy-prod.bat
+jenkins-build-and-deploy-test.bat
+```
+
+The legacy `jenkins-build-and-deploy.bat` delegates to the production script.
+
+Production defaults:
+
+- compose project: `super-pro-prod`
+- HTTP port: `9999`
+- MySQL host port: `13306`
+- Redis host port: `16379`
+- runtime dir: `D:/super-pro_pro`
+- API `NODE_ENV`: `production`
+
+Test defaults:
+
+- compose project: `super-pro-test`
+- HTTP port: `29999`
+- MySQL host port: `23306`
+- Redis host port: `26379`
+- runtime dir: `D:/super-pro_test`
+- API `NODE_ENV`: `development`
+
+Both environments generate the compose/nginx files and then run docker compose with
+an explicit `-p` project name, so containers, networks, and default names stay
+isolated. Override defaults with environment variables when needed:
 
 ```bash
-docker compose -f docker/docker-compose.prod.yml config
+PUBLIC_HTTP_PORT=19999 DOCKER_RUNTIME_DIR=D:/custom-runtime pnpm docker:test:deploy
 ```
 
-5. 查看健康检查：
+`PROD_RUNTIME_DIR` is still accepted by the wrapper when `DOCKER_RUNTIME_DIR` is
+not set, but new scripts should use `DOCKER_RUNTIME_DIR`.
 
-```bash
-docker compose -f docker/docker-compose.prod.yml ps
-docker compose -f docker/docker-compose.prod.yml logs -f nginx
-docker compose -f docker/docker-compose.prod.yml logs -f general-server
-```
+## Dockerfile Labels
 
-## 当前约束
+Required:
 
-- `general-server` 的 `/public` 仍由 `general-server` 容器提供，`nginx` 只做反向代理。
-- `reimburse-server` 的 `FILE_SERVER_API_BASE_URL` 已改成容器内地址 `http://general-server:30010/api`，避免走公网回环。
-- `general-server` 的文件目录已经挂到 named volume：
-  - `/data/file`
-  - `/data/rubbish`
-  - `/data/upload-chunks`
-- 三个后端都使用 `/ready` 做容器健康检查。
+- `super-pro.deploy="true"`
+- `super-pro.service="<service-name>"`
+- `super-pro.kind="frontend"` or `super-pro.kind="api"`
+- `super-pro.port="<container-port>"`
+- `super-pro.routes="/route/"`
 
-## 更适合你后续补强的点
+Optional:
 
-- 把 `mysql` 和 `redis` 改成外部托管服务。
-- 为 `nginx` 增加 `443` 和证书挂载。
-- 把敏感值改成 Docker secrets 或 CI/CD 注入。
-- 给 `mysql` 增加初始化脚本和备份策略。
+- `super-pro.rootRedirect="/zwpsite/"`
+- `super-pro.health="/ready"`
+- `super-pro.depends="mysql,redis"`
+- `super-pro.runtimeVolumes="logs:/app/logs,file:/data/file"`
+
+Current deployable projects:
+
+- `front-public` -> `/zwpsite/` static files in nginx
+- `login` -> `/login/` static files in nginx
+- `admin-front` -> `/file-server/` static files in nginx
+- `general-server` -> `/api/`, `/public/` API reverse proxy

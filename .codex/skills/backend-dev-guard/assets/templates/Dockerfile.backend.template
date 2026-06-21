@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:22-alpine AS builder
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=${PNPM_HOME}:${PATH}
+
+RUN corepack enable
+
+WORKDIR /workspace
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages ./packages
+COPY __SERVICE_DIR__ ./__SERVICE_DIR__
+
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter __PACKAGE_FILTER__ build
+RUN mkdir -p /out/__SERVICE_DIR__ \
+  && cp -r /workspace/node_modules /out/node_modules \
+  && cp -r /workspace/__SERVICE_DIR__/node_modules /out/__SERVICE_DIR__/node_modules \
+  && cp -r /workspace/__SERVICE_DIR__/dist /out/__SERVICE_DIR__/dist \
+  && cp /workspace/__SERVICE_DIR__/package.json /out/__SERVICE_DIR__/package.json \
+  && if [ -d /workspace/__SERVICE_DIR__/public ]; then mkdir -p /out/__SERVICE_DIR__/dist/public && cp -r /workspace/__SERVICE_DIR__/public/. /out/__SERVICE_DIR__/dist/public; fi \
+  && if [ -f /workspace/__SERVICE_DIR__/siteMenu.json ]; then cp /workspace/__SERVICE_DIR__/siteMenu.json /out/__SERVICE_DIR__/siteMenu.json; fi
+
+FROM node:22-alpine AS runtime
+
+LABEL super-pro.deploy="true" \
+      super-pro.service="__SERVICE_NAME__" \
+      super-pro.kind="api" \
+      super-pro.port="__PORT__" \
+      super-pro.routes="__ROUTES__" \
+      super-pro.health="__HEALTH_PATH__" \
+      super-pro.depends="__DEPENDS__" \
+      super-pro.runtimeVolumes="__RUNTIME_VOLUMES__"
+
+WORKDIR /app/__SERVICE_DIR__
+
+ENV NODE_ENV=production
+ENV TZ=Asia/Shanghai
+
+COPY --from=builder /out/ /app/
+
+CMD ["node", "dist/main.cjs"]
