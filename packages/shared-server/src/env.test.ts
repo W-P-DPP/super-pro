@@ -149,9 +149,9 @@ describe('shared-server env helpers', () => {
     expect(getDatabaseConfig({}, { nodeEnv: 'development' }).synchronize).toBe(false);
   });
 
-  it('keeps synchronize disabled in production even when env requests true', () => {
+  it('allows env to enable synchronize in production', () => {
     process.env.DB_SYNCHRONIZE = 'true';
 
-    expect(getDatabaseConfig({}, { nodeEnv: 'production' }).synchronize).toBe(false);
+    expect(getDatabaseConfig({}, { nodeEnv: 'production' }).synchronize).toBe(true);
   });
 });

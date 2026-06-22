@@ -75,9 +75,7 @@ export function getDatabaseConfig(
   const profile = getRuntimeProfile(options?.nodeEnv);
   const requestedSynchronize = parseBoolean(process.env.DB_SYNCHRONIZE);
   const defaultSynchronize = profile !== 'production';
-  const synchronize = profile === 'production'
-    ? false
-    : requestedSynchronize ?? defaultSynchronize;
+  const synchronize = requestedSynchronize ?? defaultSynchronize;
 
   return {
     type: firstDefined(process.env.DB_TYPE, configDatabase.type, 'mysql')!,
