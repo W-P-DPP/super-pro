@@ -22,7 +22,7 @@ LABEL super-pro.deploy="true" \
       super-pro.service="admin-front" \
       super-pro.kind="frontend" \
       super-pro.port="80" \
-      super-pro.routes="/file-server/"
+      super-pro.routes="/admin/"
 
 RUN printf '%s\n' \
     'server {' \
