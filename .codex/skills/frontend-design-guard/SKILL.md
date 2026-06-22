@@ -42,6 +42,15 @@ description: 约束本仓库前端开发流程。适用于 React、Vite、Next�
 - 默认简体中文文案
 - 默认覆盖桌面、平板、移动端
 
+## 新建前端项目 Dockerfile 规则
+
+- 新建任何可部署前端项目时，必须同时在项目根目录生成 `Dockerfile`。
+- Dockerfile 必须从 `assets/templates/Dockerfile.frontend.template` 复制，并替换所有 `__PLACEHOLDER__`。
+- 前端 Dockerfile 只作为部署元数据，不单独部署前端容器；静态产物由生成的 nginx 网关镜像统一构建和托管。
+- 必填标签必须完整：`super-pro.deploy="true"`、`super-pro.service`、`super-pro.kind="frontend"`、`super-pro.port="80"`、`super-pro.routes`。
+- 只有一个前端项目可以设置 `super-pro.rootRedirect`；如果不是默认首页，删除该 label 或置空前先确认生成器行为。
+- `super-pro.routes` 必须使用以 `/` 开头且以 `/` 结尾的路由，例如 `/zwpsite/`、`/login/`。
+
 ## 权限校验硬规则
 
 - 除非用户明确说明“不需要权限校验”，否则前端涉及页面、菜单、按钮、用户显示要求时，默认必须接权限校验。
@@ -76,6 +85,7 @@ description: 约束本仓库前端开发流程。适用于 React、Vite、Next�
 
 - 实际读取了哪些设计和主题来源
 - 复用了哪些 shared 包
+- 新建前端项目时，说明已生成项目级 `Dockerfile`，并列出 `super-pro.*` 部署标签
 - 哪些页面/菜单/按钮/用户显示增加了权限约束
 - 跑了哪些构建或测试
 - 哪些地方还没验证，以及风险是什么

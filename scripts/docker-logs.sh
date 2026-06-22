@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker/docker-compose.prod.yml}"
+DEPLOY_ENV="${DEPLOY_ENV:-prod}"
 
 if [ "$#" -gt 0 ]; then
-  docker compose -f "$COMPOSE_FILE" logs -f --tail=200 "$@"
+  node scripts/docker-compose-run.cjs "$DEPLOY_ENV" logs "$@"
 else
-  docker compose -f "$COMPOSE_FILE" logs -f --tail=200
+  node scripts/docker-compose-run.cjs "$DEPLOY_ENV" logs
 fi
