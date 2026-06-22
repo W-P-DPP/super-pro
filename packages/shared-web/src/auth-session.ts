@@ -4,10 +4,14 @@ type AuthSessionOptions = {
   storageKey: string;
   directTokenStorageKey?: string | false;
   cookieStorageKey?: string | false;
+  enableQueryHandoff?: boolean;
+  enableWindowNameHandoff?: boolean;
   storageMode?: 'hybrid' | 'cookie';
 };
 
 const DEFAULT_AUTH_SESSION_COOKIE_KEY = 'super-pro.auth-session';
+const AUTH_HANDOFF_KEY = 'super-pro.auth-handoff';
+const QUERY_AUTH_HANDOFF_PARAM = 'spauth';
 
 function isExpiredAuthSession(session: StoredAuthSession) {
   return (
@@ -89,6 +93,29 @@ function writeAuthSessionCookie(cookieKey: string, session: StoredAuthSession) {
   document.cookie = `${cookieKey}=${serialized}; path=/; SameSite=Lax${expires}`;
 }
 
+function parseAuthHandoffPayload(rawValue: string | null | undefined) {
+  const trimmedValue = rawValue?.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmedValue) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const payload = parsed as Record<string, unknown>;
+    if (payload.key !== AUTH_HANDOFF_KEY || !isStoredAuthSession(payload.session)) {
+      return null;
+    }
+
+    return payload.session;
+  } catch {
+    return null;
+  }
+}
+
 export function isStoredAuthSession(value: unknown): value is StoredAuthSession {
   if (!value || typeof value !== 'object') {
     return false;
@@ -107,6 +134,8 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
   const normalizedOptions = {
     directTokenStorageKey: 'token',
     cookieStorageKey: DEFAULT_AUTH_SESSION_COOKIE_KEY,
+    enableQueryHandoff: false,
+    enableWindowNameHandoff: false,
     storageMode: 'hybrid',
     ...options,
   } satisfies Omit<
@@ -116,6 +145,42 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
     directTokenStorageKey: string | false;
     cookieStorageKey: string | false;
   };
+
+  function consumeQueryAuthHandoff() {
+    if (!normalizedOptions.enableQueryHandoff || typeof window === 'undefined') {
+      return null;
+    }
+
+    const rawHandoff = new URLSearchParams(window.location.search).get(
+      QUERY_AUTH_HANDOFF_PARAM,
+    );
+    const session = parseAuthHandoffPayload(rawHandoff);
+    if (!session) {
+      return null;
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.delete(QUERY_AUTH_HANDOFF_PARAM);
+    const nextSearch = searchParams.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+
+    window.history?.replaceState?.(null, '', nextUrl);
+    return writeReusableAuthSession(session);
+  }
+
+  function consumeWindowNameAuthHandoff() {
+    if (!normalizedOptions.enableWindowNameHandoff || typeof window === 'undefined') {
+      return null;
+    }
+
+    const session = parseAuthHandoffPayload(window.name);
+    if (!session) {
+      return null;
+    }
+
+    window.name = '';
+    return writeReusableAuthSession(session);
+  }
 
   function clearLegacyLocalAuthArtifacts(storage: Storage | null) {
     if (!storage) {
@@ -150,6 +215,11 @@ export function createAuthSessionStore(options: AuthSessionOptions) {
   }
 
   function readReusableAuthSession() {
+    const handoffSession = consumeQueryAuthHandoff() ?? consumeWindowNameAuthHandoff();
+    if (handoffSession) {
+      return handoffSession;
+    }
+
     const storage = getStorage();
     if (
       !normalizedOptions.cookieStorageKey &&

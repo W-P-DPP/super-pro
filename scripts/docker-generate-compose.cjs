@@ -70,6 +70,10 @@ function staticMountPath(route) {
   return routeWithoutTrailingSlash(route).replace(/^\/+/, '') || 'root';
 }
 
+function shellSingleQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
 function findDockerfiles(rootDir) {
   const dockerfiles = [];
   const ignoredDirs = new Set(['.git', '.turbo', '.generated', 'dist', 'node_modules']);
@@ -468,7 +472,9 @@ function renderGatewayDockerfile(projects) {
     lines.push('', 'RUN pnpm install --frozen-lockfile');
     for (const project of frontendProjects) {
       const filter = project.packageName || `@super-pro/${project.service}`;
-      lines.push(`RUN pnpm --filter ${filter} build`);
+      lines.push(
+        `RUN VITE_APP_BASE_PATH=${shellSingleQuote(project.routes[0])} pnpm --filter ${filter} build`,
+      );
     }
     lines.push('');
   }

@@ -81,5 +81,7 @@ Current deployable projects:
 
 - `front-public` -> `/zwpsite/` static files in nginx
 - `login` -> `/login/` static files in nginx
-- `admin-front` -> `/file-server/` static files in nginx
+- `admin-front` -> `/admin/` static files in nginx
+- `file-server` -> `/file-server/` static files in nginx
+- `resume-template` -> `/resume/` static files in nginx
 - `general-server` -> `/api/`, `/public/` API reverse proxy
