@@ -35,6 +35,19 @@ const getGlobalConfigDetail = async (req: Request, res: Response) => {
   }
 };
 
+const getPublicGlobalConfigByProjectCode = async (req: Request, res: Response) => {
+  try {
+    const result = await globalConfigService.getPublicGlobalConfigByProjectCode(req.params.projectCode ?? '');
+    res.sendSuccess(result, '获取项目全局配置成功');
+  } catch (error) {
+    if (error instanceof GlobalConfigBusinessError) {
+      return res.status(error.statusCode).sendFail(error.message, error.statusCode);
+    }
+
+    return res.status(HttpStatus.ERROR).sendFail('获取项目全局配置失败', HttpStatus.ERROR);
+  }
+};
+
 const createGlobalConfig = async (req: Request, res: Response) => {
   try {
     const result = await globalConfigService.createGlobalConfig(req.body as CreateGlobalConfigRequestDto);
@@ -82,5 +95,6 @@ export {
   deleteGlobalConfig,
   getGlobalConfig,
   getGlobalConfigDetail,
+  getPublicGlobalConfigByProjectCode,
   updateGlobalConfig,
 };

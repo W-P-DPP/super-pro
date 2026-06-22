@@ -9,10 +9,14 @@ import {
   deleteGlobalConfig,
   getGlobalConfig,
   getGlobalConfigDetail,
+  getPublicGlobalConfigByProjectCode,
   updateGlobalConfig,
 } from './global-config.controller.ts';
 
 const globalConfigRouter: Router = express.Router();
+const globalConfigPublicRouter: Router = express.Router();
+
+globalConfigPublicRouter.get('/public/:projectCode', getPublicGlobalConfigByProjectCode);
 
 globalConfigRouter.use(loadAuthenticatedPrincipal);
 
@@ -58,3 +62,4 @@ globalConfigRouter.delete(
 );
 
 export default globalConfigRouter;
+export { globalConfigPublicRouter };

@@ -40,7 +40,8 @@ import {
   SidebarTrigger,
   toast,
 } from '@/components/ui'
-import { getSiteMenuConfig, getSiteMenuTree } from '@/api/modules/site-menu'
+import { getSiteMenuTree } from '@/api/modules/site-menu'
+import { useGlobalConfig } from '@/components/GlobalConfigProvider'
 import { submitSuggestion } from '@/api/modules/todo-suggestion'
 import {
   buildToolStats,
@@ -57,6 +58,11 @@ import {
   type ToolDirectoryLoadStatus,
 } from '@/data/tool-directory'
 import { resolveStrictMenuNavigationUrl } from '@/lib/strict-menu-redirect'
+import {
+  resolveHiddenMenuKeyword,
+  resolvePublicSiteLogo,
+  resolvePublicSiteTitle,
+} from '@/lib/public-global-config'
 
 const APP_SHELL_HEADER_CLASS = 'h-[var(--app-shell-header-height)] shrink-0'
 
@@ -95,8 +101,8 @@ function openMenuEntry(entry: SearchableSiteMenuEntry) {
 
 export function AppLayout() {
   const { resolvedTheme, setTheme } = useTheme()
+  const { data: globalConfigs } = useGlobalConfig()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const [appIcon, setAppIcon] = useState('/public/icons/tools.png')
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
   const [directoryStatus, setDirectoryStatus] = useState<ToolDirectoryLoadStatus>('loading')
   const [directoryErrorMessage, setDirectoryErrorMessage] = useState('')
@@ -108,7 +114,10 @@ export function AppLayout() {
   const [hiddenMenuRevealActive, setHiddenMenuRevealActive] = useState(false)
 
   const deferredSearchKeyword = useDeferredValue(searchKeyword)
-  const hiddenKeywordMatched = isHiddenMenuKeywordMatch(deferredSearchKeyword)
+  const appTitle = useMemo(() => resolvePublicSiteTitle(globalConfigs), [globalConfigs])
+  const appIcon = useMemo(() => resolvePublicSiteLogo(globalConfigs), [globalConfigs])
+  const hiddenKeyword = useMemo(() => resolveHiddenMenuKeyword(globalConfigs), [globalConfigs])
+  const hiddenKeywordMatched = isHiddenMenuKeywordMatch(deferredSearchKeyword, hiddenKeyword)
 
   const visibleMenuTree = useMemo(
     () => filterVisibleSiteMenuTree(rawMenuTree),
@@ -124,8 +133,9 @@ export function AppLayout() {
     () =>
       resolveSiteMenuSearchResults(rawMenuTree, deferredSearchKeyword, {
         revealHiddenByKeyword: hiddenMenuRevealActive,
+        hiddenKeyword,
       }),
-    [deferredSearchKeyword, hiddenMenuRevealActive, rawMenuTree],
+    [deferredSearchKeyword, hiddenKeyword, hiddenMenuRevealActive, rawMenuTree],
   )
 
   useEffect(() => {
@@ -133,6 +143,15 @@ export function AppLayout() {
       setThemeMode(resolvedTheme)
     }
   }, [resolvedTheme])
+
+  useEffect(() => {
+    document.title = appTitle
+    const iconLink = document.querySelector<HTMLLinkElement>('link[rel~="icon"]')
+
+    if (iconLink) {
+      iconLink.href = resolveSiteMenuIcon(appIcon)
+    }
+  }, [appIcon, appTitle])
 
   useEffect(() => {
     if (searchPanelOpen) {
@@ -147,10 +166,10 @@ export function AppLayout() {
   }, [searchPanelOpen])
 
   useEffect(() => {
-    if (!isHiddenMenuKeywordMatch(searchKeyword)) {
+    if (!isHiddenMenuKeywordMatch(searchKeyword, hiddenKeyword)) {
       setHiddenMenuRevealActive(false)
     }
-  }, [searchKeyword])
+  }, [hiddenKeyword, searchKeyword])
 
   const themeLabel = useMemo(
     () => (themeMode === 'dark' ? '切到浅色' : '切到深色'),
@@ -174,21 +193,15 @@ export function AppLayout() {
       setDirectoryErrorMessage('')
 
       try {
-        const [menuTree, menuConfig] = await Promise.all([
-          getSiteMenuTree({
-            forceRefresh: reloadSeed > 0,
-          }),
-          getSiteMenuConfig({
-            forceRefresh: reloadSeed > 0,
-          }),
-        ])
+        const menuTree = await getSiteMenuTree({
+          forceRefresh: reloadSeed > 0,
+        })
         if (!active) {
           return
         }
 
         const normalizedMenuTree = normalizeSiteMenuTree(menuTree)
         const nextVisibleMenuTree = filterVisibleSiteMenuTree(normalizedMenuTree)
-        setAppIcon(menuConfig.appIcon)
         setRawMenuTree(normalizedMenuTree)
         setToolStats(buildToolStats(nextVisibleMenuTree))
         setDirectoryStatus('success')
@@ -198,7 +211,6 @@ export function AppLayout() {
         }
 
         setRawMenuTree([])
-        setAppIcon('/public/icons/tools.png')
         setToolStats(emptyToolStats)
         setDirectoryStatus('error')
         setDirectoryErrorMessage(
@@ -229,7 +241,7 @@ export function AppLayout() {
       return
     }
 
-    if (!isHiddenMenuKeywordMatch(searchKeyword)) {
+    if (!isHiddenMenuKeywordMatch(searchKeyword, hiddenKeyword)) {
       return
     }
 
@@ -255,13 +267,13 @@ export function AppLayout() {
             <div className="flex size-11 items-center justify-center overflow-hidden rounded-xl border border-sidebar-border/80 bg-sidebar-accent/65 shadow-sm">
               <img
                 src={resolveSiteMenuIcon(appIcon)}
-                alt="zwpsite"
+                alt={appTitle}
                 className="size-8 object-contain"
               />
             </div>
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
               <div className="truncate text-sm font-semibold text-sidebar-foreground">
-                zwpsite
+                {appTitle}
               </div>
               <div className="mt-1 flex items-center gap-2">
                 <Badge variant="outline" className="h-5 rounded-full px-2 text-[11px]">

@@ -12,6 +12,7 @@ import type {
   GlobalConfigListQueryDto,
   GlobalConfigResponseDto,
   GlobalConfigValidationErrorContextDto,
+  PublicGlobalConfigDto,
   UpdateGlobalConfigRequestDto,
 } from './global-config.dto.ts';
 import type { GlobalConfigEntity } from './global-config.entity.ts';
@@ -29,6 +30,7 @@ const MAX_CONFIG_KEY_LENGTH = 128;
 const MAX_CONFIG_NAME_LENGTH = 64;
 const MAX_CONFIG_VALUE_LENGTH = 1000;
 const MAX_REMARK_LENGTH = 255;
+const MAX_PROJECT_CODE_LENGTH = 64;
 const DEFAULT_STATUS = 1;
 
 export class GlobalConfigBusinessError extends Error {
@@ -112,6 +114,25 @@ function ensureConfigKey(value: unknown, field: string): string {
   }
 
   return configKey;
+}
+
+function ensureProjectCode(value: unknown, field = 'projectCode'): string {
+  const projectCode = ensureRequiredString(value, field, '项目编码', MAX_PROJECT_CODE_LENGTH);
+
+  if (!/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(projectCode)) {
+    throw new GlobalConfigBusinessError(
+      '项目编码格式不合法',
+      {
+        nodePath: 'globalConfig',
+        field,
+        reason: '项目编码仅支持字母、数字、点、下划线和中划线组合',
+        value: projectCode,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  return projectCode;
 }
 
 function ensureConfigType(value: unknown, field: string): GlobalConfigType {
@@ -482,7 +503,7 @@ function validateGlobalConfigListQuery(input: Record<string, unknown>): GlobalCo
 export class GlobalConfigService {
   constructor(
     private readonly repository: GlobalConfigRepositoryPort = globalConfigRepository,
-    private readonly projectLookup: Pick<ProjectRepositoryPort, 'getProjectById'> = projectRepository,
+    private readonly projectLookup: Pick<ProjectRepositoryPort, 'getProjectById' | 'getProjectByCode'> = projectRepository,
   ) {}
 
   async getGlobalConfigList(
@@ -529,6 +550,29 @@ export class GlobalConfigService {
     }
 
     return toResponseDto(record);
+  }
+
+  async getPublicGlobalConfigByProjectCode(projectCode: string): Promise<PublicGlobalConfigDto> {
+    const normalizedProjectCode = ensureProjectCode(projectCode);
+    const project = await this.projectLookup.getProjectByCode(normalizedProjectCode);
+
+    if (!project) {
+      throw new GlobalConfigBusinessError(
+        '项目不存在',
+        {
+          nodePath: 'globalConfig',
+          field: 'projectCode',
+          reason: '未找到对应项目',
+          value: normalizedProjectCode,
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const records = await this.repository.getEnabledGlobalConfigsByProjectId(project.id);
+    const items = records.map((record) => toResponseDto(record));
+
+    return Object.fromEntries(items.map((item) => [item.configKey, item.configValue]));
   }
 
   async createGlobalConfig(

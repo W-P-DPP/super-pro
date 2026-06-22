@@ -21,4 +21,8 @@ openspec
 .codegraph
 *.test.*
 *.spec.*
+!general-server/__tests__/unit/globalConfig.service.test.ts
+!front-public/src/api/modules/global-config.test.ts
+!front-public/src/data/tool-directory.test.ts
+!front-public/src/lib/public-global-config.test.ts
 

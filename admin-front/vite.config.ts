@@ -18,7 +18,7 @@ function normalizeBasePath(value: string | undefined, fallback: string) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
   const devPort = Number(env.VITE_DEV_PORT)
-  const basePath = normalizeBasePath(env.VITE_APP_BASE_PATH, '/file-server/')
+  const basePath = normalizeBasePath(env.VITE_APP_BASE_PATH, '/admin/')
 
   return {
     base: basePath,

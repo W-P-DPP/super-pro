@@ -35,7 +35,12 @@ import {
   searchEngines,
   type ToolDirectoryContextValue,
 } from '@/data/tool-directory'
-import { resolveStrictMenuNavigationUrl } from '@/lib/strict-menu-redirect'
+import {
+  getStrictMenuLoginUrl,
+  resolveStrictMenuNavigationUrl,
+} from '@/lib/strict-menu-redirect'
+import { useGlobalConfig } from '@/components/GlobalConfigProvider'
+import { buildPublicMenuNavigationUrl } from '@/lib/public-global-config'
 
 const compactSectionNames = new Set(['网址大全', 'git', '工具'])
 
@@ -85,6 +90,7 @@ function formatTarget(link: string) {
 
 export function HomePage() {
   const directory = useOutletContext<ToolDirectoryContextValue>()
+  const { data: globalConfigs } = useGlobalConfig()
   const [engineKey, setEngineKey] = useState<string>(searchEngines[0].key)
   const [query, setQuery] = useState('')
   const [showBackToTop, setShowBackToTop] = useState(false)
@@ -114,6 +120,20 @@ export function HomePage() {
     }
 
     openSearch(activeEngine.buildUrl(trimmed))
+  }
+
+  const openConfiguredTool = (path: string, fallbackName: string, strict: boolean) => {
+    const targetUrl = buildPublicMenuNavigationUrl(path, globalConfigs, {
+      strict,
+      fallbackLoginUrl: getStrictMenuLoginUrl(),
+    })
+
+    if (targetUrl) {
+      openSearch(targetUrl)
+      return
+    }
+
+    openTool(path, fallbackName)
   }
 
   return (
@@ -269,7 +289,7 @@ export function HomePage() {
                           <button
                             key={String(item.id)}
                             type="button"
-                            onClick={() => openTool(itemPath, item.name, item.strict)}
+                            onClick={() => openConfiguredTool(itemPath, item.name, item.strict)}
                             className="group flex min-h-[9.25rem] flex-col rounded-[1.35rem] border border-border/80 bg-background/72 p-4 text-left shadow-2xs transition-[border-color,box-shadow,background-color] duration-200 hover:border-primary/35 hover:bg-background hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                           >
                             <div className="flex gap-3">

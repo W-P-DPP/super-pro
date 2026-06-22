@@ -6,5 +6,6 @@ export type {
   GlobalConfigProjectSummaryDto,
   GlobalConfigResponseDto,
   GlobalConfigValidationErrorContextDto,
+  PublicGlobalConfigDto,
   UpdateGlobalConfigRequestDto,
 } from '@super-pro/shared-types';

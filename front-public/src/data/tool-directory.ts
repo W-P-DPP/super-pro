@@ -1,7 +1,7 @@
 import type { SiteMenuResponseDto } from '@/api/modules/site-menu'
+import { DEFAULT_HIDDEN_MENU_KEYWORD } from '@/lib/public-global-config'
 
 const DEFAULT_SITE_MENU_ICON = '/public/icons/tool.svg'
-const DEFAULT_HIDDEN_MENU_KEYWORD = 'dpp'
 
 export type ToolStats = {
   sectionCount: number
@@ -129,13 +129,11 @@ export function buildSearchableSiteMenuEntries(
   })
 }
 
-export function getHiddenMenuKeyword() {
-  const configured = import.meta.env.VITE_SITE_MENU_HIDDEN_KEYWORD?.trim()
-  return configured || DEFAULT_HIDDEN_MENU_KEYWORD
-}
-
-export function isHiddenMenuKeywordMatch(keyword: string) {
-  return normalizeSearchText(keyword) === normalizeSearchText(getHiddenMenuKeyword())
+export function isHiddenMenuKeywordMatch(
+  keyword: string,
+  hiddenKeyword = DEFAULT_HIDDEN_MENU_KEYWORD,
+) {
+  return normalizeSearchText(keyword) === normalizeSearchText(hiddenKeyword)
 }
 
 export function searchSiteMenuEntries(
@@ -170,13 +168,16 @@ export function getHiddenSiteMenuEntries(nodes: SiteMenuResponseDto[]) {
 export function resolveSiteMenuSearchResults(
   nodes: SiteMenuResponseDto[],
   keyword: string,
-  options?: { revealHiddenByKeyword?: boolean },
+  options?: { revealHiddenByKeyword?: boolean; hiddenKeyword?: string },
 ) {
   if (!keyword.trim()) {
     return []
   }
 
-  if (options?.revealHiddenByKeyword && isHiddenMenuKeywordMatch(keyword)) {
+  if (
+    options?.revealHiddenByKeyword &&
+    isHiddenMenuKeywordMatch(keyword, options.hiddenKeyword)
+  ) {
     return getHiddenSiteMenuEntries(nodes)
   }
 

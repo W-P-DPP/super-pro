@@ -44,6 +44,8 @@ export interface GlobalConfigListDto {
   pageSize: number;
 }
 
+export type PublicGlobalConfigDto = Record<string, string | number | boolean>;
+
 export interface GlobalConfigValidationErrorContextDto {
   nodePath: string;
   field: string;

@@ -48,6 +48,7 @@ export interface GlobalConfigRepositoryPort {
   getGlobalConfigList(query: GlobalConfigListQueryDto): Promise<GlobalConfigListRepositoryResult>;
   getGlobalConfigById(id: number): Promise<GlobalConfigDetailRepositoryRecord | null>;
   getGlobalConfigByProjectIdAndKey(projectId: number, configKey: string): Promise<GlobalConfigEntity | null>;
+  getEnabledGlobalConfigsByProjectId(projectId: number): Promise<GlobalConfigDetailRepositoryRecord[]>;
   createGlobalConfig(input: CreateGlobalConfigEntityInput): Promise<GlobalConfigDetailRepositoryRecord | null>;
   updateGlobalConfig(id: number, input: UpdateGlobalConfigEntityInput): Promise<GlobalConfigDetailRepositoryRecord | null>;
   deleteGlobalConfig(id: number): Promise<GlobalConfigDetailRepositoryRecord | null>;
@@ -185,6 +186,21 @@ export class GlobalConfigRepository implements GlobalConfigRepositoryPort {
         deleteFlag: 0,
       },
     });
+  }
+
+  async getEnabledGlobalConfigsByProjectId(projectId: number): Promise<GlobalConfigDetailRepositoryRecord[]> {
+    const repository = await this.getRepository();
+    const result = await this.createDetailQueryBuilder(repository)
+      .andWhere('globalConfig.projectId = :projectId', { projectId })
+      .andWhere('globalConfig.status = :status', { status: 1 })
+      .orderBy('globalConfig.id', 'ASC')
+      .getRawAndEntities();
+
+    return result.entities.map((entity, index) => ({
+      entity,
+      projectName: String(result.raw[index]?.projectName ?? ''),
+      projectCode: String(result.raw[index]?.projectCode ?? ''),
+    }));
   }
 
   async createGlobalConfig(
