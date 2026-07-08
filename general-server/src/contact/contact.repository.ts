@@ -29,42 +29,71 @@ export interface ContactRepositoryPort {
 
 let ensureTablePromise: Promise<void> | null = null;
 
+function resolveDatabaseName(dataSource: DataSource): string | null {
+  const database = dataSource.options.database;
+  return typeof database === 'string' && database.trim() ? database.trim() : null;
+}
+
 async function ensureContactMessageTable(dataSource: DataSource) {
   if (ensureTablePromise) {
     return ensureTablePromise;
   }
 
-  ensureTablePromise = dataSource.query(`
-    CREATE TABLE IF NOT EXISTS resume_contact_message (
-      id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-      name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '联系人姓名',
-      email VARCHAR(128) NOT NULL DEFAULT '' COMMENT '联系人邮箱',
-      subject VARCHAR(128) NOT NULL DEFAULT '' COMMENT '主题',
-      message TEXT NOT NULL COMMENT '消息内容',
-      source_url VARCHAR(512) NOT NULL DEFAULT '' COMMENT '来源页面',
-      source_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '来源名称',
-      ip VARCHAR(64) NOT NULL DEFAULT '' COMMENT '来源 IP',
-      user_agent VARCHAR(512) NOT NULL DEFAULT '' COMMENT '浏览器 UA',
-      mail_status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '邮件状态',
-      mail_sent_at DATETIME NULL COMMENT '邮件发送时间',
-      mail_error TEXT NULL COMMENT '邮件失败原因',
-      create_by VARCHAR(64) NULL COMMENT '创建者',
-      create_time DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-      update_by VARCHAR(64) NULL COMMENT '更新者',
-      update_time DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-      delete_flag TINYINT NOT NULL DEFAULT 0 COMMENT 'delete flag',
-      remark VARCHAR(255) NULL COMMENT '备注',
-      PRIMARY KEY (id),
-      KEY idx_resume_contact_message_create_time (create_time),
-      KEY idx_resume_contact_message_mail_status (mail_status)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='简历联系方式记录表'
-  `)
-    .then(() =>
-      dataSource.query(`
-        ALTER TABLE resume_contact_message
-        ADD COLUMN IF NOT EXISTS delete_flag TINYINT NOT NULL DEFAULT 0 COMMENT 'delete flag'
-      `),
-    )
+  ensureTablePromise = (async () => {
+    // 1. 确保表存在
+    await dataSource.query(`
+      CREATE TABLE IF NOT EXISTS resume_contact_message (
+        id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+        name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '联系人姓名',
+        email VARCHAR(128) NOT NULL DEFAULT '' COMMENT '联系人邮箱',
+        subject VARCHAR(128) NOT NULL DEFAULT '' COMMENT '主题',
+        message TEXT NOT NULL COMMENT '消息内容',
+        source_url VARCHAR(512) NOT NULL DEFAULT '' COMMENT '来源页面',
+        source_name VARCHAR(128) NOT NULL DEFAULT '' COMMENT '来源名称',
+        ip VARCHAR(64) NOT NULL DEFAULT '' COMMENT '来源 IP',
+        user_agent VARCHAR(512) NOT NULL DEFAULT '' COMMENT '浏览器 UA',
+        mail_status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '邮件状态',
+        mail_sent_at DATETIME NULL COMMENT '邮件发送时间',
+        mail_error TEXT NULL COMMENT '邮件失败原因',
+        create_by VARCHAR(64) NULL COMMENT '创建者',
+        create_time DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+        update_by VARCHAR(64) NULL COMMENT '更新者',
+        update_time DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        delete_flag TINYINT NOT NULL DEFAULT 0 COMMENT 'delete flag',
+        remark VARCHAR(255) NULL COMMENT '备注',
+        PRIMARY KEY (id),
+        KEY idx_resume_contact_message_create_time (create_time),
+        KEY idx_resume_contact_message_mail_status (mail_status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='简历联系方式记录表'
+    `);
+
+    // 2. 对已有表补充 delete_flag 列（MySQL 不支持 ADD COLUMN IF NOT EXISTS，需手动检查）
+    const databaseName = resolveDatabaseName(dataSource);
+    if (!databaseName) {
+      return;
+    }
+
+    const rows = (await dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = ?
+          AND TABLE_NAME = 'resume_contact_message'
+          AND COLUMN_NAME = 'delete_flag'
+      `,
+      [databaseName],
+    )) as Array<{ count?: number | string }>;
+
+    const existingColumnCount = Number(rows[0]?.count ?? 0);
+    if (existingColumnCount > 0) {
+      return;
+    }
+
+    await dataSource.query(`
+      ALTER TABLE resume_contact_message
+      ADD COLUMN delete_flag TINYINT NOT NULL DEFAULT 0 COMMENT 'delete flag'
+    `);
+  })()
     .then(() => {
       ensureTablePromise = null;
     })
