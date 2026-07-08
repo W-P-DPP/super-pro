@@ -4,11 +4,11 @@
   "locales": {
     "en": {
       "name": "Zheng Weipeng",
-      "role": "Product Manager / Full Stack Developer / Frontend Developer"
+      "role": "Full Stack Developer(Node) / Senior Frontend Developer"
     },
     "zh": {
       "name": "郑伟鹏",
-      "role": "产品经理 / 全栈开发（Node）/ 前端开发"
+      "role": "全栈开发（Node）/ 高级前端开发"
     }
   },
   "contactOptions": [
@@ -18,10 +18,10 @@
       "href": null,
       "locales": {
         "en": {
-          "valueShort": "Guangzhou, China"
+          "valueShort": "Shenzhen, China"
         },
         "zh": {
-          "valueShort": "中国广州"
+          "valueShort": "中国深圳"
         }
       }
     },
@@ -43,10 +43,10 @@
     },
     {
       "id": "blog",
-      "value": "zwpsite.icu",
+      "value": "zwpsite.site",
       "valueShort": "个人博客",
       "faIcon": "fa-solid fa-globe",
-      "href": "http://www.zwpsite.icu:8082/zwpsite/",
+      "href": "https://www.zwpsite.site/zwpsite/",
       "copy": false
     },
     {

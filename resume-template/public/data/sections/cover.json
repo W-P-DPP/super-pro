@@ -15,10 +15,10 @@
           "id": 1,
           "locales": {
             "en": {
-              "description": "Since 2021, I have been focused on web development with strengths in frontend engineering and Node.js full-stack delivery. I have participated in and led 10+ project deliveries across frontend, backend, WeChat ecosystem products, mini-programs, and internal enterprise platforms."
+              "description": "I have been engaged in web related development since 2021, with solid front-end engineering skills and experience in full stack development of Node.js. I have participated in the complete implementation of 10+projects from requirement understanding, solution design to development delivery. He once led the construction of core modules of large-scale enterprise level systems, and the project scenarios covered front and rear development, WeChat applet, official account, enterprise internal platform and business middle platform."
             },
             "zh": {
-              "description": "2021 年开始从事 Web 相关开发，具备扎实的前端基础与 Node.js 全栈开发能力，参与并主导过 10+ 项目交付，覆盖前后端、微信小程序、公众号与企业内部平台等场景。"
+              "description": "2021 年起从事 Web 相关开发，具备扎实的前端工程能力与 Node.js 全栈开发经验，参与 10+ 项目从需求理解、方案设计到开发交付的完整落地。曾主导大型企业级系统核心模块建设，项目场景覆盖前后端开发、微信小程序、公众号、企业内部平台与业务中台等方向。"
             }
           }
         },
@@ -26,10 +26,10 @@
           "id": 2,
           "locales": {
             "en": {
-              "description": "I currently work as a product manager with hands-on experience in user research, requirement analysis, solution design, prototyping, and cross-functional delivery. My technical background helps me turn business goals into practical product plans and executable systems."
+              "description": "Focusing on engineering, architecture governance, and R&D efficiency improvement, with experience in component-based design, Monorespo collaboration, server-side capability building, deployment and operation, and AI coding R&D process implementation, able to promote high-quality delivery and team efficiency improvement in complex businesses."
             },
             "zh": {
-              "description": "当前从事产品经理岗位，具备需求调研、需求分析、方案设计、原型输出与跨团队推进能力，能够从业务视角推动产品迭代，也能够从技术视角独立完成系统架构与开发落地。"
+              "description": "关注工程化、架构治理与研发效率提升，具备组件化设计、Monorepo 协作、服务端能力建设、部署运维及 AI Coding 研发流程落地经验，能够在复杂业务中推进高质量交付与团队效能提升。"
             }
           }
         }

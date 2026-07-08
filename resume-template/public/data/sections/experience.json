@@ -12,43 +12,40 @@
         {
           "id": 1,
           "dateStart": {"year": 2025, "month": 7},
-          "dateEnd": {"string": "now"},
+          "dateEnd": {"year": 2026, "month": 7},
           "img": null,
           "fallbackFaIcon": "fa-solid fa-briefcase",
           "fallbackFaIconColor": "#1f4b99",
           "locales": {
             "en": {
               "title": "Product Manager",
-              "description": "Responsible for business research, requirement analysis, and functional solution design. Produce PRDs, business flows, and prototype documents to support requirement reviews and solution delivery.",
+              "description": "Responsible for front-end development of one of the company's core products (Precision Feeding Workshop), AI Coding engineering and team level R&D process orchestration, and task based orchestration system design",
               "list": {
                 "title": "Key Responsibilities",
                 "items": [
-                  "Break down requirement priorities based on business goals and real-world usage scenarios.",
-                  "Coordinate engineering, testing, and implementation teams across development, integration, launch, and iteration cycles.",
-                  "Track product feedback and business issues, continuously optimizing workflows and interaction experience.",
-                  "Leverage technical background to balance business value, implementation cost, and delivery timeline."
+                  "AI Coding Engineering and Team level R&D Process Scheduling",
+                  "Design of orchestration system based on task system"
                 ]
               },
               "province": "Guangzhou",
               "country": "China",
               "institution": "Shadow Technology",
-              "tags": ["Product Planning", "PRD", "Prototyping", "Cross-functional Collaboration"]
+              "tags": ["AI research and development efficiency improvement", "AI R&D Engineering", "Claude Code", "Codex"]
             },
             "zh": {
-              "title": "产品经理",
-              "description": "负责业务需求调研、需求分析与功能方案设计，输出 PRD、业务流程、原型说明等文档，支撑需求评审与方案落地。",
+              "title": "前端开发工程师",
+              "description": "负责公司核心产品之一（精喂坊）前端开发、AI Coding 工程化与团队级研发流程编排、基于任务系统的编排系统设计",
               "list": {
                 "title": "核心内容",
                 "items": [
-                  "结合业务目标与实际使用场景拆解需求优先级，协调研发、测试、实施等团队推进开发联调、上线验收与版本迭代。",
-                  "跟踪产品使用反馈与业务问题，持续优化功能流程与交互体验，提升系统可用性与交付效率。",
-                  "依托技术背景快速理解系统实现逻辑，能够在业务价值、开发成本与交付周期之间进行平衡，提升跨团队沟通效率。"
+                  "AI Coding 工程化与团队级研发流程编排",
+                  "基于任务系统的编排系统设计"
                 ]
               },
               "province": "广东-广州",
               "country": "中国",
               "institution": "广州影子科技有限公司",
-              "tags": ["产品规划", "PRD", "原型设计", "跨团队协作"]
+              "tags": ["AI研发提效", "AI研发工程化", "Claude Code", "Codex"]
             }
           }
         },

@@ -166,23 +166,23 @@
                 "chart": null
             },
             "items": [
-                {
+                 {
                     "id": 1,
                     "dateStart": null,
                     "img": null,
-                    "fallbackFaIcon": "fa-solid fa-paint-brush",
+                    "fallbackFaIcon": "fa-solid fa-font-awesome ",
                     "fallbackFaIconColor": null,
                     "percentage": null,
                     "locales": {
                         "en": {
-                            "title": "User Experience Design",
-                            "description": "Proficient in crafting user-centric digital experiences. Adept at making technology intuitive and accessible, enhancing user satisfaction.",
+                            "title": "Hiking",
+                            "description": "Measure the world with feet",
                             "level": null
                         },
                       
                         "zh": {
-                            "title": "用户体验设计",
-                            "description": "擅长创造以用户为中心的数字体验。精通使技术直观易用，提升用户满意度。",
+                            "title": "徒步",
+                            "description": "用脚丈量世界",
                             "level": null
                         }
                     }
@@ -208,90 +208,51 @@
                         }
                     }
                 },
-                {
-                    "id": 3,
-                    "dateStart": null,
-                    "img": null,
-                    "fallbackFaIcon": "fa-solid fa-music",
-                    "fallbackFaIconColor": null,
-                    "percentage": null,
-                    "locales": {
-                        "en": {
-                            "title": "Music",
-                            "description": "Playing instruments, composing, and embracing the harmony of diverse musical genres.",
-                            "level": null
-                        },
-                        
-                        "zh": {
-                            "title": "音乐",
-                            "description": "演奏乐器，作曲，融合多种音乐流派的和谐。",
-                            "level": null
-                        }
-                    }
-                },
-                {
-                    "id": 4,
-                    "dateStart": null,
-                    "img": null,
-                    "fallbackFaIcon": "fa-solid fa-users",
-                    "fallbackFaIconColor": null,
-                    "percentage": null,
-                    "locales": {
-                        "en": {
-                            "title": "User Research",
-                            "description": "Delving into user behavior and insights to shape effective design strategies.",
-                            "level": null
-                        },
-                       
-                        "zh": {
-                            "title": "用户研究",
-                            "description": "深入研究用户行为和见解，塑造有效的设计策略。",
-                            "level": null
-                        }
-                    }
-                },
+               
+               
                 {
                     "id": 5,
                     "dateStart": null,
                     "img": null,
-                    "fallbackFaIcon": "fa-solid fa-desktop",
+                    "fallbackFaIcon": "fa-solid fa-gamepad",
                     "fallbackFaIconColor": null,
                     "percentage": null,
                     "locales": {
                         "en": {
-                            "title": "Front-End Development",
-                            "description": "Crafting interactive web interfaces using modern technologies for seamless user experiences.",
+                            "title": "Gaming",
+                            "description": "Playing games occasionally is a great way to relax",
                             "level": null
                         },
                        
                         "zh": {
-                            "title": "前端开发",
-                            "description": "使用现代技术打造交互式网页界面，实现无缝的用户体验。",
+                            "title": "游戏",
+                            "description": "偶尔玩下游戏是个不错的放松选择",
                             "level": null
                         }
                     }
                 },
-                {
-                    "id": 6,
+                 {
+                    "id": 5,
                     "dateStart": null,
                     "img": null,
-                    "fallbackFaIcon": "fa-solid fa-palette",
+                    "fallbackFaIcon": "fa-solid fa-fighter-jet",
                     "fallbackFaIconColor": null,
                     "percentage": null,
                     "locales": {
                         "en": {
-                            "title": "Visual Arts",
-                            "description": "Exploring visual aesthetics, graphic design, and expressing ideas through artistic creativity.",
+                            "title": "fishing",
+                            "description": "The moment of catching fish was too exciting",
                             "level": null
                         },
                        
                         "zh": {
-                            "title": "视觉艺术",
-                            "description": "探索视觉美学，平面设计，通过艺术创意表达思想。",
+                            "title": "钓鱼",
+                            "description": "上鱼那一刻可太刺激了",
                             "level": null
                         }
                     }
                 }
+              
             ]
         }
     ]

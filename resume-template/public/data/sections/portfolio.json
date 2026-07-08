@@ -9,6 +9,9 @@
           "category_all": "All",
           "category_product": "Product",
           "category_fullstack": "Full Stack",
+           "category_mp": "mp",
+          "category_pc": "pc",
+          "category_backend": "backend",
           "category_frontend": "Frontend"
         },
         "zh": {
@@ -16,6 +19,9 @@
           "category_all": "全部",
           "category_product": "产品",
           "category_fullstack": "全栈",
+          "category_mp": "小程序",
+          "category_pc": "桌面应用",
+          "category_backend": "后端",
           "category_frontend": "前端"
         }
       },
@@ -58,7 +64,7 @@
             },
             "zh": {
               "title": "安全应急管理系统",
-              "description": "主导前端架构设计，输出 20+ 开发文档，建立标准化开发流程，新人上手效率提升 35%。\n基于 FFmpeg + WebAssembly 实现 Web 端音视频编码转换与格式转换。\n解决 COEP、COOP 浏览器安全限制问题。\n参与着火点算法开发，并通过 ECharts 二次开发实现 10 万级传感器数据实时可视化。",
+              "description": "主导前端架构设计，输出 20+ 开发文档，建立标准化开发流程，极大新人上手效率提升。\n基于 FFmpeg + WebAssembly 实现 Web 端音视频编码转换与格式转换。\n解决 COEP、COOP 浏览器安全限制问题。\n参与着火点算法开发，并通过 ECharts 二次开发实现 10 万级传感器数据实时可视化。",
               "tags": ["Vue 3", "Node.js", "WebAssembly", "WebRTC", "ECharts", "Sentry"]
             }
           },
@@ -89,7 +95,7 @@
           "img": null,
           "fallbackFaIcon": "fa-brands fa-weixin",
           "fallbackFaIconColor": "#38a169",
-          "category": "fullstack",
+          "category": "backend",
           "locales": {
             "en": {
               "title": "Emergency Broadcasting WeChat Backend Service",
@@ -100,6 +106,86 @@
               "title": "应急广播公众号后端服务",
               "description": "独立完成公众号后端开发。\n设计并实现消息推送服务。\n基于 cluster 多进程方案优化服务并发能力，TPS 可达 10000+（32 核服务器压力测试）。\n通过异步队列机制避免 Node.js 端请求丢失，提升服务稳定性。",
               "tags": ["Node.js", "Express", "微信生态", "消息推送", "并发优化"]
+            }
+          },
+          "links": []
+        },
+        {
+          "id": 5,
+          "img": null,
+          "fallbackFaIcon": "fa-solid fa-wheat-awn",
+          "fallbackFaIconColor": "#dd6b20",
+          "category": "frontend",
+          "locales": {
+            "en": {
+              "title": "Jingweifang — Precision Feeding & Feed Production Control System",
+              "description": "Built the digital hub of a mini feed mill for pig farms — a precision feeding and feed-production control system covering both a PC management console and a WeChat mini-program.\nAs the main frontend developer, led the buildout of core modules and delivered key business flows including production formulas, feeding plans, and device control.\nDrove the engineering adoption of AI Coding across the team's R&D workflow, establishing standardized development practices that improved overall delivery efficiency and code quality.\nBuilt the frontend architecture on React + TypeScript, and integrated MQTT for real-time communication and state synchronization with production devices such as smart feed lines.",
+              "tags": ["React", "TypeScript", "MQTT", "AI Coding", "Mini Program"]
+            },
+            "zh": {
+              "title": "精喂坊（精准饲喂与饲料生产管控系统）",
+              "description": "精喂坊是面向猪场的精准饲喂与饲料生产管控系统，相当于一座小型饲料厂的数字化中枢，覆盖 PC 管理端与小程序端。\n作为主要开发者主导前端核心模块搭建，完成生产配方、饲喂计划、设备管控等关键业务链路的设计与落地。\n推动 AI Coding 在团队研发流程中工程化落地，建立标准化研发范式，提升团队整体交付效率与代码质量。\n基于 React + TypeScript 构建前端架构，通过 MQTT 协议实现与智能料线等生产设备的实时通信与状态联动。",
+              "tags": ["React", "TypeScript", "MQTT", "AI Coding", "小程序"]
+            }
+          },
+          "links": []
+        },
+        {
+          "id": 6,
+          "img": null,
+          "fallbackFaIcon": "fa-solid fa-globe",
+          "fallbackFaIconColor": "#6b46c1",
+          "category": "fullstack",
+          "locales": {
+            "en": {
+              "title": "Personal Site",
+              "description": "Independently designed and built a full-stack personal site as a pnpm + Turbo monorepo, integrating a public portal, admin panel, file service, login, and resume page across multiple apps with shared workspace packages.\nFrontend built on Vue 3 + React 19 + TypeScript + Vite + shadcn/Tailwind v4; shared types, constants, and UI are extracted into reusable workspace packages.\nBackend powered by Node.js + Express 5 + TypeORM + MySQL + Redis + JWT, providing business APIs, file conversion (doc/xlsx/markdown), and auth, backed by Jest unit/integration tests and autocannon stress tests.\nContinuously integrated and deployed via Docker + PM2 + Nginx + Jenkins, with built-in /live, /ready, /metrics health checks and exception email alerting for observability.",
+              "tags": ["Monorepo","Vue 3", "React 19", "Node.js", "TypeORM", "Docker","Nginx","MySQL","Redis"]
+            },
+            "zh": {
+              "title": "个人站点（全栈平台）",
+              "description": "独立设计与开发的全栈个人站点，采用 pnpm + Turbo Monorepo 架构，整合公开门户、后台管理、文件服务、登录等多端应用，并抽取 shared 共享包沉淀类型与 UI 资产。\n前端基于 Vue 3 + React 19 + TypeScript + Vite + shadcn/Tailwind v4 构建，多端复用共享类型、常量与组件库。\n后端基于 Node.js + Express 5 + TypeORM + MySQL + Redis + JWT，提供业务 API、文件转换（doc/xlsx/markdown）与鉴权能力，配套 Jest 单元/集成测试与 autocannon 压测。\n通过 Docker + PM2 + Nginx + Jenkins 实现持续集成与部署，内置 /live、/ready、/metrics 健康检查与异常邮件告警可观测体系。",
+              "tags": ["Monorepo","Vue 3", "React 19", "Node.js", "TypeORM", "Docker","Nginx","MySQL","Redis"]
+            }
+          },
+          "links": []
+        },
+        {
+          "id": 7,
+          "img": null,
+          "fallbackFaIcon": "fa-solid fa-id-card",
+          "fallbackFaIconColor": "#0d9488",
+          "category": "mp",
+          "locales": {
+            "en": {
+              "title": "Electronic Badge Mini-Program",
+              "description": "A software and hardware integrated electronic location attendance project for frontline workers, covering both web management and mini program ends, achieving closed-loop management of personnel location and attendance check-in through electronic work cards. \nLead the development and delivery of the mini program. \nBased on Uniapp and Vue 3, the mini program is implemented, integrating BMap (Baidu Maps) to complete location collection, geofencing, and attendance trajectory visualization.\nCollaborate with the web and hardware side for debugging, connect location data upload and attendance rule verification, and ensure the accuracy and real-time attendance of on-site operators",
+              "tags": ["uniapp", "Vue 3", "BMap", "Hardware+Software", "Project Lead"]
+            },
+            "zh": {
+              "title": "电子工牌小程序",
+              "description": "软硬件一体的一线作业人员电子定位考勤项目，覆盖 Web 管理端与小程序端，通过电子工牌实现人员定位与考勤打卡的闭环管理。\n主导小程序端的开发与交付。\n基于 uniapp + Vue 3 实现小程序端，集成 BMap（百度地图）完成定位采集、地理围栏与考勤轨迹可视化。\n协同 Web 端与硬件侧联调，打通定位数据上传与考勤规则校验，保障现场作业人员考勤的准确性与实时性。",
+              "tags": ["uniapp", "Vue 3", "BMap", "软硬件一体"]
+            }
+          },
+          "links": []
+        },
+         {
+          "id": 8,
+          "img": null,
+          "fallbackFaIcon": "fa-solid fa-id-card",
+          "fallbackFaIconColor": "#0d9488",
+          "category": "pc",
+          "locales": {
+            "en": {
+              "title": "Electronic cash register (private order)",
+              "description": "This is a supermarket cash register project;\n The front-end is implemented using Electron+Vue 3, and serial port is used to integrate the weighing machine, barcode scanner, and cash register;",
+              "tags": ["Electron", "Vue 3", "serial communication", "serial"]
+            },
+            "zh": {
+              "title": "电子收银台（私单）",
+              "description": "这个一个超市的收银机项目；\n前端使用Electron + Vue 3实现，使用serialport 实现称重机、扫码枪、收银机的对接;",
+              "tags": ["Electron", "Vue 3", "串口通信", "serial"]
             }
           },
           "links": []
