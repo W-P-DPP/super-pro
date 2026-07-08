@@ -11,8 +11,8 @@
       "items": [
         {
           "id": 1,
-          "dateStart": {"year": 2025, "month": 7},
-          "dateEnd": {"year": 2026, "month": 7},
+          "dateStart": {"year": 2025, "month": 6},
+          "dateEnd": {"year": 2026, "month": 6},
           "img": null,
           "fallbackFaIcon": "fa-solid fa-briefcase",
           "fallbackFaIconColor": "#1f4b99",
@@ -51,8 +51,8 @@
         },
         {
           "id": 2,
-          "dateStart": {"year": 2023, "month": 11},
-          "dateEnd": {"year": 2025, "month": 5},
+          "dateStart": {"year": 2023, "month": 10},
+          "dateEnd": {"year": 2025, "month": 4},
           "img": null,
           "fallbackFaIcon": "fa-solid fa-code",
           "fallbackFaIconColor": "#2c7a7b",
@@ -93,8 +93,8 @@
         },
         {
           "id": 3,
-          "dateStart": {"year": 2022, "month": 8},
-          "dateEnd": {"year": 2023, "month": 10},
+          "dateStart": {"year": 2022, "month": 7},
+          "dateEnd": {"year": 2023, "month": 9},
           "img": null,
           "fallbackFaIcon": "fa-solid fa-laptop-code",
           "fallbackFaIconColor": "#805ad5",
