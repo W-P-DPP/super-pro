@@ -1,10 +1,12 @@
+// Rollup 将本文件编译为 CJS，直接使用 CJS 全局量 __dirname / require
+// 避免 import.meta.url 在 Rollup CJS 输出中被转换为 {}.url → undefined
+
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const require = createRequire(import.meta.url)
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+// CJS globals (available after Rollup compilation to CJS)
+declare var __dirname: string
+declare function require(id: string): any
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 

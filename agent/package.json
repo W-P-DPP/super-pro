@@ -2,8 +2,7 @@
   "name": "@super-pro/dp-work",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
-   "packageManager": "pnpm@10.32.1",
+  "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",

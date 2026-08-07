@@ -16,7 +16,15 @@
       "Bash(status=$?)",
       "Read(//tmp/**)",
       "Bash(exit $status)",
-      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/data/sections/portfolio.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")"
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/data/sections/portfolio.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
+      "Bash(npx electron *)",
+      "Bash(node -e ' *)",
+      "Bash(./node_modules/.bin/electron test-electron.js)",
+      "Bash(c:/Users/admin/Desktop/my/super-pro/agent/node_modules/.bin/electron .)",
+      "WebSearch",
+      "Bash(node_modules/.bin/electron test-electron.js)",
+      "Bash(./node_modules/.bin/electron.CMD test-electron.js)",
+      "Bash(node node_modules/electron/cli.js test-electron.js)"
     ]
   }
 }
