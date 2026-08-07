@@ -1,9 +1,8 @@
 # Docker Deployment
 
-Docker deployment is generated from project-level Dockerfiles.
-
-Each deployable project owns a `Dockerfile` with `super-pro.*` labels. The root
-deployment command scans those Dockerfiles, skips missing projects, and writes:
+Docker deployment is driven by an explicit project manifest at
+`docker/deployment.config.json`. The root deployment command reads that manifest
+and writes:
 
 - `docker/.generated/docker-compose.yml`
 - `docker/.generated/nginx/default.conf`
@@ -11,9 +10,19 @@ deployment command scans those Dockerfiles, skips missing projects, and writes:
 
 Generated files are ignored by git.
 
-Frontend projects are built into the generated nginx gateway image and served as
-static files by nginx. They are not deployed as separate containers. API projects
-remain independent services and are reverse proxied by nginx.
+Each deployable project owns a real `Dockerfile` and is built into its own image.
+Frontend projects ship as their own nginx static-file containers; API projects
+run as independent services. A gateway nginx container reverse proxies all routes
+to them on a single public port:
+
+```
+PUBLIC_HTTP_PORT:9999 (唯一公开端口)
+        │
+   nginx 网关容器（纯反代，不含任何前端产物）
+        │  前端：前缀剥离 proxy_pass（/admin/ → admin-front:80/）
+        │  api：前缀透传 proxy_pass（/api/ → general-server:30010/api/）
+   admin-front  front-public  login  file-server  resume-template  general-server
+```
 
 ## Commands
 
@@ -60,28 +69,41 @@ PUBLIC_HTTP_PORT=19999 DOCKER_RUNTIME_DIR=D:/custom-runtime pnpm docker:test:dep
 `PROD_RUNTIME_DIR` is still accepted by the wrapper when `DOCKER_RUNTIME_DIR` is
 not set, but new scripts should use `DOCKER_RUNTIME_DIR`.
 
-## Dockerfile Labels
+## Deployment Manifest (`docker/deployment.config.json`)
 
-Required:
+The manifest is the single source of truth for deployment metadata. Each entry in
+`projects` describes one deployable project:
 
-- `super-pro.deploy="true"`
-- `super-pro.service="<service-name>"`
-- `super-pro.kind="frontend"` or `super-pro.kind="api"`
-- `super-pro.port="<container-port>"`
-- `super-pro.routes="/route/"`
+| Field | Required | Description |
+|---|---|---|
+| `service` | yes | Compose service name (lowercase, dashes allowed; cannot be `nginx`/`mysql`/`redis`) |
+| `kind` | yes | `frontend` or `api` |
+| `dir` | no | Project directory; defaults to `service`. Dockerfile path is `${dir}/Dockerfile` |
+| `port` | yes | Container port |
+| `routes` | yes | URL routes served, e.g. `/admin/`. For frontends, `routes[0]` must equal the build base path |
+| `rootRedirect` | no | Optional; root `/` redirects here (at most one project) |
+| `health` | no | Health check path (api) |
+| `depends` | no | Comma-separated dependency services |
+| `runtimeVolumes` | no | Comma-separated `name:target` data volumes mounted under `${DOCKER_RUNTIME_DIR}/<service>/<name>` |
 
-Optional:
-
-- `super-pro.rootRedirect="/zwpsite/"`
-- `super-pro.health="/ready"`
-- `super-pro.depends="mysql,redis"`
-- `super-pro.runtimeVolumes="logs:/app/logs,file:/data/file"`
+`docker/env/<service>.env` is mounted as `env_file` for api services when it
+exists; `docker/config/<service>.config.json` is mounted read-only when it exists.
 
 Current deployable projects:
 
-- `front-public` -> `/zwpsite/` static files in nginx
-- `login` -> `/login/` static files in nginx
-- `admin-front` -> `/admin/` static files in nginx
-- `file-server` -> `/file-server/` static files in nginx
-- `resume-template` -> `/resume/` static files in nginx
+- `admin-front` -> `/admin/` frontend container (nginx)
+- `front-public` -> `/zwpsite/` frontend container (nginx), root redirect
+- `login` -> `/login/` frontend container (nginx)
+- `file-server` -> `/file-server/` frontend container (nginx)
+- `resume-template` -> `/resume/` frontend container (nginx)
 - `general-server` -> `/api/`, `/public/` API reverse proxy
+
+## Adding a project
+
+1. Add a real `Dockerfile` in the project directory. Frontend images follow the
+   multi-stage pattern in `admin-front/Dockerfile`: build with
+   `VITE_APP_BASE_PATH='/<route>/' pnpm --filter <pkg> build`, then an
+   `nginx:1.27-alpine` runtime that `COPY`s `docker/nginx-static.conf` and the
+   `dist`.
+2. Add an entry to `docker/deployment.config.json`.
+3. Re-run the deploy command.

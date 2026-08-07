@@ -14,26 +14,9 @@ COPY packages ./packages
 COPY front-public ./front-public
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @super-pro/front-public build
+RUN VITE_APP_BASE_PATH='/zwpsite/' pnpm --filter @super-pro/front-public build
 
 FROM nginx:1.27-alpine
 
-LABEL super-pro.deploy="true" \
-      super-pro.service="front-public" \
-      super-pro.kind="frontend" \
-      super-pro.port="80" \
-      super-pro.routes="/zwpsite/" \
-      super-pro.rootRedirect="/zwpsite/"
-
-RUN printf '%s\n' \
-    'server {' \
-    '    listen 80;' \
-    '    server_name _;' \
-    '    root /usr/share/nginx/html;' \
-    '    index index.html;' \
-    '    location / {' \
-    '        try_files $uri $uri/ /index.html;' \
-    '    }' \
-    '}' > /etc/nginx/conf.d/default.conf
-
+COPY docker/nginx-static.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /workspace/front-public/dist /usr/share/nginx/html

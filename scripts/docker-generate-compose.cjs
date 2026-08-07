@@ -5,51 +5,13 @@ const GENERATED_DIR = path.join('docker', '.generated');
 const NGINX_CONFIG_PATH = path.join(GENERATED_DIR, 'nginx', 'default.conf');
 const NGINX_DOCKERFILE_PATH = path.join(GENERATED_DIR, 'nginx', 'Dockerfile');
 const COMPOSE_PATH = path.join(GENERATED_DIR, 'docker-compose.yml');
+const MANIFEST_PATH = path.join('docker', 'deployment.config.json');
 const INFRA_SERVICES = new Set(['mysql', 'redis']);
+const RESERVED_SERVICES = new Set(['nginx', 'mysql', 'redis']);
 const RUNTIME_DIR_EXPR = '${DOCKER_RUNTIME_DIR:-D:/super-pro_pro}';
 
 function toPosixPath(value) {
   return value.split(path.sep).join('/');
-}
-
-function unquote(value) {
-  const trimmed = value.trim();
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed
-      .slice(1, -1)
-      .replace(/\\"/g, '"')
-      .replace(/\\'/g, "'")
-      .replace(/\\\\/g, '\\');
-  }
-  return trimmed;
-}
-
-function parseDockerfileLabels(contents) {
-  const labels = {};
-  const lines = contents.replace(/\r\n/g, '\n').split('\n');
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].trim();
-    if (!line.startsWith('LABEL ')) {
-      continue;
-    }
-
-    let statement = line.slice('LABEL '.length).trim();
-    while (statement.endsWith('\\') && index + 1 < lines.length) {
-      statement = `${statement.slice(0, -1).trim()} ${lines[index + 1].trim()}`;
-      index += 1;
-    }
-
-    const matcher = /([A-Za-z0-9_.-]+)=("(?:\\.|[^"])*"|'(?:\\.|[^'])*'|[^\s]+)/g;
-    for (const match of statement.matchAll(matcher)) {
-      labels[match[1]] = unquote(match[2]);
-    }
-  }
-
-  return labels;
 }
 
 function splitList(value) {
@@ -66,94 +28,103 @@ function normalizeRoute(route) {
   return route.endsWith('/') ? route : `${route}/`;
 }
 
-function staticMountPath(route) {
-  return routeWithoutTrailingSlash(route).replace(/^\/+/, '') || 'root';
+function routeWithoutTrailingSlash(route) {
+  return route.length > 1 && route.endsWith('/') ? route.slice(0, -1) : route;
 }
 
-function shellSingleQuote(value) {
-  return `'${String(value).replace(/'/g, "'\\''")}'`;
-}
+function loadProjectManifest(repoRoot = process.cwd()) {
+  const manifestPath = path.join(repoRoot, MANIFEST_PATH);
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Failed to read deployment manifest ${manifestPath}: ${error.message}`);
+  }
 
-function findDockerfiles(rootDir) {
-  const dockerfiles = [];
-  const ignoredDirs = new Set(['.git', '.turbo', '.generated', 'dist', 'node_modules']);
+  if (!Array.isArray(raw.projects) || raw.projects.length === 0) {
+    throw new Error(`${MANIFEST_PATH} must contain a non-empty "projects" array`);
+  }
 
-  function visit(currentDir) {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        if (ignoredDirs.has(entry.name)) {
-          continue;
-        }
-        visit(fullPath);
-        continue;
-      }
-      if (entry.isFile() && entry.name === 'Dockerfile') {
-        dockerfiles.push(fullPath);
-      }
+  const seen = new Set();
+  return raw.projects.map((entry) => {
+    const service = entry.service;
+    const dir = entry.dir || service;
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(service)) {
+      throw new Error(`Invalid service name: ${service}`);
     }
-  }
-
-  visit(rootDir);
-  return dockerfiles;
-}
-
-function projectFromDockerfile(repoRoot, dockerfilePath) {
-  const contents = fs.readFileSync(dockerfilePath, 'utf8');
-  const labels = parseDockerfileLabels(contents);
-  if (labels['super-pro.deploy'] !== 'true') {
-    return null;
-  }
-
-  const dir = toPosixPath(path.relative(repoRoot, path.dirname(dockerfilePath)));
-  const service = labels['super-pro.service'];
-  const kind = labels['super-pro.kind'];
-  const port = labels['super-pro.port'];
-  const routes = splitList(labels['super-pro.routes']).map(normalizeRoute);
-  const packageJsonPath = path.join(path.dirname(dockerfilePath), 'package.json');
-  const packageName = fs.existsSync(packageJsonPath)
-    ? JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).name
-    : '';
-
-  if (!service || !kind || !port || routes.length === 0) {
-    throw new Error(`Dockerfile ${dockerfilePath} is missing required super-pro labels`);
-  }
-  if (!['frontend', 'api'].includes(kind)) {
-    throw new Error(`Dockerfile ${dockerfilePath} has unsupported super-pro.kind: ${kind}`);
-  }
-
-  return {
-    dir,
-    dockerfile: `${dir}/Dockerfile`,
-    packageName,
-    service,
-    kind,
-    port,
-    routes,
-    rootRedirect: labels['super-pro.rootRedirect']
-      ? normalizeRoute(labels['super-pro.rootRedirect'])
-      : '',
-    health: labels['super-pro.health'] || '',
-    depends: splitList(labels['super-pro.depends']),
-    runtimeVolumes: splitList(labels['super-pro.runtimeVolumes']).map((entry) => {
-      const separator = entry.indexOf(':');
+    if (RESERVED_SERVICES.has(service)) {
+      throw new Error(`Service name is reserved: ${service}`);
+    }
+    if (seen.has(service)) {
+      throw new Error(`Duplicate service: ${service}`);
+    }
+    seen.add(service);
+    if (!['frontend', 'api'].includes(entry.kind)) {
+      throw new Error(`Unsupported kind for ${service}: ${entry.kind}`);
+    }
+    const port = Number(entry.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error(`Invalid port for ${service}: ${entry.port}`);
+    }
+    const routes = (entry.routes || []).map(normalizeRoute);
+    if (routes.length === 0) {
+      throw new Error(`${service}: routes is required`);
+    }
+    const dockerfile = path.join(repoRoot, dir, 'Dockerfile');
+    if (!fs.existsSync(dockerfile)) {
+      throw new Error(`${service}: Dockerfile not found at ${toPosixPath(dockerfile)}`);
+    }
+    const packageJsonPath = path.join(repoRoot, dir, 'package.json');
+    const packageName = fs.existsSync(packageJsonPath)
+      ? JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).name
+      : '';
+    const kind = entry.kind;
+    const runtimeVolumes = (entry.runtimeVolumes || []).map((volume) => {
+      const separator = volume.indexOf(':');
       if (separator === -1) {
-        throw new Error(`Invalid runtime volume "${entry}" in ${dockerfilePath}`);
+        throw new Error(`Invalid runtime volume "${volume}" in ${service}`);
       }
       return {
-        name: entry.slice(0, separator),
-        target: entry.slice(separator + 1),
+        name: volume.slice(0, separator),
+        target: volume.slice(separator + 1),
       };
-    }),
-  };
+    });
+
+    return {
+      service,
+      dir,
+      dockerfile: `${dir}/Dockerfile`,
+      packageName,
+      kind,
+      port,
+      routes,
+      rootRedirect: entry.rootRedirect ? normalizeRoute(entry.rootRedirect) : '',
+      health: entry.health || '',
+      depends: splitList(entry.depends),
+      runtimeVolumes,
+    };
+  });
 }
 
-function discoverDeployableProjects(repoRoot = process.cwd()) {
-  return findDockerfiles(repoRoot)
-    .map((dockerfilePath) => projectFromDockerfile(repoRoot, dockerfilePath))
-    .filter(Boolean)
-    .sort((left, right) => left.service.localeCompare(right.service));
+function validateProjects(projects) {
+  const seenRoutes = new Set();
+  const rootRedirects = projects.map((project) => project.rootRedirect).filter(Boolean);
+  if (rootRedirects.length > 1) {
+    throw new Error(`Only one rootRedirect is allowed, found: ${rootRedirects.join(', ')}`);
+  }
+  for (const project of projects) {
+    for (const route of project.routes) {
+      if (seenRoutes.has(route)) {
+        throw new Error(`Duplicate route "${route}" across services`);
+      }
+      seenRoutes.add(route);
+    }
+    if (project.kind === 'frontend' && project.routes.length > 1) {
+      console.warn(
+        `[WARN] ${project.service} has multiple routes (${project.routes.join(', ')}) but only ${project.routes[0]} matches its build base path`,
+      );
+    }
+  }
 }
 
 function indent(lines, spaces) {
@@ -199,6 +170,17 @@ function renderHealthcheck(project) {
   ];
 }
 
+function renderFrontendHealthcheck() {
+  return [
+    'healthcheck:',
+    '  test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]',
+    '  interval: 30s',
+    '  timeout: 5s',
+    '  retries: 3',
+    '  start_period: 5s',
+  ];
+}
+
 function renderProjectService(project, repoRoot) {
   const lines = [
     `${project.service}:`,
@@ -207,37 +189,42 @@ function renderProjectService(project, repoRoot) {
     `    dockerfile: ${project.dockerfile}`,
   ];
 
-  const envFile = path.join(repoRoot, 'docker', 'env', `${project.service}.env`);
-  if (fs.existsSync(envFile)) {
-    lines.push('  env_file:');
-    lines.push(`    - ../env/${project.service}.env`);
-  }
   if (project.kind === 'api') {
+    const envFile = path.join(repoRoot, 'docker', 'env', `${project.service}.env`);
+    if (fs.existsSync(envFile)) {
+      lines.push('  env_file:');
+      lines.push(`    - ../env/${project.service}.env`);
+    }
     lines.push('  environment:');
     lines.push('    NODE_ENV: ${APP_NODE_ENV:-production}');
-  }
 
-  const volumes = [];
-  const configFile = path.join(repoRoot, 'docker', 'config', `${project.service}.config.json`);
-  if (fs.existsSync(configFile)) {
-    volumes.push(`../config/${project.service}.config.json:/app/${project.service}/config.json:ro`);
-  }
-  for (const volume of project.runtimeVolumes) {
-    volumes.push(`${RUNTIME_DIR_EXPR}/${project.service}/${volume.name}:${volume.target}`);
-  }
-  if (volumes.length > 0) {
-    lines.push('  volumes:');
-    for (const volume of volumes) {
-      lines.push(`    - ${volume}`);
+    const volumes = [];
+    const configFile = path.join(repoRoot, 'docker', 'config', `${project.service}.config.json`);
+    if (fs.existsSync(configFile)) {
+      volumes.push(`../config/${project.service}.config.json:/app/${project.service}/config.json:ro`);
     }
+    for (const volume of project.runtimeVolumes) {
+      volumes.push(`${RUNTIME_DIR_EXPR}/${project.service}/${volume.name}:${volume.target}`);
+    }
+    if (volumes.length > 0) {
+      lines.push('  volumes:');
+      for (const volume of volumes) {
+        lines.push(`    - ${volume}`);
+      }
+    }
+
+    const projectServices = new Map([[project.service, project]]);
+    lines.push(...indent(renderDependsOn(project.depends, projectServices), 2));
   }
 
-  const projectServices = new Map([[project.service, project]]);
-  lines.push(...indent(renderDependsOn(project.depends, projectServices), 2));
   lines.push('  expose:');
   lines.push(`    - "${project.port}"`);
+  if (project.kind === 'frontend') {
+    lines.push(...indent(renderFrontendHealthcheck(), 2));
+  } else {
+    lines.push(...indent(renderHealthcheck(project), 2));
+  }
   lines.push('  restart: unless-stopped');
-  lines.push(...indent(renderHealthcheck(project), 2));
   lines.push('  networks:');
   lines.push('    - super-pro');
 
@@ -245,7 +232,6 @@ function renderProjectService(project, repoRoot) {
 }
 
 function renderNginxService(projects) {
-  const apiProjects = projects.filter((project) => project.kind === 'api');
   const lines = [
     'nginx:',
     '  build:',
@@ -253,12 +239,11 @@ function renderNginxService(projects) {
     '    dockerfile: docker/.generated/nginx/Dockerfile',
   ];
 
-  if (apiProjects.length > 0) {
-    lines.push('  depends_on:');
-    for (const project of apiProjects) {
-      lines.push(`    ${project.service}:`);
-      lines.push(`      condition: ${project.health ? 'service_healthy' : 'service_started'}`);
-    }
+  lines.push('  depends_on:');
+  for (const project of projects) {
+    lines.push(`    ${project.service}:`);
+    const healthy = project.kind === 'frontend' || Boolean(project.health);
+    lines.push(`      condition: ${healthy ? 'service_healthy' : 'service_started'}`);
   }
 
   lines.push(
@@ -324,13 +309,11 @@ function renderMysqlService() {
 }
 
 function renderCompose(projects, repoRoot) {
-  const apiProjects = projects.filter((project) => project.kind === 'api');
-  const projectServices = new Map(apiProjects.map((project) => [project.service, project]));
   const neededInfra = new Set(projects.flatMap((project) => project.depends).filter((dep) => INFRA_SERVICES.has(dep)));
   const lines = ['name: ${COMPOSE_PROJECT_NAME:-super-pro-prod}', '', 'services:'];
   lines.push(...indent(renderNginxService(projects), 2));
 
-  for (const project of apiProjects) {
+  for (const project of projects) {
     lines.push('');
     lines.push(...indent(renderProjectService(project, repoRoot), 2));
   }
@@ -351,23 +334,31 @@ function renderCompose(projects, repoRoot) {
   return `${lines.join('\n')}\n`;
 }
 
-function routeWithoutTrailingSlash(route) {
-  return route.length > 1 && route.endsWith('/') ? route.slice(0, -1) : route;
-}
-
 function renderNginxLocation(project, route) {
   const exactRoute = routeWithoutTrailingSlash(route);
-  const lines = [
-    `    location = ${exactRoute} {`,
-    `        return 301 ${route};`,
-    '    }',
-    '',
-    `    location ${route} {`,
-  ];
+  const lines = [];
+
+  if (exactRoute !== '/') {
+    lines.push(
+      `    location = ${exactRoute} {`,
+      `        return 301 ${route};`,
+      '    }',
+      '',
+    );
+  }
+
+  lines.push(`    location ${route} {`);
 
   if (project.kind === 'frontend') {
-    lines.push(`        try_files $uri $uri/ /${staticMountPath(route)}/index.html;`);
-    lines.push('    }');
+    lines.push(
+      `        proxy_pass http://${project.service}:${project.port}/;`,
+      '        proxy_http_version 1.1;',
+      '        proxy_set_header Host $host;',
+      '        proxy_set_header X-Real-IP $remote_addr;',
+      '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+      '        proxy_set_header X-Forwarded-Proto $scheme;',
+      '    }',
+    );
     return lines;
   }
 
@@ -392,7 +383,7 @@ function renderNginxLocation(project, route) {
 function renderNginx(projects) {
   const rootRedirects = projects.map((project) => project.rootRedirect).filter(Boolean);
   if (rootRedirects.length > 1) {
-    throw new Error(`Only one super-pro.rootRedirect is allowed, found: ${rootRedirects.join(', ')}`);
+    throw new Error(`Only one rootRedirect is allowed, found: ${rootRedirects.join(', ')}`);
   }
 
   const lines = [
@@ -400,8 +391,6 @@ function renderNginx(projects) {
     '    listen 80;',
     '    server_name _;',
     '    absolute_redirect off;',
-    '    root /usr/share/nginx/html;',
-    '    index index.html;',
     '',
     '    client_max_body_size 512m;',
     '    client_body_timeout 3600s;',
@@ -410,6 +399,8 @@ function renderNginx(projects) {
     '    gzip on;',
     '    gzip_min_length 1024;',
     '    gzip_comp_level 5;',
+    '    gzip_proxied any;',
+    '    gzip_vary on;',
     '    gzip_types',
     '        text/plain',
     '        text/css',
@@ -441,72 +432,37 @@ function renderNginx(projects) {
     lines.push('');
   }
 
+  if (!rootRedirects[0]) {
+    lines.push('    location / {');
+    lines.push('        return 404;');
+    lines.push('    }');
+    lines.push('');
+  }
+
   lines.push('}');
   return `${lines.join('\n')}\n`;
 }
 
-function renderGatewayDockerfile(projects) {
-  const frontendProjects = projects.filter((project) => project.kind === 'frontend');
-  const lines = [
+function renderGatewayDockerfile() {
+  return [
     '# syntax=docker/dockerfile:1.7',
     '',
-  ];
-
-  if (frontendProjects.length > 0) {
-    lines.push(
-      'FROM node:22-alpine AS frontend_builder',
-      '',
-      'ENV PNPM_HOME=/pnpm',
-      'ENV PATH=${PNPM_HOME}:${PATH}',
-      '',
-      'RUN corepack enable',
-      '',
-      'WORKDIR /workspace',
-      '',
-      'COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./',
-      'COPY packages ./packages',
-    );
-    for (const project of frontendProjects) {
-      lines.push(`COPY ${project.dir} ./${project.dir}`);
-    }
-    lines.push('', 'RUN pnpm install --frozen-lockfile');
-    for (const project of frontendProjects) {
-      const filter = project.packageName || `@super-pro/${project.service}`;
-      lines.push(
-        `RUN VITE_APP_BASE_PATH=${shellSingleQuote(project.routes[0])} pnpm --filter ${filter} build`,
-      );
-    }
-    lines.push('');
-  }
-
-  lines.push(
     'FROM nginx:1.27-alpine',
     '',
     'COPY docker/.generated/nginx/default.conf /etc/nginx/conf.d/default.conf',
-  );
-
-  for (const project of frontendProjects) {
-    for (const route of project.routes) {
-      lines.push(
-        `COPY --from=frontend_builder /workspace/${project.dir}/dist /usr/share/nginx/html/${staticMountPath(route)}`,
-      );
-    }
-  }
-
-  return `${lines.join('\n')}\n`;
+    '',
+  ].join('\n');
 }
 
 function generateDockerDeployment(options = {}) {
   const repoRoot = options.repoRoot || process.cwd();
   const outputRoot = options.outputRoot || path.join(repoRoot, GENERATED_DIR);
-  const projects = discoverDeployableProjects(repoRoot);
-  if (projects.length === 0) {
-    throw new Error('No deployable project Dockerfiles found');
-  }
+  const projects = loadProjectManifest(repoRoot);
+  validateProjects(projects);
 
   const compose = renderCompose(projects, repoRoot);
   const nginx = renderNginx(projects);
-  const gatewayDockerfile = renderGatewayDockerfile(projects);
+  const gatewayDockerfile = renderGatewayDockerfile();
   const composePath = path.join(outputRoot, 'docker-compose.yml');
   const nginxPath = path.join(outputRoot, 'nginx', 'default.conf');
   const gatewayDockerfilePath = path.join(outputRoot, 'nginx', 'Dockerfile');
@@ -534,14 +490,14 @@ if (require.main === module) {
   console.log(`Generated ${toPosixPath(path.relative(process.cwd(), result.composePath))}`);
   console.log(`Generated ${toPosixPath(path.relative(process.cwd(), result.nginxPath))}`);
   console.log(`Generated ${toPosixPath(path.relative(process.cwd(), result.gatewayDockerfilePath))}`);
-  console.log(`Discovered services: ${result.projects.map((project) => project.service).join(', ')}`);
+  console.log(`Manifest projects: ${result.projects.map((project) => project.service).join(', ')}`);
 }
 
 module.exports = {
-  discoverDeployableProjects,
+  loadProjectManifest,
   generateDockerDeployment,
-  parseDockerfileLabels,
   renderCompose,
   renderGatewayDockerfile,
   renderNginx,
+  validateProjects,
 };

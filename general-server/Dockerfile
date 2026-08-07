@@ -25,15 +25,6 @@ RUN mkdir -p /out/general-server \
 
 FROM node:22-alpine AS runtime
 
-LABEL super-pro.deploy="true" \
-      super-pro.service="general-server" \
-      super-pro.kind="api" \
-      super-pro.port="30010" \
-      super-pro.routes="/api/,/public/" \
-      super-pro.health="/ready" \
-      super-pro.depends="mysql,redis" \
-      super-pro.runtimeVolumes="logs:/app/logs,file:/data/file,rubbish:/data/rubbish,upload-chunks:/data/upload-chunks"
-
 WORKDIR /app/general-server
 
 ENV NODE_ENV=production
