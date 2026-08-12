@@ -93,7 +93,8 @@ function runCli(argv = process.argv.slice(2), sourceEnv = process.env) {
   console.log(`[INFO] Redis host port    : ${env.REDIS_HOST_PORT}`);
   console.log(`[INFO] App NODE_ENV       : ${env.APP_NODE_ENV}`);
 
-  const result = spawnSync('docker', args, {
+  const composeArgs = args.slice(1); // 去掉第一个元素 'docker-compose'
+  const result = spawnSync('docker-compose', composeArgs, {
     env,
     stdio: 'inherit',
     shell: false,
