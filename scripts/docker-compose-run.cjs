@@ -67,7 +67,7 @@ function buildComposeArgs(profile, action, extraArgs = []) {
     throw new Error(`Unknown docker action "${action}". Use one of: ${Object.keys(ACTION_ARGS).join(', ')}.`);
   }
 
-  return ['compose', '--project-name', profile.projectName, '-f', COMPOSE_FILE, ...actionArgs, ...extraArgs];
+  return ['docker-compose', '-p', profile.projectName, '-f', COMPOSE_FILE, ...actionArgs, ...extraArgs];
 }
 
 function runCli(argv = process.argv.slice(2), sourceEnv = process.env) {
