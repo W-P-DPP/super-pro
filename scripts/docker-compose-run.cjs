@@ -67,7 +67,8 @@ function buildComposeArgs(profile, action, extraArgs = []) {
     throw new Error(`Unknown docker action "${action}". Use one of: ${Object.keys(ACTION_ARGS).join(', ')}.`);
   }
 
-  return ['docker-compose', '-p', profile.projectName, '-f', COMPOSE_FILE, ...actionArgs, ...extraArgs];
+  // 回到之前的修改
+  return ['compose', '-p', profile.projectName, '-f', COMPOSE_FILE, ...actionArgs, ...extraArgs];
 }
 
 function runCli(argv = process.argv.slice(2), sourceEnv = process.env) {
@@ -93,8 +94,7 @@ function runCli(argv = process.argv.slice(2), sourceEnv = process.env) {
   console.log(`[INFO] Redis host port    : ${env.REDIS_HOST_PORT}`);
   console.log(`[INFO] App NODE_ENV       : ${env.APP_NODE_ENV}`);
 
-  const composeArgs = args.slice(1); // 去掉第一个元素 'docker-compose'
-  const result = spawnSync('docker-compose', composeArgs, {
+  const result = spawnSync('docker', args, {
     env,
     stdio: 'inherit',
     shell: false,
