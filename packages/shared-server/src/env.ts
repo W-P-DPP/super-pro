@@ -78,14 +78,14 @@ export function getDatabaseConfig(
   const synchronize = requestedSynchronize ?? defaultSynchronize;
 
   return {
-    type: firstDefined(process.env.DB_TYPE, configDatabase.type, 'mysql')!,
-    host: firstDefined(process.env.DB_HOST, configDatabase.host, '127.0.0.1')!,
-    port: Number(firstDefined(process.env.DB_PORT, configDatabase.port, 3306)),
-    username: firstDefined(process.env.DB_USER, configDatabase.user, 'root')!,
-    password: firstDefined(process.env.DB_PASSWORD, configDatabase.password, '123456')!,
-    database: firstDefined(process.env.DB_NAME, configDatabase.database, 'wxbot')!,
-    timezone: firstDefined(process.env.DB_TIMEZONE, configDatabase.timezone, '+08:00')!,
-    charset: firstDefined(process.env.DB_CHARSET, configDatabase.charset, 'utf8mb4')!,
+    type: firstDefined(process.env.DB_TYPE )!,
+    host: firstDefined(process.env.DB_HOST)!,
+    port: Number(firstDefined(process.env.DB_PORT)),
+    username: firstDefined(process.env.DB_USER)!,
+    password: firstDefined(process.env.DB_PASSWORD)!,
+    database: firstDefined(process.env.DB_NAME)!,
+    timezone: firstDefined(process.env.DB_TIMEZONE)!,
+    charset: firstDefined(process.env.DB_CHARSET)!,
     synchronize,
   };
 }

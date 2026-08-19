@@ -36,10 +36,7 @@ export class SharedRedisService {
   private isConnected = false;
 
   constructor(options: SharedRedisServiceOptions = {}) {
-    const redis = options.redis ?? {
-      host: '127.0.0.1',
-      port: 6379,
-    };
+    const redis = options.redis as ServerRedisConfig;
     const maxReconnectRetries = options.maxReconnectRetries ?? 10;
 
     this.logger = options.logger ?? fallbackLogger;

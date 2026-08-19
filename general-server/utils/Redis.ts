@@ -7,7 +7,10 @@ class RedisService extends SharedRedisService {
 
   private constructor() {
     super({
-      redis: config.Redis,
+      redis: {
+        host:<string>process.env.REDIS_HOST,
+        port:Number(process.env.REDIS_PORT)
+      },
       logger: Logger.getInstance(),
     });
   }

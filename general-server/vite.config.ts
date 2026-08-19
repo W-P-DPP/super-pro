@@ -1,13 +1,10 @@
 import { defineConfig } from 'vite';
 import { builtinModules } from 'module';
-import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join, resolve } from 'path';
+import { dirname, resolve } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const pkgPath = join(__dirname, 'package.json');
-const pkg = JSON.parse(readFileSync(pkgPath, { encoding: 'utf-8' }));
 
 export default defineConfig({
   resolve: {
@@ -29,6 +26,8 @@ export default defineConfig({
   },
   
   ssr: {
-    noExternal: Object.keys(pkg.dependencies || {}),
+    // 将所有第三方依赖（含传递依赖）一起打包进 dist，运行时无需 node_modules
+    // true 表示不外部化任何 node_modules 包；Node 内置模块始终保持外部
+    noExternal: true,
   },
 });

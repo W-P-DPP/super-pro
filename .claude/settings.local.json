@@ -16,7 +16,11 @@
       "Bash(status=$?)",
       "Read(//tmp/**)",
       "Bash(exit $status)",
-      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/data/sections/portfolio.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")"
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/data/sections/portfolio.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
+      "Bash(node -e \"console.log\\('node', process.version\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(NODE_ENV=smoketest timeout 25 node dist/main.cjs)",
+      "Bash(echo \"=== exit code: $? ===\")"
     ]
   }
 }
