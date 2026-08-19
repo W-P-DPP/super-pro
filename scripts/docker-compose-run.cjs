@@ -67,6 +67,7 @@ function buildComposeArgs(profile, action, extraArgs = []) {
     throw new Error(`Unknown docker action "${action}". Use one of: ${Object.keys(ACTION_ARGS).join(', ')}.`);
   }
 
+  // 回到之前的修改
   return ['compose', '-p', profile.projectName, '-f', COMPOSE_FILE, ...actionArgs, ...extraArgs];
 }
 
