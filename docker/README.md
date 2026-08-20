@@ -1,19 +1,13 @@
 # Docker Deployment
 
-Docker deployment is driven by an explicit project manifest at
-`docker/deployment.config.json`. The root deployment command reads that manifest
-and writes:
+Docker deployment is **hand-maintained**（无生成器）。整个栈由 `docker/` 下两个被 git 跟踪的文件定义：
 
-- `docker/.generated/docker-compose.yml`
-- `docker/.generated/nginx/default.conf`
-- `docker/.generated/nginx/Dockerfile`
+- `docker/compose.yml` —— 整个栈的唯一定义的 Compose 文件
+- `docker/nginx/default.conf` —— 网关 nginx 反向代理配置
 
-Generated files are ignored by git.
+部署 wrapper `scripts/docker-compose-run.cjs` 只负责按环境设置变量（项目名、公开 HTTP 端口、运行时目录、宿主端口、`NODE_ENV`），并把 Compose 指向 `docker/compose.yml`。它**不会生成或修改任何文件**。
 
-Each deployable project owns a real `Dockerfile` and is built into its own image.
-Frontend projects ship as their own nginx static-file containers; API projects
-run as independent services. A gateway nginx container reverse proxies all routes
-to them on a single public port:
+每个可部署项目拥有自己的真实 `Dockerfile`，构建为独立镜像。前端项目发布为独立的 nginx 静态文件容器；API 项目作为独立服务运行。网关 nginx 容器把所有路由反向代理到它们之上，对外只暴露一个公开端口：
 
 ```
 PUBLIC_HTTP_PORT:9999 (唯一公开端口)
@@ -24,6 +18,8 @@ PUBLIC_HTTP_PORT:9999 (唯一公开端口)
    admin-front  front-public  login  file-server  resume-template  general-server
 ```
 
+网关 nginx 使用官方 `nginx:1.27-alpine` 镜像；`docker/nginx/default.conf` 以只读方式挂载到 `/etc/nginx/conf.d/default.conf`。改路由只需改该文件后 `docker compose restart nginx`，无需重新构建镜像。
+
 ## Commands
 
 ```bash
@@ -31,79 +27,62 @@ pnpm docker:prod:deploy
 pnpm docker:test:deploy
 ```
 
-Jenkins entry scripts:
+Jenkins 入口脚本：
 
 ```bat
 jenkins-build-and-deploy-prod.bat
 jenkins-build-and-deploy-test.bat
 ```
 
-The legacy `jenkins-build-and-deploy.bat` delegates to the production script.
+旧版 `jenkins-build-and-deploy.bat` 委托给生产脚本。
 
-Production defaults:
+生产默认值（定义在 `scripts/docker-compose-run.cjs`）：
 
-- compose project: `super-pro-prod`
-- HTTP port: `9999`
-- MySQL host port: `13306`
-- Redis host port: `16379`
-- runtime dir: `D:/super-pro_pro`
-- API `NODE_ENV`: `production`
+- compose 项目名：`super-pro-prod`
+- HTTP 端口：`9999`
+- MySQL 宿主端口：`13306`
+- Redis 宿主端口：`16379`
+- 运行时目录：`D:/super-pro_pro`
+- API `NODE_ENV`：`production`
 
-Test defaults:
+测试默认值：
 
-- compose project: `super-pro-test`
-- HTTP port: `29999`
-- MySQL host port: `23306`
-- Redis host port: `26379`
-- runtime dir: `D:/super-pro_test`
-- API `NODE_ENV`: `development`
+- compose 项目名：`super-pro-test`
+- HTTP 端口：`29999`
+- MySQL 宿主端口：`23306`
+- Redis 宿主端口：`26379`
+- 运行时目录：`D:/super-pro_test`
+- API `NODE_ENV`：`development`
 
-Both environments generate the compose/nginx files and then run docker compose with
-an explicit `-p` project name, so containers, networks, and default names stay
-isolated. Override defaults with environment variables when needed:
+wrapper 以 `docker compose -p <project>` 运行，使容器、网络和默认名称在两个环境之间相互隔离。需要时可用环境变量覆盖默认值：
 
 ```bash
 PUBLIC_HTTP_PORT=19999 DOCKER_RUNTIME_DIR=D:/custom-runtime pnpm docker:test:deploy
 ```
 
-`PROD_RUNTIME_DIR` is still accepted by the wrapper when `DOCKER_RUNTIME_DIR` is
-not set, but new scripts should use `DOCKER_RUNTIME_DIR`.
+当 `DOCKER_RUNTIME_DIR` 未设置时，`PROD_RUNTIME_DIR` 仍被 wrapper 兼容接受，但新脚本应使用 `DOCKER_RUNTIME_DIR`。
 
-## Deployment Manifest (`docker/deployment.config.json`)
+## 维护
 
-The manifest is the single source of truth for deployment metadata. Each entry in
-`projects` describes one deployable project:
+直接编辑两个文件后重新执行部署命令：
 
-| Field | Required | Description |
-|---|---|---|
-| `service` | yes | Compose service name (lowercase, dashes allowed; cannot be `nginx`/`mysql`/`redis`) |
-| `kind` | yes | `frontend` or `api` |
-| `dir` | no | Project directory; defaults to `service`. Dockerfile path is `${dir}/Dockerfile` |
-| `port` | yes | Container port |
-| `routes` | yes | URL routes served, e.g. `/admin/`. For frontends, `routes[0]` must equal the build base path |
-| `rootRedirect` | no | Optional; root `/` redirects here (at most one project) |
-| `health` | no | Health check path (api) |
-| `depends` | no | Comma-separated dependency services |
-| `runtimeVolumes` | no | Comma-separated `name:target` data volumes mounted under `${DOCKER_RUNTIME_DIR}/<service>/<name>` |
+- `docker/compose.yml` —— 服务、镜像/构建上下文、卷、端口、健康检查、`depends_on`、网络。
+- `docker/nginx/default.conf` —— 路由表。新增路由/服务时，同步更新网关 `depends_on` 的健康门控与 nginx `location` 块。
 
-`docker/env/<service>.env` is mounted as `env_file` for api services when it
-exists; `docker/config/<service>.config.json` is mounted read-only when it exists.
+运行时数据（MySQL 数据、Redis 数据、上传文件、nginx 日志、应用日志）存放在宿主运行时目录（`DOCKER_RUNTIME_DIR`）下，**不在仓库里**。`docker/runtime/` 为保留目录且被 git 忽略。
 
-Current deployable projects:
+## Services
 
-- `admin-front` -> `/admin/` frontend container (nginx)
-- `front-public` -> `/zwpsite/` frontend container (nginx), root redirect
-- `login` -> `/login/` frontend container (nginx)
-- `file-server` -> `/file-server/` frontend container (nginx)
-- `resume-template` -> `/resume/` frontend container (nginx)
-- `general-server` -> `/api/`, `/public/` API reverse proxy
+- `admin-front` -> `/admin/` 前端容器（nginx）
+- `front-public` -> `/zwpsite/` 前端容器（nginx），根路径重定向
+- `login` -> `/login/` 前端容器（nginx）
+- `file-server` -> `/file-server/` 前端容器（nginx）
+- `resume-template` -> `/resume/` 前端容器（nginx）
+- `general-server` -> `/api/`、`/public/` API 反向代理
+- `mysql`、`redis` —— 基础设施
 
-## Adding a project
+## 添加项目
 
-1. Add a real `Dockerfile` in the project directory. Frontend images follow the
-   multi-stage pattern in `admin-front/Dockerfile`: build with
-   `VITE_APP_BASE_PATH='/<route>/' pnpm --filter <pkg> build`, then an
-   `nginx:1.27-alpine` runtime that `COPY`s `docker/nginx-static.conf` and the
-   `dist`.
-2. Add an entry to `docker/deployment.config.json`.
-3. Re-run the deploy command.
+1. 在项目目录添加真实的 `Dockerfile`。前端镜像遵循 `admin-front/Dockerfile` 的多阶段模式：用 `VITE_APP_BASE_PATH='/<route>/' pnpm --filter <pkg> build` 构建，再用 `nginx:1.27-alpine` 运行时 `COPY` 一份 `docker/nginx-static.conf` 和 `dist`。
+2. 在 `docker/compose.yml` 中添加服务（build context `..`，`dockerfile: <dir>/Dockerfile`），并在 `docker/nginx/default.conf` 中添加路由。
+3. 重新执行部署命令。

@@ -14,7 +14,7 @@ set "APP_NODE_ENV=production"
 
 echo [INFO] Jenkins deploy environment : production
 echo [INFO] Repo dir                   : %REPO_DIR%
-echo [INFO] Compose file               : %REPO_DIR%\docker\.generated\docker-compose.yml
+echo [INFO] Compose file               : %REPO_DIR%\docker\compose.yml
 echo [INFO] Compose project            : %COMPOSE_PROJECT_NAME%
 echo [INFO] HTTP port                  : %PUBLIC_HTTP_PORT%
 echo [INFO] Runtime dir                : %DOCKER_RUNTIME_DIR%

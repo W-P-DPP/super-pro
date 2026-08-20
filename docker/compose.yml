@@ -1,0 +1,188 @@
+name: ${COMPOSE_PROJECT_NAME:-super-pro-prod}
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      general-server:
+        condition: service_healthy
+      admin-front:
+        condition: service_healthy
+      front-public:
+        condition: service_healthy
+      login:
+        condition: service_healthy
+      file-server:
+        condition: service_healthy
+      resume-template:
+        condition: service_healthy
+    ports:
+      - "${PUBLIC_HTTP_PORT:-9999}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${DOCKER_RUNTIME_DIR:-D:/super-pro_pro}/nginx/logs:/var/log/nginx
+    restart: unless-stopped
+    networks:
+      - super-pro
+
+  general-server:
+    build:
+      context: ..
+      dockerfile: general-server/Dockerfile
+    env_file:
+      - ./env/general-server.env
+    environment:
+      NODE_ENV: ${APP_NODE_ENV:-production}
+    ports:
+      - "30010:30010"
+    volumes:
+      - ./config/general-server.config.json:/app/general-server/config.json:ro
+      - ${DOCKER_RUNTIME_DIR:-D:/super-pro_pro}/general-server/logs:/app/general-server/logs
+      - ${DOCKER_RUNTIME_DIR:-D:/super-pro_pro}/general-server/file:/data/file
+      - ${DOCKER_RUNTIME_DIR:-D:/super-pro_pro}/general-server/rubbish:/data/rubbish
+      - ${DOCKER_RUNTIME_DIR:-D:/super-pro_pro}/general-server/upload-chunks:/data/upload-chunks
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "30010"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:30010/ready', (res) => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - super-pro
+
+  admin-front:
+    build:
+      context: ..
+      dockerfile: admin-front/Dockerfile
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - super-pro
+
+  front-public:
+    build:
+      context: ..
+      dockerfile: front-public/Dockerfile
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - super-pro
+
+  login:
+    build:
+      context: ..
+      dockerfile: login/Dockerfile
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - super-pro
+
+  file-server:
+    build:
+      context: ..
+      dockerfile: file-server/Dockerfile
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - super-pro
+
+  resume-template:
+    build:
+      context: ..
+      dockerfile: resume-template/Dockerfile
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - super-pro
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ${DOCKER_RUNTIME_DIR:-D:/super-pro_pro}/redis:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-16379}:6379"
+    networks:
+      - super-pro
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-zxc123654}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-wxbot}"
+      MYSQL_USER: "${MYSQL_USER:-super_pro}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-zxc123654}"
+      TZ: "${TZ:-Asia/Shanghai}"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - ${DOCKER_RUNTIME_DIR:-D:/super-pro_pro}/mysql:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-13306}:3306"
+    networks:
+      - super-pro
+
+networks:
+  super-pro:
+    driver: bridge

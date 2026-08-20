@@ -1,8 +1,6 @@
 const { spawnSync } = require('node:child_process');
 
-const { generateDockerDeployment } = require('./docker-generate-compose.cjs');
-
-const COMPOSE_FILE = 'docker/.generated/docker-compose.yml';
+const COMPOSE_FILE = 'docker/compose.yml';
 
 const DEPLOYMENT_PROFILES = {
   prod: {
@@ -83,8 +81,6 @@ function runCli(argv = process.argv.slice(2), sourceEnv = process.env) {
   const profile = getDeploymentProfile(environmentName);
   const env = buildComposeEnv(profile, sourceEnv);
   const args = buildComposeArgs(profile, action, extraArgs);
-
-  generateDockerDeployment();
 
   console.log(`[INFO] Docker environment : ${profile.name}`);
   console.log(`[INFO] Compose project    : ${profile.projectName}`);
